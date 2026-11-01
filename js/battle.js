@@ -12,6 +12,7 @@ window.BattleModule = {
   logs: [],
   contractWon: false,
   contractLost: false,
+  battleStats: { shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 },
 
   initEncounter() {
     const st = window.GameState.data;
@@ -25,6 +26,7 @@ window.BattleModule = {
     this.weaponCooldowns = {};
     this.contractWon = false;
     this.contractLost = false;
+    this.battleStats = { shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 };
 
     // Build 5x6 Hex Grid
     this.hexes = [];
@@ -130,12 +132,18 @@ window.BattleModule = {
       const locs = ['CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL', 'HD'];
       const hitLoc = locs[Math.floor(Math.random() * 7)];
       playerMech.armor[hitLoc] = Math.max(0, playerMech.armor[hitLoc] - this.enemy.dmg);
+      this.battleStats.damageTaken += this.enemy.dmg;
       this.log(`ALERT: ${this.enemy.name} hits your ${hitLoc} for ${this.enemy.dmg} dmg!`);
 
       if (playerMech.armor.CT <= 0 || playerMech.armor.HD <= 0) {
         this.contractLost = true;
-        if (jock) jock.health = Math.max(25, jock.health - 30);
-        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered.`);
+        if (jock) {
+          jock.health = Math.max(25, jock.health - 30);
+          jock.missions = (jock.missions || 0) + 1;
+          jock.xp = (jock.xp || 0) + 75;
+          this.recordBattleHistory(jock, playerMech, 'EJECTED', 'Core Breach — Emergency Ejection', 75, 'EJECT');
+        }
+        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered (+75 Survival XP).`);
       }
     } else {
       this.log(`${this.enemy.name} fires salvos — evaded! (Roll ${roll} > ${toHit}%)`);
@@ -228,6 +236,7 @@ window.BattleModule = {
 
     this.playerPos.heat += weapon.heat;
     this.weaponCooldowns[instanceKey] = weapon.sec;
+    this.battleStats.shotsFired += 1;
 
     if (roll <= hitChance) {
       const randomLocs = ['CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL'];
@@ -236,6 +245,8 @@ window.BattleModule = {
         : this.aimTarget;
 
       this.enemy.armor[hitLoc] = Math.max(0, this.enemy.armor[hitLoc] - weapon.dmg);
+      this.battleStats.shotsHit += 1;
+      this.battleStats.damageDealt += weapon.dmg;
       this.log(`HIT! ${weapon.name} strikes Enemy ${hitLoc} for ${weapon.dmg} dmg (Roll ${roll}<=${hitChance}%).`);
 
       // Check Victory (Head, CT, or both Legs destroyed)
@@ -244,10 +255,18 @@ window.BattleModule = {
         this.contractWon = true;
         st.credits += 35000;
         st.missionsCompleted += 1;
+        const killCode = this.enemy.armor.HD <= 0 ? 'HD' : (this.enemy.armor.CT <= 0 ? 'CT' : 'LEGS');
+        const killMethod = killCode === 'HD'
+          ? `Headshot Decapitation (HD) via ${weapon.name}`
+          : killCode === 'CT'
+            ? `Center Torso Reactor Breach (CT) via ${weapon.name}`
+            : `Dual Leg Sweep (LL + RL) via ${weapon.name}`;
+
         if (jock) {
           jock.xp += 250;
           jock.kills += 1;
           jock.missions += 1;
+          this.recordBattleHistory(jock, mech, 'VICTORY', killMethod, 250, killCode);
           if (jock.contract) {
             if (jock.contract.type === 'mercenary') {
               jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
@@ -274,6 +293,68 @@ window.BattleModule = {
 
     this.advanceTime(3, mech, metrics);
     this.render();
+  },
+
+  recordBattleHistory(jock, mech, outcome, killMethod, xpEarned, killCode) {
+    if (!jock) return;
+    if (!Array.isArray(jock.fightHistory)) jock.fightHistory = [];
+    if (!Array.isArray(jock.awards)) jock.awards = [];
+
+    const fightNumber = jock.fightHistory.length + 1;
+    const newAwards = [];
+    const grantAward = (id, citation) => {
+      if (jock.awards.some(a => a.id === id)) return;
+      const def = (window.TOS_DATA.commendations || []).find(c => c.id === id);
+      if (!def) return;
+      jock.awards.push({
+        id: def.id,
+        title: def.title,
+        citation: citation || def.desc,
+        fightNum: fightNumber
+      });
+      newAwards.push(def.title);
+      this.log(`COMMENDATION AWARDED: ${jock.callsign} received the [${def.title}]!`);
+    };
+
+    if (outcome === 'VICTORY') {
+      grantAward('first-blood', `Neutralized ${this.enemy.name} in Fight #${fightNumber}.`);
+      if (killCode === 'HD') {
+        grantAward('headhunter', `Decapitated ${this.enemy.name} with a Cockpit Headshot (HD) in Fight #${fightNumber}.`);
+      } else if (killCode === 'CT') {
+        grantAward('core-breaker', `Cored ${this.enemy.name}'s Center Torso (CT) reactor in Fight #${fightNumber}.`);
+      } else if (killCode === 'LEGS') {
+        grantAward('leg-sweeper', `Swept both legs (LL & RL) of ${this.enemy.name} in Fight #${fightNumber}.`);
+      }
+
+      const acc = this.battleStats.shotsFired > 0
+        ? Math.round((this.battleStats.shotsHit / this.battleStats.shotsFired) * 100)
+        : 0;
+      if (this.battleStats.shotsFired >= 3 && acc >= 75) {
+        grantAward('sharpshooter', `Finished Fight #${fightNumber} with ${acc}% gunnery accuracy (${this.battleStats.shotsHit}/${this.battleStats.shotsFired}).`);
+      }
+      if (this.battleStats.damageTaken >= 36) {
+        grantAward('ironclad-survivor', `Endured ${this.battleStats.damageTaken} armor damage against ${this.enemy.name} and emerged victorious.`);
+      }
+      if (jock.kills >= 3) {
+        grantAward('titan-ace', `Achieved ${jock.kills} confirmed Titan kills in service of the company.`);
+      }
+    }
+
+    jock.fightHistory.unshift({
+      fightNumber,
+      enemyName: this.enemy.name,
+      enemyWeight: this.enemy.weight,
+      mechName: mech ? mech.customName : 'Titan-AT',
+      outcome,
+      durationSec: this.clockSec,
+      shotsFired: this.battleStats.shotsFired,
+      shotsHit: this.battleStats.shotsHit,
+      damageDealt: this.battleStats.damageDealt,
+      damageTaken: this.battleStats.damageTaken,
+      killMethod,
+      xpEarned,
+      awardsEarned: newAwards
+    });
   },
 
   hexPoints(cx, cy, r) {
@@ -488,7 +569,12 @@ window.BattleModule = {
                 <div class="section-title">Target Lock: ${this.enemy.name} (${this.enemy.weight})</div>
                 <div class="subtext">Select a Called Shot body part or fire at General mass</div>
               </div>
-              ${this.contractWon ? `<span class="badge green">CONTRACT WON (+35,000 Cr / +250 XP)</span>` : ''}
+              ${this.contractWon ? `
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="badge green">CONTRACT WON (+35,000 Cr / +250 XP)</span>
+                  ${jock ? `<button class="btn btn-primary" onclick="App.switchTab('hq'); HQModule.openJockeyPage('${jock.id}', 'history');">View ${jock.callsign}'s History &amp; Awards &rarr;</button>` : ''}
+                </div>
+              ` : ''}
             </div>
 
             <div>

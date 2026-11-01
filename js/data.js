@@ -1,6 +1,74 @@
 // Core Catalog & Reference Data for Titans of Steel Remake (Mode A: Classic Sim)
 
 window.TOS_DATA = {
+  commendations: [
+    {
+      id: 'first-blood',
+      title: 'First Blood Ribbon',
+      desc: 'Awarded for scoring a confirmed hostile Mech kill in live combat.',
+      svg: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+        <rect x="6" y="14" width="36" height="20" rx="4" fill="#991b1b" stroke="#f87171" stroke-width="2"/>
+        <path d="M18 14V34M30 14V34" stroke="#fef08a" stroke-width="3"/>
+        <circle cx="24" cy="24" r="4" fill="#fbbf24"/>
+      </svg>`
+    },
+    {
+      id: 'headhunter',
+      title: 'Headhunter Cross',
+      desc: 'Awarded for neutralizing an enemy Mech by destroying its Head (HD) cockpit.',
+      svg: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+        <polygon points="24,4 30,18 44,24 30,30 24,44 18,30 4,24 18,18" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+        <circle cx="24" cy="24" r="6" fill="#0284c7" stroke="#bae6fd" stroke-width="1.5"/>
+      </svg>`
+    },
+    {
+      id: 'core-breaker',
+      title: 'Core Breaker Star',
+      desc: 'Awarded for breaching an enemy Mech\'s Center Torso (CT) reactor core.',
+      svg: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+        <polygon points="24,4 29,16 42,18 32,27 35,40 24,33 13,40 16,27 6,18 19,16" fill="#d97706" stroke="#fef08a" stroke-width="2"/>
+        <circle cx="24" cy="24" r="5" fill="#fef9c3"/>
+      </svg>`
+    },
+    {
+      id: 'leg-sweeper',
+      title: 'Actuator Crippler Citation',
+      desc: 'Awarded for toppling an enemy Mech by destroying both Left and Right Legs (LL & RL).',
+      svg: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+        <circle cx="24" cy="24" r="18" fill="#065f46" stroke="#34d399" stroke-width="2"/>
+        <path d="M16 30L24 16L32 30H16Z" fill="#10b981" stroke="#d1fae5" stroke-width="1.5"/>
+      </svg>`
+    },
+    {
+      id: 'sharpshooter',
+      title: 'Deadeye Marksman Medal',
+      desc: 'Awarded for achieving 75%+ weapon accuracy (min 3 shots) and 50+ damage in a battle.',
+      svg: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+        <circle cx="24" cy="24" r="18" fill="#1e1b4b" stroke="#a78bfa" stroke-width="2"/>
+        <circle cx="24" cy="24" r="10" stroke="#c4b5fd" stroke-width="1.5"/>
+        <path d="M24 8V40M8 24H40" stroke="#a78bfa" stroke-width="1.5"/>
+      </svg>`
+    },
+    {
+      id: 'ironclad-survivor',
+      title: 'Crimson Heart of Valor',
+      desc: 'Awarded for enduring 45+ incoming armor damage in a single battle and surviving.',
+      svg: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+        <polygon points="24,6 40,14 40,28 24,42 8,28 8,14" fill="#881337" stroke="#fda4af" stroke-width="2"/>
+        <path d="M24 15L28 24L24 33L20 24L24 15Z" fill="#f43f5e"/>
+      </svg>`
+    },
+    {
+      id: 'titan-ace',
+      title: 'Order of the Titan Ace',
+      desc: 'Prestigious medal awarded upon achieving 5 confirmed hostile Mech kills.',
+      svg: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+        <circle cx="24" cy="24" r="19" fill="#78350f" stroke="#fde047" stroke-width="2.5"/>
+        <polygon points="24,9 28,19 39,19 30,26 33,37 24,30 15,37 18,26 9,19 20,19" fill="#eab308"/>
+      </svg>`
+    }
+  ],
+
   companyEmblems: [
     {
       id: 'emblem-wolf',

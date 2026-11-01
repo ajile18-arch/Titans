@@ -5,6 +5,10 @@ window.HQModule = {
   editMode: false,
   selectedPortraitId: 'visor-blue',
 
+  // Dedicated Jockey Information Page & Sub-Tab State
+  jockeyPageOpen: false,
+  jockeySubTab: 'dossier', // 'dossier' | 'history'
+
   // Job Posting & Interview State
   offeredBonusInput: 5000,
   interviewOpen: false,
@@ -25,6 +29,16 @@ window.HQModule = {
 
     const jock = st.jocks.find(j => j.id === st.selectedJockId) || st.jocks[0];
     if (jock && st.selectedJockId !== jock.id) st.selectedJockId = jock.id;
+    if (!jock) this.jockeyPageOpen = false;
+
+    // Dedicated Single-Jockey Information Page (Only the chosen Jockey's information + History & Awards Tab)
+    if (this.jockeyPageOpen && jock) {
+      container.innerHTML = `
+        ${this.renderDedicatedJockeyPage(jock)}
+        ${this.renderCreatorModal(jock)}
+      `;
+      return;
+    }
 
     // Best Squad Mechanic & Medic
     const bestMechanic = st.jocks.reduce((best, j) => (j.skills['Mechanic (Repair)'] > (best?.skills['Mechanic (Repair)'] || 0) ? j : best), null);
@@ -111,7 +125,7 @@ window.HQModule = {
             <div class="section-header">
               <div>
                 <div class="section-title">Active Squad Jocks (${st.jocks.length} / 8)</div>
-                <div class="subtext">Click a Jock to inspect dossier or train XP</div>
+                <div class="subtext">Click a Jockey's name to open their dedicated Jockey Information Page</div>
               </div>
             </div>
             <div style="display:flex; flex-direction:column; gap:8px;">
@@ -124,20 +138,23 @@ window.HQModule = {
                 const mech = st.mechs.find(m => m.id === j.assignedMechId);
                 const isSel = j.id === jock?.id;
                 const isMerc = j.contract?.type === 'mercenary';
+                const awardsCount = (j.awards || []).length;
                 return `
-                  <div class="list-item ${isSel ? 'selected' : ''}" onclick="HQModule.selectJock('${j.id}')">
+                  <div class="list-item ${isSel ? 'selected' : ''}" onclick="HQModule.openJockeyPage('${j.id}')">
                     <div style="display:flex; align-items:center; gap:10px;">
                       <div style="flex-shrink:0;">${window.GameState.getPortraitSvg(j.portraitId)}</div>
                       <div style="flex:1; min-width:0;">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
-                          <strong style="font-size:14px;">${j.firstName} "${j.callsign}" ${j.lastName}</strong>
+                          <a href="javascript:void(0)" onclick="event.stopPropagation(); HQModule.openJockeyPage('${j.id}')" style="font-size:14px; font-weight:800; color:#93c5fd; text-decoration:underline;">
+                            ${j.firstName} "${j.callsign}" ${j.lastName} &rarr;
+                          </a>
                           <span class="badge ${isMerc ? 'amber' : 'primary'}">${isMerc ? 'Mercenary' : rk.name}</span>
                         </div>
                         <div class="subtext" style="margin-top:2px;">
                           Titan: <strong>${mech ? mech.customName : 'Unassigned'}</strong> • <span class="mono">${window.GameState.getContractSummary(j)}</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:12px;">
-                          <span class="mono" style="color:var(--accent-green); font-weight:700;">${j.xp} XP Ready</span>
+                          <span class="mono" style="color:var(--accent-green); font-weight:700;">${j.xp} XP • ${awardsCount} Award${awardsCount === 1 ? '' : 's'}</span>
                           <span class="mono subtext">${isMerc ? 'Flat Fee Paid (0 Cr/mo)' : 'Wage: ' + window.GameState.getJockSalary(j).toLocaleString() + ' Cr/mo'}</span>
                         </div>
                       </div>
@@ -209,9 +226,9 @@ window.HQModule = {
 
         </div>
 
-        <!-- Right 8 Cols: Selected Jock Full Dossier, Attributes & 0-100% Skills -->
+        <!-- Right 8 Cols: Company Roster Overview (Click any Jockey's name to open Dedicated Jockey Page) -->
         <div class="col-8" style="display:flex; flex-direction:column; gap:16px;">
-          ${jock ? this.renderDossier(jock) : `
+          ${st.jocks.length > 0 ? this.renderSquadOverviewDirectory() : `
             <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:16px;">
               <span class="badge primary">RECRUITMENT &amp; INTERVIEW OFFICE</span>
               <h2 style="font-size:22px; font-weight:800;">No MechJocks Under Contract Yet</h2>
@@ -537,6 +554,8 @@ window.HQModule = {
       health: 100,
       kills: 0,
       missions: 0,
+      fightHistory: [],
+      awards: [],
       assignedMechId: freeMech ? freeMech.id : '',
       stats: { ...c.stats },
       skills: { ...c.skills }
@@ -747,6 +766,307 @@ window.HQModule = {
           </div>
 
         </div>
+      </div>
+    `;
+  },
+
+  openJockeyPage(id, subTab = 'dossier') {
+    window.GameState.data.selectedJockId = id;
+    this.jockeyPageOpen = true;
+    this.jockeySubTab = subTab;
+    window.GameState.save();
+    this.render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  },
+
+  closeJockeyPage() {
+    this.jockeyPageOpen = false;
+    this.render();
+  },
+
+  setJockeySubTab(tab) {
+    this.jockeySubTab = tab;
+    this.render();
+  },
+
+  renderSquadOverviewDirectory() {
+    const st = window.GameState.data;
+    return `
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Company Jockey Roster Directory</div>
+            <div class="subtext">Click any Jockey's name below to open their dedicated Jockey Information Page &amp; Combat History</div>
+          </div>
+          <span class="badge primary">${st.jocks.length} Active Pilot${st.jocks.length === 1 ? '' : 's'}</span>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${st.jocks.map(j => {
+            const rk = window.GameState.getJockRank(j);
+            const salary = window.GameState.getJockSalary(j);
+            const mech = st.mechs.find(m => m.id === j.assignedMechId);
+            const isMerc = j.contract?.type === 'mercenary';
+            const fights = j.fightHistory || [];
+            const awards = j.awards || [];
+            return `
+              <div class="panel" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; padding:14px;">
+                <div style="display:flex; align-items:center; gap:14px; flex:1; min-width:260px;">
+                  <div style="flex-shrink:0; cursor:pointer;" onclick="HQModule.openJockeyPage('${j.id}')">
+                    ${window.GameState.getPortraitSvg(j.portraitId, 72)}
+                  </div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                      <a href="javascript:void(0)" onclick="HQModule.openJockeyPage('${j.id}')" style="font-size:17px; font-weight:800; color:#93c5fd; text-decoration:underline;">
+                        ${j.firstName} "${j.callsign}" ${j.lastName}
+                      </a>
+                      <span class="badge ${isMerc ? 'amber' : 'primary'}">${isMerc ? 'Mercenary' : rk.name}</span>
+                      <span class="badge green">HP ${j.health}%</span>
+                      <span class="badge amber mono">${window.GameState.getContractSummary(j)}</span>
+                    </div>
+                    <div class="subtext" style="margin-top:4px;">${j.bio}</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:8px; font-size:12px;" class="mono subtext">
+                      <span>Assigned Titan: <strong style="color:#f8fafc;">${mech ? mech.customName : 'Unassigned'}</strong></span>
+                      <span>Fights: <strong style="color:#f8fafc;">${j.missions || fights.length}</strong></span>
+                      <span>Kills: <strong style="color:#f8fafc;">${j.kills}</strong></span>
+                      <span>Commendations: <strong style="color:var(--accent-amber);">${awards.length}</strong></span>
+                      <span>Ready XP: <strong style="color:var(--accent-green);">${j.xp} XP</strong></span>
+                      <span>Wage: <strong>${isMerc ? '0 Cr/mo (Flat Fee)' : salary.toLocaleString() + ' Cr/mo'}</strong></span>
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px; min-width:190px;">
+                  <button class="btn btn-primary" onclick="HQModule.openJockeyPage('${j.id}', 'dossier')">
+                    Open Jockey Page &rarr;
+                  </button>
+                  <button class="btn" onclick="HQModule.openJockeyPage('${j.id}', 'history')">
+                    Combat History &amp; Awards (${awards.length})
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  },
+
+  renderDedicatedJockeyPage(jock) {
+    const rank = window.GameState.getJockRank(jock);
+    const isMerc = jock.contract?.type === 'mercenary';
+    const awardsCount = (jock.awards || []).length;
+    const fightsCount = (jock.fightHistory || []).length;
+
+    return `
+      <!-- Dedicated Jockey Information Page Top Bar -->
+      <div class="card" style="margin-bottom:16px; border-color:var(--primary);">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <button class="btn" onclick="HQModule.closeJockeyPage()" style="padding:8px 14px; font-weight:700;">
+              &larr; Back to Company HQ
+            </button>
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span class="badge primary">DEDICATED JOCKEY INFORMATION PAGE</span>
+                <span class="badge ${isMerc ? 'amber' : 'green'}">${isMerc ? 'Short-Term Mercenary' : rank.name}</span>
+              </div>
+              <h2 style="font-size:20px; font-weight:800; margin-top:3px;">
+                ${jock.firstName} "${jock.callsign}" ${jock.lastName}
+              </h2>
+            </div>
+          </div>
+
+          <!-- Dedicated Jockey Page Sub-Tabs (Dossier & Training vs. Combat History & Commendations) -->
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button
+              class="btn ${this.jockeySubTab === 'dossier' ? 'btn-primary' : ''}"
+              style="padding:9px 16px; font-size:13px;"
+              onclick="HQModule.setJockeySubTab('dossier')"
+            >
+              1. Pilot Dossier, Attributes &amp; Skills (${jock.xp} XP)
+            </button>
+            <button
+              class="btn ${this.jockeySubTab === 'history' ? 'btn-primary' : ''}"
+              style="padding:9px 16px; font-size:13px;"
+              onclick="HQModule.setJockeySubTab('history')"
+            >
+              2. Combat History, Commendations &amp; Awards (${fightsCount} Fights / ${awardsCount} Awards)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        ${this.jockeySubTab === 'history' ? this.renderJockeyHistoryTab(jock) : this.renderDossier(jock)}
+      </div>
+    `;
+  },
+
+  renderJockeyHistoryTab(jock) {
+    const fights = jock.fightHistory || [];
+    const earnedAwards = jock.awards || [];
+    const allCommendations = window.TOS_DATA.commendations || [];
+
+    const totalShots = fights.reduce((s, f) => s + (f.shotsFired || 0), 0);
+    const totalHits = fights.reduce((s, f) => s + (f.shotsHit || 0), 0);
+    const careerAcc = totalShots > 0 ? Math.round((totalHits / totalShots) * 100) : 0;
+    const totalDmgDealt = fights.reduce((s, f) => s + (f.damageDealt || 0), 0);
+    const totalDmgTaken = fights.reduce((s, f) => s + (f.damageTaken || 0), 0);
+    const victories = fights.filter(f => f.outcome === 'VICTORY').length;
+
+    return `
+      <!-- Pilot Service Summary Header -->
+      <div class="card">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div class="panel" style="padding:6px;">
+              ${window.GameState.getPortraitSvg(jock.portraitId, 76)}
+            </div>
+            <div>
+              <h3 style="font-size:18px; font-weight:800;">Service Record: ${jock.firstName} "${jock.callsign}" ${jock.lastName}</h3>
+              <div class="subtext" style="margin-top:2px;">Official Mercenary Combat Log, Battle Performance Telemetry &amp; Commendations</div>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-wrap:wrap; gap:10px;">
+            <div class="hud-pill">
+              <div class="label">Combat Drops</div>
+              <div class="val">${jock.missions || fights.length}</div>
+            </div>
+            <div class="hud-pill">
+              <div class="label">Victories / Kills</div>
+              <div class="val" style="color:var(--accent-green);">${victories} / ${jock.kills}</div>
+            </div>
+            <div class="hud-pill">
+              <div class="label">Career Accuracy</div>
+              <div class="val">${totalShots > 0 ? careerAcc + '%' : 'N/A'}</div>
+            </div>
+            <div class="hud-pill">
+              <div class="label">Damage Dealt / Taken</div>
+              <div class="val">${totalDmgDealt} / ${totalDmgTaken}</div>
+            </div>
+            <div class="hud-pill">
+              <div class="label">Commendations</div>
+              <div class="val" style="color:var(--accent-amber);">${earnedAwards.length} / ${allCommendations.length}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Commendations & Awards Section -->
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Commendations, Medals &amp; Combat Awards</div>
+            <div class="subtext">Awarded for distinguished gunnery, precision called-shot kills, and survival in the Battle Arena</div>
+          </div>
+          <span class="badge amber mono">${earnedAwards.length} Earned</span>
+        </div>
+
+        ${earnedAwards.length === 0 ? `
+          <div class="panel subtext" style="padding:18px; text-align:center;">
+            <strong>${jock.callsign}</strong> has not received any combat commendations yet. Deploy to the <strong>3. Battle &amp; Hex Arena</strong> to earn medals such as the <em>First Blood Ribbon</em>, <em>Headhunter's Star</em>, <em>Core Breaker Cross</em>, or <em>Sharpshooter Citation</em>!
+          </div>
+        ` : `
+          <div class="grid-12">
+            ${earnedAwards.map(aw => {
+              const def = allCommendations.find(c => c.id === aw.id) || aw;
+              return `
+                <div class="col-6 panel" style="display:flex; align-items:center; gap:14px; border-color:var(--accent-amber);">
+                  <div style="flex-shrink:0;">
+                    <svg viewBox="0 0 64 64" width="54" height="54" style="background:#0f172a; border-radius:8px; border:1px solid #f59e0b;">
+                      ${def.svg || ''}
+                    </svg>
+                  </div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                      <strong style="font-size:14px; color:#fde68a;">${def.title}</strong>
+                      <span class="badge amber mono">Fight #${aw.fightNum || 1}</span>
+                    </div>
+                    <div class="subtext" style="margin-top:3px;">${aw.citation || def.desc}</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
+
+        <!-- Available / Un-earned Commendations Reference -->
+        <div style="margin-top:8px;">
+          <div class="subtext" style="font-weight:700; text-transform:uppercase; margin-bottom:8px;">All Official Mercenary Commendations &amp; Unlock Criteria:</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:8px;">
+            ${allCommendations.map(c => {
+              const isUnlocked = earnedAwards.some(a => a.id === c.id);
+              return `
+                <div class="panel" style="display:flex; align-items:center; gap:10px; opacity:${isUnlocked ? '1' : '0.55'};">
+                  <svg viewBox="0 0 64 64" width="38" height="38" style="flex-shrink:0; background:#0f172a; border-radius:6px; border:1px solid ${isUnlocked ? '#10b981' : '#334155'};">
+                    ${c.svg}
+                  </svg>
+                  <div style="font-size:12px;">
+                    <div style="font-weight:700; color:${isUnlocked ? '#6ee7b7' : '#e2e8f0'};">
+                      ${isUnlocked ? '&#9989; ' : ''}${c.title}
+                    </div>
+                    <div class="subtext" style="font-size:11px;">${c.desc}</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Previous Fights & Combat Performance History Log -->
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Previous Fights &amp; Combat Performance Log</div>
+            <div class="subtext">Detailed engagement record for every battle fought by ${jock.firstName} "${jock.callsign}" ${jock.lastName}</div>
+          </div>
+          <button class="btn btn-primary" onclick="App.switchTab('battle')">Deploy ${jock.callsign} to Next Fight &rarr;</button>
+        </div>
+
+        ${fights.length === 0 ? `
+          <div class="panel subtext" style="padding:22px; text-align:center;">
+            No previous fights recorded for <strong>${jock.callsign}</strong> yet. Complete a combat contract in the <strong>3. Battle &amp; Hex Arena</strong> to log their first battle report!
+          </div>
+        ` : `
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            ${fights.map(f => {
+              const acc = f.shotsFired > 0 ? Math.round((f.shotsHit / f.shotsFired) * 100) : 0;
+              const isWin = f.outcome === 'VICTORY';
+              const mins = String(Math.floor((f.durationSec || 0) / 60)).padStart(2, '0');
+              const secs = String((f.durationSec || 0) % 60).padStart(2, '0');
+              return `
+                <div class="panel" style="display:flex; flex-direction:column; gap:8px; border-left:4px solid ${isWin ? 'var(--accent-green)' : 'var(--accent-red)'};">
+                  <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                      <span class="badge ${isWin ? 'green' : 'red'} mono">FIGHT #${f.fightNumber} — ${f.outcome}</span>
+                      <strong style="font-size:14px;">vs. ${f.enemyName} (${f.enemyWeight || 'Hostile Titan'})</strong>
+                      <span class="subtext">in <strong>${f.mechName || 'Assigned Titan'}</strong></span>
+                    </div>
+                    <div class="mono subtext" style="font-size:12px;">
+                      Action-Time Duration: <strong>${mins}:${secs}s</strong> • Earned: <strong style="color:var(--accent-green);">+${f.xpEarned || 0} XP</strong>
+                    </div>
+                  </div>
+
+                  <div style="display:flex; flex-wrap:wrap; gap:18px; font-size:12px;" class="mono">
+                    <span>Shots Hit / Fired: <strong>${f.shotsHit}/${f.shotsFired} (${acc}%)</strong></span>
+                    <span>Damage Dealt: <strong style="color:var(--accent-green);">${f.damageDealt} Dmg</strong></span>
+                    <span>Damage Taken: <strong style="color:var(--accent-amber);">${f.damageTaken} Dmg</strong></span>
+                    <span>Resolution: <strong>${f.killMethod || (isWin ? 'Hostile Neutralized' : 'Emergency Ejection')}</strong></span>
+                  </div>
+
+                  ${(f.awardsEarned && f.awardsEarned.length > 0) ? `
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding-top:4px; border-top:1px solid var(--border);">
+                      <span class="subtext" style="font-size:11px; font-weight:700;">Commendations Awarded in Fight:</span>
+                      ${f.awardsEarned.map(title => `<span class="badge amber">${title}</span>`).join('')}
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
       </div>
     `;
   },
@@ -1089,6 +1409,8 @@ window.HQModule = {
       health: 100,
       kills: 0,
       missions: 0,
+      fightHistory: [],
+      awards: [],
       assignedMechId: freeMech ? freeMech.id : '',
       stats: { ...r.stats },
       skills: { ...r.skills }
