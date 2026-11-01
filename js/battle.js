@@ -249,7 +249,15 @@ window.BattleModule = {
           jock.kills += 1;
           jock.missions += 1;
           if (jock.contract) {
-            if (jock.contract.type === 'fights') {
+            if (jock.contract.type === 'mercenary') {
+              jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
+              jock.contract.monthsRemaining = Math.max(0, (jock.contract.monthsRemaining ?? jock.contract.totalMonths) - 1);
+              if (jock.contract.fightsRemaining <= 0 || jock.contract.monthsRemaining <= 0) {
+                this.log(`NOTICE: Mercenary ${jock.callsign}'s short-term flat-fee contract has concluded and they have departed the company.`);
+                st.jocks = st.jocks.filter(x => x.id !== jock.id);
+                if (st.selectedJockId === jock.id) st.selectedJockId = st.jocks[0]?.id || '';
+              }
+            } else if (jock.contract.type === 'fights') {
               jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
             } else {
               jock.contract.monthsRemaining = Math.max(0, (jock.contract.monthsRemaining ?? (jock.contract.totalYears * 12)) - 1);

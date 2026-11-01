@@ -25,42 +25,66 @@ function createDefaultState() {
     jocks: [],
     mechs: [],
 
-    // Optional Mercenary Hiring Hall applicants if the player wants to hire in addition to creating custom Jocks
+    // Short-Term Freelance Mercenaries available on the main HQ screen for a flat fee (short time & small number of fights)
     recruits: [
       {
-        id: 'rec-1',
+        id: 'merc-1',
         firstName: 'Nadia',
         lastName: 'Chen',
         callsign: 'Spark',
-        portraitId: 'cyber-violet',
-        bio: 'Academy graduate specializing in Energy weaponry and heat management.',
-        xp: 500,
-        xpSpent: 0,
-        hireCost: 4500,
-        baseSalary: 900,
-        stats: { Constitution: 22, Intelligence: 28, Instinct: 25, Reflexes: 27, Piloting: 24, Bravery: 23 },
+        portraitId: 'gold-commander',
+        bio: 'Freelance Energy gunner available for short-term contract drops.',
+        xp: 150,
+        xpSpent: 600,
+        flatFee: 6500,
+        termMonths: 2,
+        termFights: 2,
+        baseSalary: 0,
+        stats: { Constitution: 24, Intelligence: 29, Instinct: 26, Reflexes: 31, Piloting: 25, Bravery: 24 },
         skills: {
-          'Energy Weapons': 60, 'Cannons / Ballistic': 40, 'Guided Missiles': 45, 'Close Combat': 35,
-          'Recon / Scanner': 55, 'Damage Control': 50, 'Leadership': 40, 'Survival': 45,
+          'Energy Weapons': 68, 'Cannons / Ballistic': 42, 'Guided Missiles': 48, 'Close Combat': 35,
+          'Recon / Scanner': 58, 'Damage Control': 54, 'Leadership': 40, 'Survival': 48,
           'Mechanic (Repair)': 45, 'Medical (First Aid)': 40
         }
       },
       {
-        id: 'rec-2',
+        id: 'merc-2',
         firstName: 'Viktor',
         lastName: 'Orlov',
         callsign: 'Kodiak',
         portraitId: 'iron-veteran',
-        bio: 'Frontier defender trained in Ballistic Cannons and Guided Missile salvos.',
-        xp: 500,
-        xpSpent: 0,
-        hireCost: 4500,
-        baseSalary: 900,
-        stats: { Constitution: 28, Intelligence: 21, Instinct: 25, Reflexes: 23, Piloting: 26, Bravery: 29 },
+        bio: 'Veteran heavy ballistic & missile freelancer for hire by the drop.',
+        xp: 100,
+        xpSpent: 1400,
+        flatFee: 9500,
+        termMonths: 3,
+        termFights: 3,
+        baseSalary: 0,
+        stats: { Constitution: 32, Intelligence: 23, Instinct: 28, Reflexes: 27, Piloting: 29, Bravery: 34 },
         skills: {
-          'Energy Weapons': 40, 'Cannons / Ballistic': 60, 'Guided Missiles': 60, 'Close Combat': 45,
-          'Recon / Scanner': 45, 'Damage Control': 55, 'Leadership': 45, 'Survival': 50,
-          'Mechanic (Repair)': 50, 'Medical (First Aid)': 35
+          'Energy Weapons': 48, 'Cannons / Ballistic': 72, 'Guided Missiles': 70, 'Close Combat': 52,
+          'Recon / Scanner': 50, 'Damage Control': 64, 'Leadership': 55, 'Survival': 60,
+          'Mechanic (Repair)': 55, 'Medical (First Aid)': 35
+        }
+      },
+      {
+        id: 'merc-3',
+        firstName: 'Talia',
+        lastName: 'Moreau',
+        callsign: 'Spectre',
+        portraitId: 'cyber-violet',
+        bio: 'High-precision sniper ringer available for a single urgent contract.',
+        xp: 100,
+        xpSpent: 2100,
+        flatFee: 5500,
+        termMonths: 1,
+        termFights: 1,
+        baseSalary: 0,
+        stats: { Constitution: 25, Intelligence: 32, Instinct: 34, Reflexes: 38, Piloting: 30, Bravery: 28 },
+        skills: {
+          'Energy Weapons': 78, 'Cannons / Ballistic': 74, 'Guided Missiles': 55, 'Close Combat': 40,
+          'Recon / Scanner': 72, 'Damage Control': 60, 'Leadership': 45, 'Survival': 62,
+          'Mechanic (Repair)': 40, 'Medical (First Aid)': 45
         }
       }
     ]
@@ -77,6 +101,10 @@ window.GameState = {
         this.data = JSON.parse(saved);
         if (!this.data.company) {
           this.data.company = createDefaultState().company;
+        }
+        // Ensure recruits have the new flat-fee short-term mercenary fields
+        if (!this.data.recruits || !this.data.recruits.length || !this.data.recruits[0].flatFee) {
+          this.data.recruits = createDefaultState().recruits;
         }
         // Migrate any old 1-20 attributes to the new 1-100 scale
         (this.data.jocks || []).forEach(j => {
@@ -111,6 +139,11 @@ window.GameState = {
 
   getContractSummary(jock) {
     if (!jock.contract) return 'Standard Charter';
+    if (jock.contract.type === 'mercenary') {
+      const remF = jock.contract.fightsRemaining ?? jock.contract.totalFights;
+      const remM = jock.contract.monthsRemaining ?? jock.contract.totalMonths;
+      return `Mercenary: ${remF}/${jock.contract.totalFights} Fights • ${remM}/${jock.contract.totalMonths} Mos`;
+    }
     if (jock.contract.type === 'fights') {
       const rem = jock.contract.fightsRemaining ?? jock.contract.totalFights;
       return `${rem} / ${jock.contract.totalFights} Fights Left`;

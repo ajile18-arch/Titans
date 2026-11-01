@@ -117,12 +117,13 @@ window.HQModule = {
             <div style="display:flex; flex-direction:column; gap:8px;">
               ${st.jocks.length === 0 ? `
                 <div class="panel subtext" style="text-align:center; padding:18px 12px;">
-                  No Jocks on your payroll yet.<br/>Set a Signing Bonus above and click <strong>Post Offer &amp; Interview Next Applicant</strong>!
+                  No Jocks on your payroll yet.<br/>Interview a long-term Jockey above or hire a short-term Flat-Fee Mercenary below!
                 </div>
               ` : st.jocks.map(j => {
                 const rk = window.GameState.getJockRank(j);
                 const mech = st.mechs.find(m => m.id === j.assignedMechId);
                 const isSel = j.id === jock?.id;
+                const isMerc = j.contract?.type === 'mercenary';
                 return `
                   <div class="list-item ${isSel ? 'selected' : ''}" onclick="HQModule.selectJock('${j.id}')">
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -130,20 +131,55 @@ window.HQModule = {
                       <div style="flex:1; min-width:0;">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
                           <strong style="font-size:14px;">${j.firstName} "${j.callsign}" ${j.lastName}</strong>
-                          <span class="badge primary">${rk.name}</span>
+                          <span class="badge ${isMerc ? 'amber' : 'primary'}">${isMerc ? 'Mercenary' : rk.name}</span>
                         </div>
                         <div class="subtext" style="margin-top:2px;">
                           Titan: <strong>${mech ? mech.customName : 'Unassigned'}</strong> • <span class="mono">${window.GameState.getContractSummary(j)}</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:12px;">
                           <span class="mono" style="color:var(--accent-green); font-weight:700;">${j.xp} XP Ready</span>
-                          <span class="mono subtext">Wage: ${window.GameState.getJockSalary(j).toLocaleString()} Cr/mo</span>
+                          <span class="mono subtext">${isMerc ? 'Flat Fee Paid (0 Cr/mo)' : 'Wage: ' + window.GameState.getJockSalary(j).toLocaleString() + ' Cr/mo'}</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 `;
               }).join('')}
+            </div>
+          </div>
+
+          <!-- Hire Short-Term Mercenary (Flat Fee / Short Time & Small Number of Fights) -->
+          <div class="card">
+            <div class="section-header">
+              <div>
+                <div class="section-title">Hire Mercenary (Short-Term Flat Fee)</div>
+                <div class="subtext">Short duration &amp; small fight count for a single flat fee (0 Cr/mo wage)</div>
+              </div>
+              <button class="btn" onclick="HQModule.refreshMercenaries()" title="Refresh Available Mercenaries (-500 Cr)">Refresh</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              ${(st.recruits || []).length === 0 ? `
+                <div class="panel subtext">No freelance mercenaries currently in sector. Click Refresh above.</div>
+              ` : st.recruits.map((r, idx) => `
+                <div class="panel" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                  <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+                    <div style="flex-shrink:0;">${window.GameState.getPortraitSvg(r.portraitId, 52)}</div>
+                    <div style="flex:1; min-width:0;">
+                      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                        <strong>${r.firstName} "${r.callsign}" ${r.lastName}</strong>
+                        <span class="badge amber mono">${r.termMonths} Mo${r.termMonths > 1 ? 's' : ''} / ${r.termFights} Fight${r.termFights > 1 ? 's' : ''}</span>
+                      </div>
+                      <div class="subtext" style="margin-top:2px;">${r.bio}</div>
+                      <div class="mono" style="font-size:12px; margin-top:4px; color:var(--accent-green); font-weight:700;">
+                        Flat Fee: ${(r.flatFee || 6500).toLocaleString()} Cr <span class="subtext" style="font-weight:400;">(0 Cr/mo Wage)</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary" ${st.jocks.length >= 8 ? 'disabled' : ''} onclick="HQModule.hireMercenary(${idx})">
+                    Hire Merc
+                  </button>
+                </div>
+              `).join('')}
             </div>
           </div>
 
@@ -1016,6 +1052,88 @@ window.HQModule = {
     const st = window.GameState.data;
     st.jocks.forEach(j => { j.health = 100; });
     window.GameState.save();
+    this.render();
+  },
+
+  hireMercenary(idx) {
+    const st = window.GameState.data;
+    const r = st.recruits[idx];
+    if (!r || st.jocks.length >= 8) return;
+    const fee = r.flatFee || 6500;
+    if (st.credits < fee) {
+      alert(`Insufficient funds to pay the ${fee.toLocaleString()} Cr Mercenary Flat Fee!`);
+      return;
+    }
+
+    st.credits -= fee;
+    const newId = 'merc-' + Date.now();
+    const freeMech = st.mechs.find(m => !st.jocks.some(j => j.assignedMechId === m.id));
+
+    st.jocks.push({
+      id: newId,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      callsign: r.callsign,
+      portraitId: r.portraitId,
+      bio: r.bio,
+      xp: r.xp || 100,
+      xpSpent: r.xpSpent || 800,
+      baseSalary: 0, // Flat-fee Mercenary has 0 monthly wage
+      contract: {
+        type: 'mercenary',
+        totalMonths: r.termMonths || 2,
+        monthsRemaining: r.termMonths || 2,
+        totalFights: r.termFights || 2,
+        fightsRemaining: r.termFights || 2
+      },
+      health: 100,
+      kills: 0,
+      missions: 0,
+      assignedMechId: freeMech ? freeMech.id : '',
+      stats: { ...r.stats },
+      skills: { ...r.skills }
+    });
+
+    st.recruits.splice(idx, 1);
+    st.selectedJockId = newId;
+    window.GameState.save();
+    App.updateHUD();
+    this.render();
+  },
+
+  refreshMercenaries() {
+    const st = window.GameState.data;
+    if (st.credits < 500) return;
+    st.credits -= 500;
+
+    const terms = [
+      { months: 1, fights: 1, fee: 5000 },
+      { months: 2, fights: 2, fee: 7500 },
+      { months: 3, fights: 3, fee: 10500 }
+    ];
+
+    st.recruits = terms.map((t, i) => {
+      const gen = this.generateApplicant(t.fee * 1.4);
+      return {
+        id: 'merc-' + Date.now() + '-' + i,
+        firstName: gen.firstName,
+        lastName: gen.lastName,
+        callsign: gen.callsign,
+        portraitId: gen.portraitId,
+        bio: `Short-term flat-fee mercenary (${t.months} Mo / ${t.fights} Fight limit, strong in ${gen.primaryWeapon}).`,
+        xp: 120,
+        xpSpent: gen.xpSpent,
+        flatFee: t.fee,
+        termMonths: t.months,
+        termFights: t.fights,
+        baseSalary: 0,
+        stats: gen.stats,
+        skills: gen.skills
+      };
+    });
+
+    window.GameState.save();
+    App.updateHUD();
     this.render();
   }
 };
