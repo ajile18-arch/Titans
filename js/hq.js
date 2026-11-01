@@ -32,7 +32,11 @@ window.HQModule = {
               <button class="btn btn-primary" onclick="HQModule.openCreator(false)">+ Custom Jock</button>
             </div>
             <div style="display:flex; flex-direction:column; gap:8px;">
-              ${st.jocks.map(j => {
+              ${st.jocks.length === 0 ? `
+                <div class="panel subtext" style="text-align:center; padding:18px 12px;">
+                  No Jocks in your squad yet.<br/>Click <strong>+ Custom Jock</strong> above to create your first pilot from scratch!
+                </div>
+              ` : st.jocks.map(j => {
                 const rk = window.GameState.getJockRank(j);
                 const mech = st.mechs.find(m => m.id === j.assignedMechId);
                 const isSel = j.id === jock?.id;
@@ -112,7 +116,23 @@ window.HQModule = {
 
         <!-- Right 8 Cols: Selected Jock Full Dossier, Attributes & 0-100% Skills -->
         <div class="col-8" style="display:flex; flex-direction:column; gap:16px;">
-          ${jock ? this.renderDossier(jock) : `<div class="card">Select or create a Jock.</div>`}
+          ${jock ? this.renderDossier(jock) : `
+            <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:16px;">
+              <span class="badge primary">NEW MERCENARY COMMAND</span>
+              <h2 style="font-size:22px; font-weight:800;">Start Your Squad From Scratch</h2>
+              <p class="subtext" style="max-width:520px; font-size:14px;">
+                Your Hangar and Pilot Barracks are currently empty. You have <strong class="mono" style="color:var(--accent-green);">${st.credits.toLocaleString()} Cr</strong> in starting capital to establish your unit:
+              </p>
+              <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:6px;">
+                <button class="btn btn-primary" style="padding:10px 18px; font-size:13px;" onclick="HQModule.openCreator(false)">
+                  1. Create Your First Jock (2,500 Cr)
+                </button>
+                <button class="btn" style="padding:10px 18px; font-size:13px;" onclick="App.switchTab('garage')">
+                  2. Build Your First Mech in Garage &rarr;
+                </button>
+              </div>
+            </div>
+          `}
         </div>
       </div>
 
@@ -400,6 +420,7 @@ window.HQModule = {
       if (st.credits < 2500 || st.jocks.length >= 8) return;
       st.credits -= 2500;
       const newId = 'jock-' + Date.now();
+      const freeMech = st.mechs.find(m => !st.jocks.some(j => j.assignedMechId === m.id));
       st.jocks.push({
         id: newId,
         firstName,
@@ -413,7 +434,7 @@ window.HQModule = {
         health: 100,
         kills: 0,
         missions: 0,
-        assignedMechId: '',
+        assignedMechId: freeMech ? freeMech.id : '',
         stats: { Constitution: 14, Intelligence: 14, Instinct: 14, Reflexes: 15, Piloting: 14, Bravery: 14 },
         skills: {
           'Energy Weapons': 50, 'Cannons / Ballistic': 50, 'Guided Missiles': 50, 'Close Combat': 40,

@@ -9,6 +9,13 @@ window.App = {
     this.switchTab('hq');
   },
 
+  startNewScratchGame() {
+    window.GameState.reset();
+    window.BattleModule.active = false;
+    this.updateHUD();
+    this.enterGame('hq');
+  },
+
   enterGame(tab) {
     const intro = document.getElementById('intro-screen');
     if (intro) intro.classList.add('hidden');
@@ -16,13 +23,9 @@ window.App = {
   },
 
   showIntro() {
+    this.updateHUD();
     const intro = document.getElementById('intro-screen');
     if (intro) intro.classList.remove('hidden');
-  },
-
-  startNewSquadFromIntro() {
-    this.enterGame('hq');
-    window.HQModule.openCreator(false);
   },
 
   switchTab(tab) {
@@ -52,10 +55,30 @@ window.App = {
     if (upkeepEl) upkeepEl.textContent = '-' + totalUpkeep.toLocaleString() + ' Cr/mo';
     if (jocksEl) jocksEl.textContent = `${st.jocks.length} / 8`;
     if (mechsEl) mechsEl.textContent = `${st.mechs.length} Units`;
+
+    // Update Intro Screen dynamic telemetry
+    const badgeEl = document.getElementById('intro-callout-badge');
+    const titleEl = document.getElementById('intro-callout-title');
+    const subEl = document.getElementById('intro-callout-sub');
+    const contSub = document.getElementById('intro-continue-sub');
+
+    if (st.jocks.length === 0 && st.mechs.length === 0) {
+      if (badgeEl) badgeEl.textContent = '0 JOCKS / 0 MECHS';
+      if (titleEl) titleEl.textContent = 'Fresh Campaign Ready';
+      if (subEl) subEl.textContent = 'Starting Capital: 500,000 Cr • Recruit Jocks & Commission Titans from scratch.';
+      if (contSub) contSub.textContent = 'EMPTY ROSTER →';
+    } else {
+      const leadJock = st.jocks[0];
+      const leadMech = st.mechs[0];
+      if (badgeEl) badgeEl.textContent = `${st.jocks.length} JOCKS • ${st.mechs.length} MECHS`;
+      if (titleEl) titleEl.textContent = leadJock ? `${leadJock.firstName} "${leadJock.callsign}" ${leadJock.lastName}` : 'Uncrewed Hangar';
+      if (subEl) subEl.textContent = leadMech ? `Assigned Titan: ${leadMech.customName} • Funds: ${st.credits.toLocaleString()} Cr` : `Funds: ${st.credits.toLocaleString()} Cr`;
+      if (contSub) contSub.textContent = `${st.jocks.length} JOCKS / ${st.mechs.length} MECHS →`;
+    }
   },
 
   resetSave() {
-    if (confirm('Reset your squad, hangar mechs, and funds back to the starting campaign state?')) {
+    if (confirm('Start a brand-new game from scratch (0 Jocks, 0 Mechs, 500,000 Cr)?')) {
       window.GameState.reset();
       window.BattleModule.active = false;
       this.switchTab(this.currentTab);

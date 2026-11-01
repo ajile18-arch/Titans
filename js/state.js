@@ -1,177 +1,20 @@
 // Persistent Game State & Calculations for Titans of Steel Remake
 
-const STORAGE_KEY = 'TOS_REMAKE_SAVE_V1';
+const STORAGE_KEY = 'TOS_REMAKE_SAVE_V2';
 
 function createDefaultState() {
   return {
-    credits: 520000,
+    credits: 500000,
     missionsCompleted: 0,
-    selectedJockId: 'jock-1',
-    selectedMechId: 'mech-1',
+    selectedJockId: '',
+    selectedMechId: '',
     selectedBodyPart: 'RA',
 
-    jocks: [
-      {
-        id: 'jock-1',
-        firstName: 'Marcus',
-        lastName: 'Vance',
-        callsign: 'Valkyrie',
-        portraitId: 'visor-blue',
-        bio: 'Former Solar Navy recon ace. Known for surgical laser fire and staying calm inside overheating cockpits.',
-        xp: 550,
-        xpSpent: 2100,
-        baseSalary: 1200,
-        health: 100,
-        kills: 7,
-        missions: 12,
-        assignedMechId: 'mech-1',
-        stats: {
-          Constitution: 14,
-          Intelligence: 16,
-          Instinct: 15,
-          Reflexes: 17,
-          Piloting: 16,
-          Bravery: 15
-        },
-        skills: {
-          'Energy Weapons': 78,
-          'Cannons / Ballistic': 50,
-          'Guided Missiles': 65,
-          'Close Combat': 45,
-          'Recon / Scanner': 72,
-          'Damage Control': 62,
-          'Leadership': 55,
-          'Survival': 60,
-          'Mechanic (Repair)': 55,
-          'Medical (First Aid)': 35
-        }
-      },
-      {
-        id: 'jock-2',
-        firstName: 'Kara',
-        lastName: 'Kovács',
-        callsign: 'Anvil',
-        portraitId: 'crimson-ace',
-        bio: 'Outer Rim arena gladiator who favors heavy ballistic cannons and brutal close-quarters Power Axe strikes.',
-        xp: 400,
-        xpSpent: 3600,
-        baseSalary: 1300,
-        health: 100,
-        kills: 14,
-        missions: 19,
-        assignedMechId: 'mech-2',
-        stats: {
-          Constitution: 18,
-          Intelligence: 13,
-          Instinct: 16,
-          Reflexes: 15,
-          Piloting: 17,
-          Bravery: 19
-        },
-        skills: {
-          'Energy Weapons': 55,
-          'Cannons / Ballistic': 84,
-          'Guided Missiles': 50,
-          'Close Combat': 82,
-          'Recon / Scanner': 48,
-          'Damage Control': 75,
-          'Leadership': 60,
-          'Survival': 70,
-          'Mechanic (Repair)': 70,
-          'Medical (First Aid)': 40
-        }
-      },
-      {
-        id: 'jock-3',
-        firstName: 'Devon',
-        lastName: 'Takahashi',
-        callsign: 'Ghost',
-        portraitId: 'recon-ghost',
-        bio: 'Electronic warfare specialist and chief squad medic. Excels at deep-scanner locks and evasive light mech piloting.',
-        xp: 650,
-        xpSpent: 1150,
-        baseSalary: 1100,
-        health: 100,
-        kills: 4,
-        missions: 8,
-        assignedMechId: 'mech-3',
-        stats: {
-          Constitution: 13,
-          Intelligence: 18,
-          Instinct: 16,
-          Reflexes: 18,
-          Piloting: 17,
-          Bravery: 14
-        },
-        skills: {
-          'Energy Weapons': 64,
-          'Cannons / Ballistic': 42,
-          'Guided Missiles': 60,
-          'Close Combat': 45,
-          'Recon / Scanner': 85,
-          'Damage Control': 55,
-          'Leadership': 48,
-          'Survival': 65,
-          'Mechanic (Repair)': 48,
-          'Medical (First Aid)': 74
-        }
-      }
-    ],
+    // Start from complete scratch with no Jockeys and no Mechs
+    jocks: [],
+    mechs: [],
 
-    mechs: [
-      {
-        id: 'mech-1',
-        customName: 'TAT-120M "Guillotine"',
-        templateId: 'medium-120',
-        armor: { HD: 18, CT: 50, LT: 38, RT: 38, LA: 32, RA: 32, LL: 38, RL: 38 },
-        maxArmorCurrent: { HD: 18, CT: 50, LT: 38, RT: 38, LA: 32, RA: 32, LL: 38, RL: 38 },
-        locations: {
-          HD: ['bcomp'],
-          CT: ['hs', 'hs'],
-          LT: ['lrm10', 'hs'],
-          RT: ['srm6', 'hs'],
-          LA: ['hlas', 'paxe'],
-          RA: ['hlas', 'mlas'],
-          LL: ['jjet'],
-          RL: ['jjet']
-        }
-      },
-      {
-        id: 'mech-2',
-        customName: 'TAT-160H "Ironclad"',
-        templateId: 'heavy-160',
-        armor: { HD: 22, CT: 70, LT: 52, RT: 52, LA: 44, RA: 44, LL: 50, RL: 50 },
-        maxArmorCurrent: { HD: 22, CT: 70, LT: 52, RT: 52, LA: 44, RA: 44, LL: 50, RL: 50 },
-        locations: {
-          HD: ['bcomp'],
-          CT: ['dhs', 'hs'],
-          LT: ['lrm15', 'hs'],
-          RT: ['ac12', 'hs'],
-          LA: ['mlas', 'vsword'],
-          RA: ['ac12', 'mlas'],
-          LL: ['hs'],
-          RL: ['hs']
-        }
-      },
-      {
-        id: 'mech-3',
-        customName: 'TAT-50R "Nightshade"',
-        templateId: 'recon-50',
-        armor: { HD: 14, CT: 26, LT: 20, RT: 20, LA: 16, RA: 16, LL: 20, RL: 20 },
-        maxArmorCurrent: { HD: 14, CT: 26, LT: 20, RT: 20, LA: 16, RA: 16, LL: 20, RL: 20 },
-        locations: {
-          HD: ['ecm'],
-          CT: ['hs'],
-          LT: ['srm6'],
-          RT: ['hs'],
-          LA: ['mlas'],
-          RA: ['mlas', 'slas'],
-          LL: ['jjet'],
-          RL: ['jjet']
-        }
-      }
-    ],
-
+    // Optional Mercenary Hiring Hall applicants if the player wants to hire in addition to creating custom Jocks
     recruits: [
       {
         id: 'rec-1',
@@ -179,15 +22,15 @@ function createDefaultState() {
         lastName: 'Chen',
         callsign: 'Spark',
         portraitId: 'cyber-violet',
-        bio: 'Academy honors graduate specializing in high-output Plasma and Meson beam weaponry.',
+        bio: 'Academy graduate specializing in Energy weaponry and heat management.',
         xp: 500,
-        xpSpent: 450,
-        hireCost: 6500,
-        baseSalary: 950,
-        stats: { Constitution: 13, Intelligence: 16, Instinct: 15, Reflexes: 17, Piloting: 15, Bravery: 14 },
+        xpSpent: 0,
+        hireCost: 4500,
+        baseSalary: 900,
+        stats: { Constitution: 13, Intelligence: 16, Instinct: 15, Reflexes: 16, Piloting: 14, Bravery: 14 },
         skills: {
-          'Energy Weapons': 68, 'Cannons / Ballistic': 40, 'Guided Missiles': 50, 'Close Combat': 35,
-          'Recon / Scanner': 60, 'Damage Control': 55, 'Leadership': 40, 'Survival': 50,
+          'Energy Weapons': 60, 'Cannons / Ballistic': 40, 'Guided Missiles': 45, 'Close Combat': 35,
+          'Recon / Scanner': 55, 'Damage Control': 50, 'Leadership': 40, 'Survival': 45,
           'Mechanic (Repair)': 45, 'Medical (First Aid)': 40
         }
       },
@@ -197,16 +40,16 @@ function createDefaultState() {
         lastName: 'Orlov',
         callsign: 'Kodiak',
         portraitId: 'iron-veteran',
-        bio: 'Seasoned frontier defender with decades of experience in Heavy and Assault missile platforms.',
-        xp: 350,
-        xpSpent: 2200,
-        hireCost: 16000,
-        baseSalary: 1250,
-        stats: { Constitution: 17, Intelligence: 14, Instinct: 17, Reflexes: 15, Piloting: 16, Bravery: 18 },
+        bio: 'Frontier defender trained in Ballistic Cannons and Guided Missile salvos.',
+        xp: 500,
+        xpSpent: 0,
+        hireCost: 4500,
+        baseSalary: 900,
+        stats: { Constitution: 16, Intelligence: 13, Instinct: 15, Reflexes: 14, Piloting: 15, Bravery: 16 },
         skills: {
-          'Energy Weapons': 55, 'Cannons / Ballistic': 68, 'Guided Missiles': 80, 'Close Combat': 55,
-          'Recon / Scanner': 55, 'Damage Control': 70, 'Leadership': 65, 'Survival': 65,
-          'Mechanic (Repair)': 60, 'Medical (First Aid)': 35
+          'Energy Weapons': 40, 'Cannons / Ballistic': 60, 'Guided Missiles': 60, 'Close Combat': 45,
+          'Recon / Scanner': 45, 'Damage Control': 55, 'Leadership': 45, 'Survival': 50,
+          'Mechanic (Repair)': 50, 'Medical (First Aid)': 35
         }
       }
     ]

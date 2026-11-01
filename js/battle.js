@@ -271,13 +271,35 @@ window.BattleModule = {
   },
 
   render() {
-    if (!this.active) this.initEncounter();
     const container = document.getElementById('view-battle');
     if (!container) return;
 
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
     const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
+
+    if (!jock || !mech) {
+      container.innerHTML = `
+        <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:16px;">
+          <span class="badge amber">PRE-FLIGHT CHECKLIST INCOMPLETE</span>
+          <h2 style="font-size:22px; font-weight:800;">Squad Not Ready for Combat Deployment</h2>
+          <p class="subtext" style="max-width:520px; font-size:14px;">
+            Before deploying to the Hex Arena, you need at least <strong>1 Jock</strong> and <strong>1 Titan Mech</strong> built and assigned:
+          </p>
+          <div class="panel" style="display:flex; flex-direction:column; gap:10px; text-align:left; min-width:340px;">
+            <div>${jock ? '&#9989;' : '&#10060;'} <strong>Step 1:</strong> Create or Hire a Jock in HQ (${st.jocks.length} in Roster)</div>
+            <div>${mech ? '&#9989;' : '&#10060;'} <strong>Step 2:</strong> Commission &amp; Equip a Titan in the Garage (${st.mechs.length} in Hangar)</div>
+          </div>
+          <div style="display:flex; gap:12px; margin-top:6px;">
+            <button class="btn btn-primary" onclick="App.switchTab('hq')">Go to 1. HQ &amp; Jockey Roster</button>
+            <button class="btn btn-primary" onclick="App.switchTab('garage')">Go to 2. Garage &amp; Mech Factory</button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    if (!this.active) this.initEncounter();
     const metrics = window.GameState.computeMechMetrics(mech);
 
     const mins = String(Math.floor(this.clockSec / 60)).padStart(2, '0');

@@ -13,7 +13,38 @@ window.GarageModule = {
     const activeLoc = st.selectedBodyPart || 'RA';
 
     if (!mech) {
-      container.innerHTML = `<div class="card">No Titans in Hangar. Commission one below!</div>`;
+      container.innerHTML = `
+        <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:18px;">
+          <span class="badge primary">FACTORY &amp; HANGAR BAY</span>
+          <h2 style="font-size:22px; font-weight:800;">No Titans in Your Hangar Yet</h2>
+          <p class="subtext" style="max-width:560px; font-size:14px;">
+            Commission your first Titan chassis below to begin mounting weapons, heat sinks, electronics, and armor across all 8 body sections.
+          </p>
+
+          <div class="panel" style="display:flex; flex-direction:column; gap:12px; width:100%; max-width:540px; text-align:left; padding:18px;">
+            <div>
+              <label class="subtext" style="font-weight:600;">1. Choose Chassis Weight Class</label>
+              <select id="new-chassis-select" class="select" style="margin-top:6px;">
+                ${window.TOS_DATA.chassisTemplates.map(t => `
+                  <option value="${t.id}">${t.model} (${t.maxTons}t ${t.weightClass}) — ${t.baseCost.toLocaleString()} Cr</option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div>
+              <label class="subtext" style="font-weight:600;">2. Choose Starting Configuration</label>
+              <select id="new-chassis-mode" class="select" style="margin-top:6px;">
+                <option value="stripped">Stripped Bare Frame (0 Weapons / 50% Armor — Build Everything Yourself)</option>
+                <option value="standard">Basic Factory Frame (2x Medium Lasers, 2x Heat Sinks, Full Armor)</option>
+              </select>
+            </div>
+
+            <button class="btn btn-primary" style="padding:11px; font-size:14px; margin-top:4px;" onclick="GarageModule.commissionChassis()">
+              + Commission Titan Chassis
+            </button>
+          </div>
+        </div>
+      `;
       return;
     }
 
@@ -339,31 +370,36 @@ window.GarageModule = {
 
   commissionChassis() {
     const st = window.GameState.data;
-    const selId = document.getElementById('new-chassis-select')?.value || 'medium-120';
+    const selId = document.getElementById('new-chassis-select')?.value || 'recon-50';
+    const mode = document.getElementById('new-chassis-mode')?.value || 'stripped';
     const tpl = window.TOS_DATA.chassisTemplates.find(t => t.id === selId);
     if (!tpl || st.credits < tpl.baseCost) return;
 
     st.credits -= tpl.baseCost;
     const newId = 'mech-' + Date.now();
-    const armorCopy = { ...tpl.maxArmor };
+    const armorCopy = {};
+    Object.keys(tpl.maxArmor).forEach(k => {
+      armorCopy[k] = mode === 'stripped' ? Math.round(tpl.maxArmor[k] * 0.5) : tpl.maxArmor[k];
+    });
+
     st.mechs.push({
       id: newId,
       customName: tpl.model,
       templateId: tpl.id,
       armor: { ...armorCopy },
       maxArmorCurrent: { ...armorCopy },
-      locations: {
-        HD: [],
-        CT: ['hs', 'hs'],
-        LT: [],
-        RT: [],
-        LA: ['mlas'],
-        RA: ['mlas'],
-        LL: [],
-        RL: []
-      }
+      locations: mode === 'stripped'
+        ? { HD: [], CT: [], LT: [], RT: [], LA: [], RA: [], LL: [], RL: [] }
+        : { HD: [], CT: ['hs', 'hs'], LT: [], RT: [], LA: ['mlas'], RA: ['mlas'], LL: [], RL: [] }
     });
     st.selectedMechId = newId;
+
+    // Auto-assign to the first unassigned Jock if one exists
+    const unassignedJock = st.jocks.find(j => !j.assignedMechId);
+    if (unassignedJock) {
+      unassignedJock.assignedMechId = newId;
+    }
+
     window.GameState.save();
     App.updateHUD();
     this.render();
