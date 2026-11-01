@@ -156,6 +156,8 @@ window.BattleModule = {
           jock.health = Math.max(25, jock.health - 30);
           jock.missions = (jock.missions || 0) + 1;
           jock.xp = (jock.xp || 0) + 75;
+          window.GameState.ensureJockContract(jock);
+          jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
           this.recordBattleHistory(jock, playerMech, 'EJECTED', 'Core Breach — Emergency Ejection', 75, 'EJECT');
         }
         window.GameState.advanceTimeWeeks(4, 'Combat Drop & Recovery');
@@ -282,19 +284,9 @@ window.BattleModule = {
           jock.xp += 250;
           jock.kills += 1;
           jock.missions += 1;
+          window.GameState.ensureJockContract(jock);
+          jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
           this.recordBattleHistory(jock, mech, 'VICTORY', killMethod, 250, killCode);
-          if (jock.contract) {
-            if (jock.contract.type === 'mercenary') {
-              jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
-              if (jock.contract.fightsRemaining <= 0) {
-                this.log(`NOTICE: Mercenary ${jock.callsign}'s short-term flat-fee contract has concluded and they have departed the company.`);
-                st.jocks = st.jocks.filter(x => x.id !== jock.id);
-                if (st.selectedJockId === jock.id) st.selectedJockId = st.jocks[0]?.id || '';
-              }
-            } else if (jock.contract.type === 'fights') {
-              jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
-            }
-          }
         }
         window.GameState.advanceTimeWeeks(4, `Victory vs. ${this.enemy.name}`);
         this.log(`VICTORY! ${this.enemy.name} neutralized! Earned +35,000 Cr and +250 XP for ${jock ? jock.callsign : 'Pilot'} (+1 Month Elapsed)!`);

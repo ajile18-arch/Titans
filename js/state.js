@@ -149,7 +149,7 @@ window.GameState = {
         if (!this.data.recruits || !this.data.recruits.length || !this.data.recruits[0].flatFee) {
           this.data.recruits = createDefaultState().recruits;
         }
-        // Migrate any old 1-20 attributes to the new 1-100 scale
+        // Migrate any old 1-20 attributes to the new 1-100 scale & ensure dual-condition contracts
         (this.data.jocks || []).forEach(j => {
           if (j.stats) {
             const maxStat = Math.max(...Object.values(j.stats));
@@ -159,6 +159,7 @@ window.GameState = {
               });
             }
           }
+          this.ensureJockContract(j);
         });
       } catch (e) {
         this.data = createDefaultState();
@@ -166,6 +167,36 @@ window.GameState = {
     } else {
       this.data = createDefaultState();
     }
+  },
+
+  ensureJockContract(j) {
+    if (!j) return;
+    if (!j.contract || typeof j.contract !== 'object') {
+      j.contract = {
+        type: 'standard',
+        totalYears: 2,
+        totalMonths: 24,
+        monthsRemaining: 24,
+        totalFights: 10,
+        fightsRemaining: 10,
+        expired: false
+      };
+      return;
+    }
+    if (j.contract.type === 'mercenary') {
+      j.contract.totalMonths = j.contract.totalMonths || 2;
+      if (typeof j.contract.monthsRemaining !== 'number') j.contract.monthsRemaining = j.contract.totalMonths;
+      j.contract.totalFights = j.contract.totalFights || 2;
+      if (typeof j.contract.fightsRemaining !== 'number') j.contract.fightsRemaining = j.contract.totalFights;
+    } else {
+      j.contract.type = 'standard';
+      j.contract.totalYears = j.contract.totalYears || 2;
+      j.contract.totalMonths = j.contract.totalYears * 12;
+      if (typeof j.contract.monthsRemaining !== 'number') j.contract.monthsRemaining = j.contract.totalMonths;
+      j.contract.totalFights = j.contract.totalFights || 10;
+      if (typeof j.contract.fightsRemaining !== 'number') j.contract.fightsRemaining = j.contract.totalFights;
+    }
+    j.contract.expired = (j.contract.fightsRemaining <= 0 || j.contract.monthsRemaining <= 0);
   },
 
   ensureCalendar() {
@@ -266,23 +297,29 @@ window.GameState = {
         if (monthlyUpkeep > 0) {
           st.credits = Math.max(0, st.credits - monthlyUpkeep);
         }
-        // Decrement monthsRemaining on Year-based or Mercenary contracts
-        const expiredIds = [];
+        // Decrement monthsRemaining on all active contracts (both fights and max time, whichever comes first)
+        let newlyExpiredJockId = null;
+        let newlyExpiredReason = '';
         (st.jocks || []).forEach(j => {
-          if (j.contract && (j.contract.type === 'years' || j.contract.type === 'mercenary')) {
-            if (typeof j.contract.monthsRemaining === 'number') {
-              j.contract.monthsRemaining = Math.max(0, j.contract.monthsRemaining - 1);
-              if (j.contract.monthsRemaining <= 0) {
-                expiredIds.push(j.id);
-              }
+          this.ensureJockContract(j);
+          const wasExpired = j.contract.expired;
+          if (typeof j.contract.monthsRemaining === 'number' && j.contract.monthsRemaining > 0) {
+            j.contract.monthsRemaining = Math.max(0, j.contract.monthsRemaining - 1);
+          }
+          if (j.contract.monthsRemaining <= 0 || j.contract.fightsRemaining <= 0) {
+            j.contract.expired = true;
+            if (!wasExpired && !newlyExpiredJockId) {
+              newlyExpiredJockId = j.id;
+              newlyExpiredReason = j.contract.monthsRemaining <= 0
+                ? 'Max Contract Time Reached (0 Months Remaining)'
+                : 'All Contract Fights Completed (0 Fights Remaining)';
             }
           }
         });
-        if (expiredIds.length > 0) {
-          st.jocks = st.jocks.filter(j => !expiredIds.includes(j.id));
-          if (expiredIds.includes(st.selectedJockId)) {
-            st.selectedJockId = st.jocks[0]?.id || '';
-          }
+        if (newlyExpiredJockId && window.HQModule && typeof window.HQModule.triggerContractExpirationPrompt === 'function') {
+          setTimeout(() => {
+            window.HQModule.triggerContractExpirationPrompt(newlyExpiredJockId, newlyExpiredReason);
+          }, 20);
         }
       }
     }
@@ -310,20 +347,21 @@ window.GameState = {
   },
 
   getContractSummary(jock) {
-    if (!jock.contract) return 'Standard Charter';
-    if (jock.contract.type === 'mercenary') {
-      const remF = jock.contract.fightsRemaining ?? jock.contract.totalFights;
-      const remM = jock.contract.monthsRemaining ?? jock.contract.totalMonths;
-      return `Mercenary: ${remF}/${jock.contract.totalFights} Fights • ${remM}/${jock.contract.totalMonths} Mos`;
+    if (!jock) return 'Standard Charter';
+    this.ensureJockContract(jock);
+    const c = jock.contract;
+    const remF = c.fightsRemaining ?? c.totalFights;
+    const totF = c.totalFights || 10;
+    const remM = c.monthsRemaining ?? c.totalMonths;
+    const totM = c.totalMonths || ((c.totalYears || 2) * 12);
+
+    if (c.expired || remF <= 0 || remM <= 0) {
+      return `CONTRACT DONE (${remF}/${totF} Fights • ${remM}/${totM} Mos) — Renegotiate!`;
     }
-    if (jock.contract.type === 'fights') {
-      const rem = jock.contract.fightsRemaining ?? jock.contract.totalFights;
-      return `${rem} / ${jock.contract.totalFights} Fights Left`;
-    } else {
-      const yrs = jock.contract.totalYears || 1;
-      const mos = jock.contract.monthsRemaining ?? (yrs * 12);
-      return `${yrs} Yr Term (${mos} Mos Left)`;
+    if (c.type === 'mercenary') {
+      return `Merc: ${remF}/${totF} Fights or ${remM}/${totM} Mos (1st)`;
     }
+    return `${remF}/${totF} Fights or ${remM}/${totM} Mos Max (${c.totalYears || 2} Yr)`;
   },
 
   getCompanyEmblemSvg(emblemId) {

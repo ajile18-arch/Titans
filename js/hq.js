@@ -16,13 +16,25 @@ window.HQModule = {
   askedQuestions: {},
   proposedWage: 1200,
   proposedBonus: 5000,
-  proposedContractType: 'years', // 'years' or 'fights'
   proposedYears: 2,
   proposedFights: 10,
   negotiationMessage: '',
   candidateWalkedOut: false,
 
+  // Contract Expiration Prompt & Renegotiation State
+  renegotiateOpen: false,
+  renegotiateJockId: '',
+  renegotiateIsExpiredPrompt: false,
+  renegotiateReason: '',
+  renegYears: 2,
+  renegFights: 10,
+  renegBonus: 3000,
+  renegWage: 1200,
+  renegMessage: '',
+  renegPatience: 3,
+
   render() {
+    this.updateRenegotiationModalMount();
     const st = window.GameState.data;
     const container = document.getElementById('view-hq');
     if (!container) return;
@@ -590,25 +602,15 @@ window.HQModule = {
     if (fEl) this.proposedFights = Math.max(1, Number(fEl.value) || 10);
   },
 
-  setContractType(type) {
-    this.updateNegotiationInputs();
-    this.proposedContractType = type;
-    this.render();
-  },
-
   getContractTermLabel() {
-    if (this.proposedContractType === 'fights') {
-      return `${this.proposedFights}-Fight Contract`;
-    }
-    return `${this.proposedYears}-Year Contract`;
+    return `${this.proposedFights} Fights or ${this.proposedYears} Yr${this.proposedYears > 1 ? 's' : ''} Max (Whichever First)`;
   },
 
   // Longer contracts require slightly more signing bonus or wage security to lock the pilot in
   getContractLengthModifier() {
-    if (this.proposedContractType === 'fights') {
-      return Math.round((this.proposedFights - 10) * 18);
-    }
-    return Math.round((this.proposedYears - 2) * 85);
+    const fightsMod = Math.round((this.proposedFights - 10) * 14);
+    const yearsMod = Math.round((this.proposedYears - 2) * 55);
+    return fightsMod + yearsMod;
   },
 
   testCounterOffer() {
@@ -669,7 +671,7 @@ window.HQModule = {
       return;
     }
 
-    // Deduct signing bonus and add Jock to active squad with negotiated base salary & contract term!
+    // Deduct signing bonus and add Jock to active squad with negotiated base salary & dual-condition contract!
     st.credits -= this.proposedBonus;
     const newId = 'jock-' + Date.now();
     const freeMech = st.mechs.find(m => !st.jocks.some(j => j.assignedMechId === m.id));
@@ -678,9 +680,16 @@ window.HQModule = {
     const rk = window.GameState.getJockRank(tempJock);
     const baseSalary = Math.max(300, Math.round(this.proposedWage / rk.salaryMult));
 
-    const contractObj = this.proposedContractType === 'fights'
-      ? { type: 'fights', totalFights: this.proposedFights, fightsRemaining: this.proposedFights }
-      : { type: 'years', totalYears: this.proposedYears, monthsRemaining: this.proposedYears * 12 };
+    const contractObj = {
+      type: 'standard',
+      totalYears: this.proposedYears,
+      totalMonths: this.proposedYears * 12,
+      monthsRemaining: this.proposedYears * 12,
+      totalFights: this.proposedFights,
+      fightsRemaining: this.proposedFights,
+      whicheverComesFirst: true,
+      expired: false
+    };
 
     st.jocks.push({
       id: newId,
@@ -780,46 +789,32 @@ window.HQModule = {
                   </span>
                 </div>
 
-                <!-- Contract Length Type Choice (Years vs. Number of Fights) -->
+                <!-- Dual-Condition Contract Structure (Both Fights & Max Length of Time, Whichever Comes First) -->
                 <div>
-                  <label class="subtext" style="font-weight:600;">1. Choose Contract Length Structure:</label>
-                  <div style="display:flex; gap:6px; margin-top:4px;">
-                    <button
-                      class="btn ${this.proposedContractType === 'years' ? 'btn-primary' : ''}"
-                      style="flex:1;"
-                      ${this.candidateWalkedOut ? 'disabled' : ''}
-                      onclick="HQModule.setContractType('years')"
-                    >
-                      By Length in Years
-                    </button>
-                    <button
-                      class="btn ${this.proposedContractType === 'fights' ? 'btn-primary' : ''}"
-                      style="flex:1;"
-                      ${this.candidateWalkedOut ? 'disabled' : ''}
-                      onclick="HQModule.setContractType('fights')"
-                    >
-                      By Number of Fights
-                    </button>
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:4px;">
+                    <label class="subtext" style="font-weight:700; color:var(--text);">1. Contract Length (Fights &amp; Max Time — Whichever Comes First):</label>
                   </div>
-                </div>
-
-                <!-- Duration Selector (Years or Fights) -->
-                <div>
-                  ${this.proposedContractType === 'years' ? `
-                    <label class="subtext" style="font-weight:600;">Contract Duration (Years):</label>
-                    <select id="neg-inp-years" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
-                      ${[1, 2, 3, 4, 5].map(yr => `
-                        <option value="${yr}" ${this.proposedYears === yr ? 'selected' : ''}>${yr} Year${yr > 1 ? 's' : ''} (${yr * 12} Months)</option>
-                      `).join('')}
-                    </select>
-                  ` : `
-                    <label class="subtext" style="font-weight:600;">Contract Duration (Combat Drops / Fights):</label>
-                    <select id="neg-inp-fights" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
-                      ${[3, 5, 10, 15, 25].map(f => `
-                        <option value="${f}" ${this.proposedFights === f ? 'selected' : ''}>${f} Combat Fights</option>
-                      `).join('')}
-                    </select>
-                  `}
+                  <div class="grid-12">
+                    <div class="col-6">
+                      <label class="subtext" style="font-weight:600;">Combat Fights:</label>
+                      <select id="neg-inp-fights" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
+                        ${[3, 5, 10, 15, 25].map(f => `
+                          <option value="${f}" ${this.proposedFights === f ? 'selected' : ''}>${f} Fights</option>
+                        `).join('')}
+                      </select>
+                    </div>
+                    <div class="col-6">
+                      <label class="subtext" style="font-weight:600;">Max Time Limit:</label>
+                      <select id="neg-inp-years" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
+                        ${[1, 2, 3, 4, 5].map(yr => `
+                          <option value="${yr}" ${this.proposedYears === yr ? 'selected' : ''}>${yr} Yr${yr > 1 ? 's' : ''} (${yr * 12} Mos)</option>
+                        `).join('')}
+                      </select>
+                    </div>
+                  </div>
+                  <div class="subtext" style="font-size:11px; margin-top:4px;">
+                    Contract concludes after <strong>${this.proposedFights} Fights</strong> OR <strong>${this.proposedYears * 12} Months (${this.proposedYears} Yr${this.proposedYears > 1 ? 's' : ''})</strong>, whichever comes first.
+                  </div>
                 </div>
 
                 <div style="display:flex; justify-content:space-between; font-size:12px;">
@@ -983,6 +978,13 @@ window.HQModule = {
                   <button class="btn" onclick="HQModule.openJockeyPage('${j.id}', 'history')">
                     Combat History &amp; Awards (${awards.length})
                   </button>
+                  <button
+                    class="btn ${j.contract?.expired ? 'btn-primary' : ''}"
+                    style="${j.contract?.expired ? 'background:var(--accent-amber); color:#0b0f17; font-weight:800;' : ''}"
+                    onclick="HQModule.openRenegotiationModal('${j.id}', false)"
+                  >
+                    &#128221; Renegotiate Contract
+                  </button>
                 </div>
               </div>
             `;
@@ -1010,6 +1012,7 @@ window.HQModule = {
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <span class="badge primary">DEDICATED JOCKEY INFORMATION PAGE</span>
                 <span class="badge ${isMerc ? 'amber' : 'green'}">${isMerc ? 'Short-Term Mercenary' : rank.name}</span>
+                <span class="badge ${jock.contract?.expired ? 'red' : 'amber'} mono">${window.GameState.getContractSummary(jock)}</span>
               </div>
               <h2 style="font-size:20px; font-weight:800; margin-top:3px;">
                 ${jock.firstName} "${jock.callsign}" ${jock.lastName}
@@ -1017,7 +1020,7 @@ window.HQModule = {
             </div>
           </div>
 
-          <!-- Dedicated Jockey Page Sub-Tabs (Dossier & Training vs. Combat History & Commendations) -->
+          <!-- Dedicated Jockey Page Sub-Tabs & Renegotiate Contract Button -->
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button
               class="btn ${this.jockeySubTab === 'dossier' ? 'btn-primary' : ''}"
@@ -1032,6 +1035,13 @@ window.HQModule = {
               onclick="HQModule.setJockeySubTab('history')"
             >
               2. Combat History, Commendations &amp; Awards (${fightsCount} Fights / ${awardsCount} Awards)
+            </button>
+            <button
+              class="btn"
+              style="padding:9px 16px; font-size:13px; border-color:var(--accent-amber); color:var(--accent-amber); font-weight:700;"
+              onclick="HQModule.openRenegotiationModal('${jock.id}', false)"
+            >
+              &#128221; Renegotiate Contract
             </button>
           </div>
         </div>
@@ -1231,8 +1241,15 @@ window.HQModule = {
                 <h2 style="font-size:18px; font-weight:700;">${jock.firstName} "${jock.callsign}" ${jock.lastName}</h2>
                 <span class="badge primary">${rank.name}</span>
                 <span class="badge green">HP ${jock.health}%</span>
-                <span class="badge amber mono">${window.GameState.getContractSummary(jock)}</span>
+                <span class="badge ${jock.contract?.expired ? 'red' : 'amber'} mono">${window.GameState.getContractSummary(jock)}</span>
                 <button class="btn" onclick="HQModule.openCreator(true)">Edit Callsign / Portrait / Bio</button>
+                <button
+                  class="btn"
+                  style="border-color:var(--accent-amber); color:var(--accent-amber); font-weight:700;"
+                  onclick="HQModule.openRenegotiationModal('${jock.id}', false)"
+                >
+                  &#128221; Renegotiate Contract
+                </button>
               </div>
               <p class="subtext" style="margin-top:6px; max-width:620px; font-size:13px;">${jock.bio}</p>
               <div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:8px; font-size:12px;" class="mono subtext">
@@ -1606,5 +1623,290 @@ window.HQModule = {
 
     window.GameState.advanceTimeWeeks(1, 'Scouted Freelance Mercenaries');
     this.render();
+  },
+
+  // --- CONTRACT EXPIRATION NOTIFICATION & RENEGOTIATION MODAL ---
+
+  triggerContractExpirationPrompt(jockId, reason) {
+    this.openRenegotiationModal(jockId, true, reason);
+  },
+
+  getRenegotiationAskingTerms(jock, fights, years) {
+    const rk = window.GameState.getJockRank(jock);
+    const currentWage = Math.max(700, window.GameState.getJockSalary(jock) || 950);
+    const fightsMod = Math.round((fights - 10) * 14);
+    const yearsMod = Math.round((years - 2) * 55);
+    const lengthMod = fightsMod + yearsMod;
+
+    // Veteran/skilled pilots ask for a modest raise or renewal bonus based on rank and kills
+    const careerPrestige = Math.round((jock.kills || 0) * 35 + (jock.xpSpent || 0) * 0.15);
+    const askingWage = Math.max(550, Math.round((currentWage + careerPrestige + lengthMod) / 50) * 50);
+    const minWage = Math.max(450, Math.round(askingWage * 0.85 / 50) * 50);
+    const askingBonus = Math.max(1500, Math.round((askingWage * 2.2 * rk.salaryMult) / 500) * 500);
+    return { askingWage, minWage, askingBonus };
+  },
+
+  openRenegotiationModal(jockId, isExpiredPrompt = false, reason = '') {
+    const st = window.GameState.data;
+    const jock = st.jocks.find(j => j.id === jockId);
+    if (!jock) return;
+
+    window.GameState.ensureJockContract(jock);
+    this.renegotiateOpen = true;
+    this.renegotiateJockId = jock.id;
+    this.renegotiateIsExpiredPrompt = !!isExpiredPrompt;
+    this.renegotiateReason = reason || (jock.contract.expired ? 'Contract term reached' : '');
+    this.renegYears = jock.contract.totalYears || 2;
+    this.renegFights = jock.contract.totalFights || 10;
+    this.renegPatience = 3;
+
+    const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
+    this.renegBonus = terms.askingBonus;
+    this.renegWage = terms.askingWage;
+
+    if (isExpiredPrompt || jock.contract.expired) {
+      this.renegMessage = `"Commander, my contract has concluded (${this.renegotiateReason || 'term completed'}). Would you like to renegotiate a new Fights & Max-Time contract to keep me on the roster, or part ways?"`;
+    } else {
+      this.renegMessage = `"Ready to talk contract extension, Commander. Here are my terms for a fresh ${this.renegFights}-Fight / ${this.renegYears}-Year Max contract (whichever comes first)."`;
+    }
+
+    this.updateRenegotiationModalMount();
+  },
+
+  updateRenegotiationInputs() {
+    const fEl = document.getElementById('reneg-inp-fights');
+    const yEl = document.getElementById('reneg-inp-years');
+    const bEl = document.getElementById('reneg-inp-bonus');
+    const wEl = document.getElementById('reneg-inp-wage');
+    if (fEl) this.renegFights = Math.max(1, Number(fEl.value) || 10);
+    if (yEl) this.renegYears = Math.max(1, Number(yEl.value) || 2);
+    if (bEl) this.renegBonus = Math.max(0, Number(bEl.value) || 0);
+    if (wEl) this.renegWage = Math.max(300, Number(wEl.value) || 600);
+  },
+
+  onRenegotiationDurationChange() {
+    this.updateRenegotiationInputs();
+    this.updateRenegotiationModalMount();
+  },
+
+  testRenegotiationOffer() {
+    const st = window.GameState.data;
+    const jock = st.jocks.find(j => j.id === this.renegotiateJockId);
+    if (!jock || this.renegPatience <= 0) return;
+
+    this.updateRenegotiationInputs();
+    const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
+    const bonusDiff = Math.round((this.renegBonus - terms.askingBonus) * 0.05);
+    const effectiveWage = this.renegWage + bonusDiff;
+    const label = `${this.renegFights} Fights or ${this.renegYears} Yr${this.renegYears > 1 ? 's' : ''} Max (Whichever First)`;
+
+    if (effectiveWage >= terms.askingWage) {
+      this.renegMessage = `"${this.renegBonus.toLocaleString()} Cr renewal bonus and ${this.renegWage.toLocaleString()} Cr/mo for ${label}? Deal! Click 'Sign Renegotiated Contract' and I'm locked in."`;
+    } else if (effectiveWage >= terms.minWage) {
+      this.renegPatience -= 1;
+      if (this.renegPatience <= 0) {
+        this.renegMessage = `"We're too far apart on numbers, Commander. Take a breather and reopen contract talks when you're ready to meet my minimum rate."`;
+      } else {
+        const counter = Math.round(((this.renegWage + terms.askingWage) / 2) / 50) * 50;
+        this.renegMessage = `"For ${label}, ${this.renegWage.toLocaleString()} Cr/mo is a little light given my combat record. Come up to ${counter.toLocaleString()} Cr/mo (or boost the renewal bonus) and I'll sign."`;
+      }
+    } else {
+      this.renegPatience -= 1;
+      this.renegMessage = `"Commander, ${this.renegWage.toLocaleString()} Cr/mo for ${label} is well below market rate for a ${window.GameState.getJockRank(jock).name} Jockey. You'll need to come closer to ${terms.askingWage.toLocaleString()} Cr/mo."`;
+    }
+
+    this.updateRenegotiationModalMount();
+  },
+
+  confirmRenegotiation() {
+    const st = window.GameState.data;
+    const jock = st.jocks.find(j => j.id === this.renegotiateJockId);
+    if (!jock || this.renegPatience <= 0) return;
+
+    this.updateRenegotiationInputs();
+    if (st.credits < this.renegBonus) {
+      alert('Not enough credits in Company Treasury to pay that Renewal Signing Bonus!');
+      return;
+    }
+
+    const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
+    const bonusDiff = Math.round((this.renegBonus - terms.askingBonus) * 0.05);
+    const effectiveWage = this.renegWage + bonusDiff;
+
+    if (effectiveWage < terms.minWage) {
+      this.testRenegotiationOffer();
+      return;
+    }
+
+    st.credits -= this.renegBonus;
+    const rk = window.GameState.getJockRank(jock);
+    jock.baseSalary = Math.max(300, Math.round(this.renegWage / rk.salaryMult));
+    jock.contract = {
+      type: 'standard',
+      totalYears: this.renegYears,
+      totalMonths: this.renegYears * 12,
+      monthsRemaining: this.renegYears * 12,
+      totalFights: this.renegFights,
+      fightsRemaining: this.renegFights,
+      whicheverComesFirst: true,
+      expired: false
+    };
+
+    this.renegotiateOpen = false;
+    this.renegotiateJockId = '';
+    this.updateRenegotiationModalMount();
+    window.GameState.advanceTimeWeeks(1, `Renegotiated Contract with ${jock.callsign}`);
+    this.render();
+  },
+
+  releaseExpiredJock(jockId) {
+    const st = window.GameState.data;
+    const idx = st.jocks.findIndex(j => j.id === jockId);
+    if (idx === -1) return;
+    const jock = st.jocks[idx];
+    st.jocks.splice(idx, 1);
+    if (st.selectedJockId === jockId) {
+      st.selectedJockId = st.jocks[0]?.id || '';
+      if (!st.selectedJockId) this.jockeyPageOpen = false;
+    }
+    this.renegotiateOpen = false;
+    this.renegotiateJockId = '';
+    this.updateRenegotiationModalMount();
+    window.GameState.save();
+    window.GameState.updateHeaderBar();
+    this.render();
+  },
+
+  closeRenegotiationModal() {
+    this.renegotiateOpen = false;
+    this.renegotiateJockId = '';
+    this.updateRenegotiationModalMount();
+    this.render();
+  },
+
+  updateRenegotiationModalMount() {
+    const mount = document.getElementById('renegotiation-modal-mount');
+    if (!mount) return;
+    mount.innerHTML = this.renderRenegotiationModal();
+  },
+
+  renderRenegotiationModal() {
+    if (!this.renegotiateOpen || !this.renegotiateJockId) return '';
+    const st = window.GameState.data;
+    const jock = st.jocks.find(j => j.id === this.renegotiateJockId);
+    if (!jock) return '';
+
+    const rk = window.GameState.getJockRank(jock);
+    const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
+    const isExpired = this.renegotiateIsExpiredPrompt || jock.contract?.expired;
+
+    return `
+      <div class="modal-backdrop" style="z-index:200;">
+        <div class="modal-card" style="max-width:680px; border-color:${isExpired ? 'var(--accent-amber)' : 'var(--primary)'};">
+          <div class="section-header">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span class="badge ${isExpired ? 'amber' : 'primary'}">
+                  ${isExpired ? '&#9888; CONTRACT COMPLETED — RENEGOTIATE CONTRACT?' : '&#128221; JOCKEY CONTRACT RENEGOTIATION'}
+                </span>
+                <span class="badge green mono">Treasury: ${st.credits.toLocaleString()} Cr</span>
+              </div>
+              <h3 style="font-size:19px; font-weight:800; margin-top:6px;">
+                ${jock.firstName} "${jock.callsign}" ${jock.lastName} (${rk.name})
+              </h3>
+              ${isExpired ? `
+                <div class="subtext" style="color:var(--accent-amber); font-weight:600; margin-top:2px;">
+                  Contract Finished (${this.renegotiateReason || 'Fights or Max Time limit reached'}). Would you like to renegotiate a new contract with ${jock.callsign}?
+                </div>
+              ` : `
+                <div class="subtext" style="margin-top:2px;">
+                  Current Contract: <span class="mono">${window.GameState.getContractSummary(jock)}</span>
+                </div>
+              `}
+            </div>
+            <button class="btn" onclick="HQModule.closeRenegotiationModal()">Decide Later</button>
+          </div>
+
+          <!-- Pilot Summary & Dialogue -->
+          <div class="panel" style="display:flex; gap:14px; align-items:center;">
+            <div style="flex-shrink:0;">${window.GameState.getPortraitSvg(jock.portraitId, 72)}</div>
+            <div style="flex:1;">
+              <div style="display:flex; flex-wrap:wrap; gap:10px; font-size:12px;" class="mono subtext">
+                <span>Rank: <strong style="color:#f8fafc;">${rk.name}</strong></span>
+                <span>Missions: <strong style="color:#f8fafc;">${jock.missions}</strong></span>
+                <span>Kills: <strong style="color:#f8fafc;">${jock.kills}</strong></span>
+                <span>Awards: <strong style="color:var(--accent-amber);">${(jock.awards || []).length}</strong></span>
+              </div>
+              <div style="margin-top:8px; font-size:13px; color:#f8fafc; font-style:italic; line-height:1.45;">
+                ${this.renegMessage}
+              </div>
+            </div>
+          </div>
+
+          <!-- Dual-Condition Contract Terms (Both Fights & Max Time — Whichever Comes First) -->
+          <div class="panel" style="display:flex; flex-direction:column; gap:12px; border-color:var(--primary);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong style="font-size:13px;">New Contract Structure (Fights &amp; Max Time — Whichever Comes First)</strong>
+              <span class="badge ${this.renegPatience <= 0 ? 'red' : 'green'} mono">Patience: ${this.renegPatience}/3</span>
+            </div>
+
+            <div class="grid-12">
+              <div class="col-6">
+                <label class="subtext" style="font-weight:600;">Contract Fights Limit:</label>
+                <select id="reneg-inp-fights" class="select mono" style="margin-top:4px;" onchange="HQModule.onRenegotiationDurationChange()">
+                  ${[3, 5, 10, 15, 25].map(f => `
+                    <option value="${f}" ${this.renegFights === f ? 'selected' : ''}>${f} Combat Fights</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="subtext" style="font-weight:600;">Max Length of Time:</label>
+                <select id="reneg-inp-years" class="select mono" style="margin-top:4px;" onchange="HQModule.onRenegotiationDurationChange()">
+                  ${[1, 2, 3, 4, 5].map(yr => `
+                    <option value="${yr}" ${this.renegYears === yr ? 'selected' : ''}>${yr} Year${yr > 1 ? 's' : ''} (${yr * 12} Months Max)</option>
+                  `).join('')}
+                </select>
+              </div>
+            </div>
+
+            <div class="subtext" style="font-size:12px;">
+              Contract ends after <strong>${this.renegFights} Fights</strong> OR <strong>${this.renegYears * 12} Months (${this.renegYears} Yr${this.renegYears > 1 ? 's' : ''})</strong>, whichever comes first.
+            </div>
+
+            <div style="display:flex; justify-content:space-between; font-size:12px; border-top:1px solid var(--border); padding-top:8px;">
+              <span class="subtext">Pilot's Target Renewal Terms:</span>
+              <strong class="mono" style="color:var(--accent-amber);">
+                ${terms.askingBonus.toLocaleString()} Cr Bonus + ${terms.askingWage.toLocaleString()} Cr/mo
+              </strong>
+            </div>
+
+            <div class="grid-12">
+              <div class="col-6">
+                <label class="subtext">Renewal Signing Bonus Offer (Cr)</label>
+                <input id="reneg-inp-bonus" type="number" step="500" class="input mono" value="${this.renegBonus}" onchange="HQModule.updateRenegotiationInputs()" />
+              </div>
+              <div class="col-6">
+                <label class="subtext">New Monthly Wage Offer (Cr/mo)</label>
+                <input id="reneg-inp-wage" type="number" step="50" class="input mono" value="${this.renegWage}" onchange="HQModule.updateRenegotiationInputs()" />
+              </div>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;">
+              <button class="btn" style="flex:1;" ${this.renegPatience <= 0 ? 'disabled' : ''} onclick="HQModule.testRenegotiationOffer()">
+                Test Counter-Offer
+              </button>
+              <button class="btn btn-primary" style="flex:1.4;" ${this.renegPatience <= 0 ? 'disabled' : ''} onclick="HQModule.confirmRenegotiation()">
+                &#128221; Sign Renegotiated Contract (+1 Wk)
+              </button>
+              ${isExpired ? `
+                <button class="btn btn-danger" onclick="HQModule.releaseExpiredJock('${jock.id}')">
+                  Release Jockey (End Service)
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
   }
 };
