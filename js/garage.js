@@ -3,6 +3,54 @@
 window.GarageModule = {
   filterCat: 'All',
 
+  renderShopkeeperBanner(repLvl, totalSpareParts = 0) {
+    const quote = repLvl >= 4
+      ? `"Reputation Level ${repLvl}! You're legends in this sector, Commander. I've unlocked my entire vault—including the 200-ton Sovereign Assault frames."`
+      : repLvl === 3
+        ? `"Word of your victories is spreading fast (Reputation Level ${repLvl}). I'm now authorized to sell you 160-ton Heavy Marauder chassis!"`
+        : repLvl === 2
+          ? `"Not bad out there, Commander! At Reputation Level ${repLvl}, I can clear you for 120-ton Medium Guillotine frames. Keep winning to unlock Heavy iron."`
+          : `"Welcome to Vos Heavy Salvage & Ordnance! At Reputation Level 1, I can only clear you for Recon and Light chassis. Remember: you gotta buy a part from my shop before bolting it on, and I buy back gear at 50%—less if you bring it back shot up!"`;
+
+    return `
+      <div class="card" style="margin-bottom:16px; border-color:var(--accent-amber);">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;">
+          <div style="display:flex; align-items:center; gap:14px; flex:1; min-width:280px;">
+            <img
+              src="assets/portraits/shopkeeper_rusty.jpg"
+              alt="Shopkeeper Kaelen 'Rusty' Vos"
+              style="width:78px; height:78px; object-fit:cover; border-radius:12px; border:2px solid var(--accent-amber); flex-shrink:0; background:#0f172a;"
+            />
+            <div>
+              <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                <span class="badge amber">SHOPKEEPER &amp; QUARTERMASTER</span>
+                <h2 style="font-size:18px; font-weight:800;">Kaelen "Rusty" Vos</h2>
+                <span class="subtext mono">— Vos Heavy Salvage &amp; Ordnance</span>
+              </div>
+              <div style="font-style:italic; color:#fde68a; font-size:13px; margin-top:4px;">
+                ${quote}
+              </div>
+              <div class="subtext" style="margin-top:4px; font-size:12px;">
+                <strong>Shop Policy:</strong> Chassis unlocked by <strong>Company Reputation (Lvl ${repLvl})</strong> • Buy parts to equip • <strong>50% Base Buyback</strong> (Reduced if damaged)
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div class="hud-pill">
+              <div class="label">Company Rep</div>
+              <div class="val" style="color:var(--accent-amber);">Level ${repLvl}</div>
+            </div>
+            <div class="hud-pill">
+              <div class="label">Spare Parts Owned</div>
+              <div class="val" style="color:var(--accent-green);">${totalSpareParts} in Storage</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
   render() {
     const st = window.GameState.data;
     const container = document.getElementById('view-garage');
@@ -12,9 +60,11 @@ window.GarageModule = {
     const mech = st.mechs.find(m => m.id === st.selectedMechId) || st.mechs[0];
     if (mech && st.selectedMechId !== mech.id) st.selectedMechId = mech.id;
     const activeLoc = st.selectedBodyPart || 'RA';
+    const totalSpareParts = (st.partStorage || []).length;
 
     if (!mech) {
       container.innerHTML = `
+        ${this.renderShopkeeperBanner(repLvl, totalSpareParts)}
         <div class="card" style="padding:32px 28px; text-align:center; align-items:center; gap:18px;">
           <div style="display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap;">
             <span class="badge primary">CHASSIS DEALERSHIP &amp; HANGAR BAY</span>
@@ -118,10 +168,10 @@ window.GarageModule = {
 
     const categories = ['All', 'Energy Weapons', 'Cannons / Ballistic', 'Guided Missiles', 'Close Combat', 'Support'];
     const filteredCatalog = window.TOS_DATA.components.filter(c => this.filterCat === 'All' || c.cat === this.filterCat);
-    const totalSpareParts = (st.partStorage || []).length;
     const resaleInfo = window.GameState.getChassisResaleInfo(mech);
 
     container.innerHTML = `
+      ${this.renderShopkeeperBanner(repLvl, totalSpareParts)}
       <div class="grid-12">
         <!-- Left 5 Cols: Hangar Bay Roster & Reputation-Gated Chassis Shop + 8-Location Titan Paperdoll -->
         <div class="col-5" style="display:flex; flex-direction:column; gap:16px;">
