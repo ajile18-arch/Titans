@@ -248,6 +248,13 @@ window.BattleModule = {
           jock.xp += 250;
           jock.kills += 1;
           jock.missions += 1;
+          if (jock.contract) {
+            if (jock.contract.type === 'fights') {
+              jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
+            } else {
+              jock.contract.monthsRemaining = Math.max(0, (jock.contract.monthsRemaining ?? (jock.contract.totalYears * 12)) - 1);
+            }
+          }
         }
         this.log(`VICTORY! ${this.enemy.name} neutralized! Earned +35,000 Cr and +250 XP for ${jock ? jock.callsign : 'Pilot'}!`);
         window.GameState.save();

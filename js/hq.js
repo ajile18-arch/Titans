@@ -12,6 +12,9 @@ window.HQModule = {
   askedQuestions: {},
   proposedWage: 1200,
   proposedBonus: 5000,
+  proposedContractType: 'years', // 'years' or 'fights'
+  proposedYears: 2,
+  proposedFights: 10,
   negotiationMessage: '',
   candidateWalkedOut: false,
 
@@ -129,7 +132,7 @@ window.HQModule = {
                           <span class="badge primary">${rk.name}</span>
                         </div>
                         <div class="subtext" style="margin-top:2px;">
-                          Titan: <strong>${mech ? mech.customName : 'Unassigned'}</strong>
+                          Titan: <strong>${mech ? mech.customName : 'Unassigned'}</strong> • <span class="mono">${window.GameState.getContractSummary(j)}</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:12px;">
                           <span class="mono" style="color:var(--accent-green); font-weight:700;">${j.xp} XP Ready</span>
@@ -313,8 +316,11 @@ window.HQModule = {
     this.askedQuestions = {};
     this.proposedBonus = this.offeredBonusInput;
     this.proposedWage = this.candidate.askingWage;
+    this.proposedContractType = 'years';
+    this.proposedYears = 2;
+    this.proposedFights = 10;
     this.candidateWalkedOut = false;
-    this.negotiationMessage = `"Thanks for bringing me in, Commander. With a ${this.proposedBonus.toLocaleString()} Cr signing bonus on the table, I'm looking for ${this.candidate.askingWage.toLocaleString()} Cr per month. Feel free to ask me anything about my cockpit record."`;
+    this.negotiationMessage = `"Thanks for bringing me in, Commander. With a ${this.proposedBonus.toLocaleString()} Cr signing bonus on the table, I'm looking for ${this.candidate.askingWage.toLocaleString()} Cr per month on a standard 2-Year (or 10-Fight) contract. Feel free to ask me anything about my cockpit record."`;
     this.interviewOpen = true;
     this.render();
   },
@@ -413,38 +419,67 @@ window.HQModule = {
   updateNegotiationInputs() {
     const wEl = document.getElementById('neg-inp-wage');
     const bEl = document.getElementById('neg-inp-bonus');
+    const yEl = document.getElementById('neg-inp-years');
+    const fEl = document.getElementById('neg-inp-fights');
     if (wEl) this.proposedWage = Math.max(200, Number(wEl.value) || 500);
     if (bEl) this.proposedBonus = Math.max(500, Number(bEl.value) || 1000);
+    if (yEl) this.proposedYears = Math.max(1, Number(yEl.value) || 2);
+    if (fEl) this.proposedFights = Math.max(1, Number(fEl.value) || 10);
+  },
+
+  setContractType(type) {
+    this.updateNegotiationInputs();
+    this.proposedContractType = type;
+    this.render();
+  },
+
+  getContractTermLabel() {
+    if (this.proposedContractType === 'fights') {
+      return `${this.proposedFights}-Fight Contract`;
+    }
+    return `${this.proposedYears}-Year Contract`;
+  },
+
+  // Longer contracts require slightly more signing bonus or wage security to lock the pilot in
+  getContractLengthModifier() {
+    if (this.proposedContractType === 'fights') {
+      return Math.round((this.proposedFights - 10) * 18);
+    }
+    return Math.round((this.proposedYears - 2) * 85);
   },
 
   testCounterOffer() {
     if (!this.candidate || this.candidateWalkedOut) return;
     this.updateNegotiationInputs();
     const c = this.candidate;
+    const termLabel = this.getContractTermLabel();
+    const lengthMod = this.getContractLengthModifier();
+    const targetAsking = Math.max(450, c.askingWage + lengthMod);
+    const targetMin = Math.max(350, c.minWage + Math.round(lengthMod * 0.7));
 
     // Effective monthly value combines wage + amortized bonus difference
     const bonusAdjustment = Math.round((this.proposedBonus - this.offeredBonusInput) * 0.05);
     const effectiveWageOffer = this.proposedWage + bonusAdjustment;
 
-    if (effectiveWageOffer >= c.askingWage) {
-      this.negotiationMessage = `"${this.proposedBonus.toLocaleString()} Cr up front and ${this.proposedWage.toLocaleString()} Cr a month? That's a square deal, Commander. Put the contract in front of me and I'll sign right now!"`;
-    } else if (effectiveWageOffer >= c.minWage) {
+    if (effectiveWageOffer >= targetAsking) {
+      this.negotiationMessage = `"${this.proposedBonus.toLocaleString()} Cr signing bonus and ${this.proposedWage.toLocaleString()} Cr/mo on a ${termLabel}? That's a square deal, Commander. Put the contract in front of me and I'll sign right now!"`;
+    } else if (effectiveWageOffer >= targetMin) {
       c.patience -= 1;
       if (c.patience <= 0) {
         this.candidateWalkedOut = true;
         this.negotiationMessage = `"We've been haggling in circles over nickels and dimes while I put my life on the line in a reactor core. I'm withdrawing my application."`;
       } else {
-        const counter = Math.round(((this.proposedWage + c.askingWage) / 2) / 50) * 50;
-        c.askingWage = counter;
-        this.negotiationMessage = `"Hmm... ${this.proposedWage.toLocaleString()} Cr/mo is a bit tight for my skill set. Meet me halfway at ${counter.toLocaleString()} Cr/mo (or sweeten the signing bonus) and you have a deal."`;
+        const counter = Math.round(((this.proposedWage + targetAsking) / 2) / 50) * 50;
+        c.askingWage = Math.max(450, counter - lengthMod);
+        this.negotiationMessage = `"Hmm... locking into a ${termLabel} at ${this.proposedWage.toLocaleString()} Cr/mo is a bit tight for my skill set. Meet me at ${counter.toLocaleString()} Cr/mo (or sweeten the signing bonus / adjust the term length) and you have a deal."`;
       }
     } else {
       c.patience -= 2;
       if (c.patience <= 0) {
         this.candidateWalkedOut = true;
-        this.negotiationMessage = `"${this.proposedWage.toLocaleString()} Cr a month?! That's an insult to a Titan Jock. Find yourself a desperate academy washout—interview's over!"`;
+        this.negotiationMessage = `"${this.proposedWage.toLocaleString()} Cr a month for a ${termLabel}?! That's an insult to a MechJock. Find yourself a desperate academy washout—interview's over!"`;
       } else {
-        this.negotiationMessage = `"Commander, ${this.proposedWage.toLocaleString()} Cr/mo won't even cover my life-support insurance! You'll need to come much closer to ${c.askingWage.toLocaleString()} Cr/mo before I walk out."`;
+        this.negotiationMessage = `"Commander, ${this.proposedWage.toLocaleString()} Cr/mo for a ${termLabel} won't even cover my life-support insurance! You'll need to come much closer to ${targetAsking.toLocaleString()} Cr/mo before I walk out."`;
       }
     }
     this.render();
@@ -461,15 +496,17 @@ window.HQModule = {
       return;
     }
 
+    const lengthMod = this.getContractLengthModifier();
+    const targetMin = Math.max(350, c.minWage + Math.round(lengthMod * 0.7));
     const bonusAdjustment = Math.round((this.proposedBonus - this.offeredBonusInput) * 0.05);
     const effectiveWageOffer = this.proposedWage + bonusAdjustment;
 
-    if (effectiveWageOffer < c.minWage) {
+    if (effectiveWageOffer < targetMin) {
       this.testCounterOffer();
       return;
     }
 
-    // Deduct signing bonus and add Jock to active squad with negotiated base salary!
+    // Deduct signing bonus and add Jock to active squad with negotiated base salary & contract term!
     st.credits -= this.proposedBonus;
     const newId = 'jock-' + Date.now();
     const freeMech = st.mechs.find(m => !st.jocks.some(j => j.assignedMechId === m.id));
@@ -477,6 +514,10 @@ window.HQModule = {
     const tempJock = { xpSpent: c.xpSpent };
     const rk = window.GameState.getJockRank(tempJock);
     const baseSalary = Math.max(300, Math.round(this.proposedWage / rk.salaryMult));
+
+    const contractObj = this.proposedContractType === 'fights'
+      ? { type: 'fights', totalFights: this.proposedFights, fightsRemaining: this.proposedFights }
+      : { type: 'years', totalYears: this.proposedYears, monthsRemaining: this.proposedYears * 12 };
 
     st.jocks.push({
       id: newId,
@@ -488,6 +529,7 @@ window.HQModule = {
       xp: c.xp,
       xpSpent: c.xpSpent,
       baseSalary,
+      contract: contractObj,
       health: 100,
       kills: 0,
       missions: 0,
@@ -570,15 +612,57 @@ window.HQModule = {
               <!-- Contract & Monthly Wage Negotiation Box -->
               <div class="panel" style="display:flex; flex-direction:column; gap:10px; border-color:var(--primary);">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <strong style="font-size:13px;">Contract &amp; Wage Negotiation</strong>
+                  <strong style="font-size:13px;">Contract Terms &amp; Wage Negotiation</strong>
                   <span class="badge ${this.candidateWalkedOut ? 'red' : 'green'}">
                     ${this.candidateWalkedOut ? 'Walked Out' : `Patience: ${c.patience}/3`}
                   </span>
                 </div>
 
+                <!-- Contract Length Type Choice (Years vs. Number of Fights) -->
+                <div>
+                  <label class="subtext" style="font-weight:600;">1. Choose Contract Length Structure:</label>
+                  <div style="display:flex; gap:6px; margin-top:4px;">
+                    <button
+                      class="btn ${this.proposedContractType === 'years' ? 'btn-primary' : ''}"
+                      style="flex:1;"
+                      ${this.candidateWalkedOut ? 'disabled' : ''}
+                      onclick="HQModule.setContractType('years')"
+                    >
+                      By Length in Years
+                    </button>
+                    <button
+                      class="btn ${this.proposedContractType === 'fights' ? 'btn-primary' : ''}"
+                      style="flex:1;"
+                      ${this.candidateWalkedOut ? 'disabled' : ''}
+                      onclick="HQModule.setContractType('fights')"
+                    >
+                      By Number of Fights
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Duration Selector (Years or Fights) -->
+                <div>
+                  ${this.proposedContractType === 'years' ? `
+                    <label class="subtext" style="font-weight:600;">Contract Duration (Years):</label>
+                    <select id="neg-inp-years" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
+                      ${[1, 2, 3, 4, 5].map(yr => `
+                        <option value="${yr}" ${this.proposedYears === yr ? 'selected' : ''}>${yr} Year${yr > 1 ? 's' : ''} (${yr * 12} Months)</option>
+                      `).join('')}
+                    </select>
+                  ` : `
+                    <label class="subtext" style="font-weight:600;">Contract Duration (Combat Drops / Fights):</label>
+                    <select id="neg-inp-fights" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
+                      ${[3, 5, 10, 15, 25].map(f => `
+                        <option value="${f}" ${this.proposedFights === f ? 'selected' : ''}>${f} Combat Fights</option>
+                      `).join('')}
+                    </select>
+                  `}
+                </div>
+
                 <div style="display:flex; justify-content:space-between; font-size:12px;">
-                  <span class="subtext">Applicant's Asking Wage:</span>
-                  <strong class="mono" style="color:var(--accent-amber);">${c.askingWage.toLocaleString()} Cr / month</strong>
+                  <span class="subtext">Asking Wage (${this.getContractTermLabel()}):</span>
+                  <strong class="mono" style="color:var(--accent-amber);">${Math.max(450, c.askingWage + this.getContractLengthModifier()).toLocaleString()} Cr / month</strong>
                 </div>
 
                 <div class="grid-12">
@@ -670,6 +754,7 @@ window.HQModule = {
                 <h2 style="font-size:18px; font-weight:700;">${jock.firstName} "${jock.callsign}" ${jock.lastName}</h2>
                 <span class="badge primary">${rank.name}</span>
                 <span class="badge green">HP ${jock.health}%</span>
+                <span class="badge amber mono">${window.GameState.getContractSummary(jock)}</span>
                 <button class="btn" onclick="HQModule.openCreator(true)">Edit Callsign / Portrait / Bio</button>
               </div>
               <p class="subtext" style="margin-top:6px; max-width:620px; font-size:13px;">${jock.bio}</p>
@@ -750,7 +835,7 @@ window.HQModule = {
           <div class="section-header">
             <div>
               <div class="section-title">Combat, Recon &amp; Crew Skills (0–100%)</div>
-              <div class="subtext">Escalating XP cost per +3% Skill Training</div>
+              <div class="subtext">High escalating XP cost per +1% Skill Training</div>
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:10px;">
@@ -768,7 +853,7 @@ window.HQModule = {
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span class="mono" style="font-size:14px; font-weight:700;">${val}%</span>
                       <button class="btn btn-primary" ${jock.xp < cost || val >= 100 ? 'disabled' : ''} onclick="HQModule.trainSkill('${sk.key}')">
-                        +3% (${cost} XP)
+                        +1% (${cost} XP)
                       </button>
                     </div>
                   </div>
@@ -878,7 +963,7 @@ window.HQModule = {
     if (jock.xp < cost || curVal >= 100) return;
     jock.xp -= cost;
     jock.xpSpent += cost;
-    jock.skills[skillKey] = Math.min(100, curVal + 3);
+    jock.skills[skillKey] = Math.min(100, curVal + 1);
     window.GameState.save();
     App.updateHUD();
     this.render();

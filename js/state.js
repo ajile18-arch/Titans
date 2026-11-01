@@ -99,13 +99,25 @@ window.GameState = {
   // Escalating XP cost to raise a 1-100 Attribute by +1 (starts high and climbs steep)
   getAttrUpgradeCost(currentVal) {
     const v = Number(currentVal) || 20;
-    return Math.round((250 + v * 12) / 10) * 10;
+    return Math.round((350 + v * 15) / 10) * 10;
   },
 
-  // Escalating XP cost to raise a 0-100% Skill by +3%
+  // High escalating XP cost to raise a 0-100% Skill by +1%
   getSkillUpgradeCost(currentVal) {
     const v = Number(currentVal) || 30;
-    return Math.round((80 + v * 2.5) / 10) * 10;
+    return Math.round((220 + v * 8.5) / 10) * 10;
+  },
+
+  getContractSummary(jock) {
+    if (!jock.contract) return 'Standard Charter';
+    if (jock.contract.type === 'fights') {
+      const rem = jock.contract.fightsRemaining ?? jock.contract.totalFights;
+      return `${rem} / ${jock.contract.totalFights} Fights Left`;
+    } else {
+      const yrs = jock.contract.totalYears || 1;
+      const mos = jock.contract.monthsRemaining ?? (yrs * 12);
+      return `${yrs} Yr Term (${mos} Mos Left)`;
+    }
   },
 
   getCompanyEmblemSvg(emblemId) {
