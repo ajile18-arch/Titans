@@ -1352,9 +1352,16 @@ window.HQModule = {
     const st = window.GameState.data;
     let totalMissing = 0;
     st.mechs.forEach(m => {
+      window.GameState.ensureMechPartConditions(m);
       Object.keys(m.armor).forEach(k => {
         totalMissing += Math.max(0, m.maxArmorCurrent[k] - m.armor[k]);
         m.armor[k] = m.maxArmorCurrent[k];
+      });
+      Object.keys(m.partConditions || {}).forEach(loc => {
+        m.partConditions[loc] = (m.partConditions[loc] || []).map(cond => {
+          totalMissing += Math.max(0, Math.round((100 - cond) * 0.5));
+          return 100;
+        });
       });
     });
     const bestMechSkill = Math.max(30, ...st.jocks.map(j => j.skills['Mechanic (Repair)'] || 30));

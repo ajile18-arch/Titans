@@ -21,10 +21,11 @@ function createDefaultState() {
       reputationLevel: 1
     },
 
-    // Start from complete scratch with no Jockeys, no Mechs, and empty Parts Inventory
+    // Start from complete scratch with no Jockeys, no Mechs, and empty Parts Storage
     jocks: [],
     mechs: [],
     partInventory: {},
+    partStorage: [],
 
     // Short-Term Freelance Mercenaries available on the main HQ screen for a flat fee (short time & small number of fights)
     recruits: [
@@ -103,9 +104,27 @@ window.GameState = {
         if (!this.data.company) {
           this.data.company = createDefaultState().company;
         }
-        if (!this.data.partInventory) {
-          this.data.partInventory = {};
+        if (!Array.isArray(this.data.partStorage)) {
+          this.data.partStorage = [];
+          // Migrate any count-based partInventory into condition-tracked partStorage items
+          if (this.data.partInventory && typeof this.data.partInventory === 'object') {
+            Object.entries(this.data.partInventory).forEach(([cid, count]) => {
+              const n = Number(count) || 0;
+              for (let i = 0; i < n; i++) {
+                this.data.partStorage.push({
+                  uid: 'part-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                  compId: cid,
+                  condition: 100
+                });
+              }
+            });
+            this.data.partInventory = {};
+          }
         }
+        // Ensure every Mech has parallel partConditions arrays for all 8 locations
+        (this.data.mechs || []).forEach(m => {
+          this.ensureMechPartConditions(m);
+        });
         // Ensure recruits have the new flat-fee short-term mercenary fields
         if (!this.data.recruits || !this.data.recruits.length || !this.data.recruits[0].flatFee) {
           this.data.recruits = createDefaultState().recruits;
@@ -203,7 +222,85 @@ window.GameState = {
   },
 
   getOwnedPartCount(compId) {
-    return this.data?.partInventory?.[compId] || 0;
+    return (this.data?.partStorage || []).filter(p => p.compId === compId).length;
+  },
+
+  getOwnedPartsByCompId(compId) {
+    // Sort highest condition first when equipping, or lowest condition first when inspecting
+    return (this.data?.partStorage || [])
+      .filter(p => p.compId === compId)
+      .sort((a, b) => (b.condition ?? 100) - (a.condition ?? 100));
+  },
+
+  ensureMechPartConditions(mech) {
+    if (!mech) return;
+    if (!mech.partConditions) mech.partConditions = {};
+    const locs = ['HD', 'CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL'];
+    locs.forEach(loc => {
+      const compArr = mech.locations?.[loc] || [];
+      if (!Array.isArray(mech.partConditions[loc])) {
+        mech.partConditions[loc] = compArr.map(() => 100);
+      } else {
+        while (mech.partConditions[loc].length < compArr.length) {
+          mech.partConditions[loc].push(100);
+        }
+        if (mech.partConditions[loc].length > compArr.length) {
+          mech.partConditions[loc].length = compArr.length;
+        }
+      }
+    });
+  },
+
+  getInstalledPartCondition(mech, locCode, idx) {
+    this.ensureMechPartConditions(mech);
+    const val = mech?.partConditions?.[locCode]?.[idx];
+    return val !== undefined ? val : 100;
+  },
+
+  // Base resale is 50% (half off) at 100% condition, and reduced further if the part is damaged
+  getPartResaleValue(compId, condition = 100) {
+    const comp = this.getComponent(compId);
+    if (!comp) return 0;
+    const condPct = Math.max(0, Math.min(100, Number(condition) ?? 100));
+    return Math.round(comp.cost * 0.50 * (condPct / 100));
+  },
+
+  // Chassis condition % based on current armor vs max armor capacity
+  getChassisConditionPct(mech) {
+    if (!mech) return 100;
+    const curArmor = Object.values(mech.armor || {}).reduce((a, b) => a + b, 0);
+    const maxArmor = Object.values(mech.maxArmorCurrent || {}).reduce((a, b) => a + b, 0);
+    if (maxArmor <= 0) return 100;
+    return Math.max(10, Math.min(100, Math.round((curArmor / maxArmor) * 100)));
+  },
+
+  // Base chassis resale is 50% (half off) of chassis baseCost at 100% condition, reduced if damaged
+  getChassisResaleInfo(mech) {
+    if (!mech) return { conditionPct: 100, chassisResale: 0, partsResale: 0, totalResale: 0, partCount: 0 };
+    this.ensureMechPartConditions(mech);
+    const tpl = this.getMechTemplate(mech);
+    const conditionPct = this.getChassisConditionPct(mech);
+    const baseHalfOff = Math.round(tpl.baseCost * 0.50);
+    const chassisResale = Math.round(baseHalfOff * (conditionPct / 100));
+
+    let partsResale = 0;
+    let partCount = 0;
+    Object.entries(mech.locations || {}).forEach(([loc, compIds]) => {
+      compIds.forEach((cid, idx) => {
+        const cond = this.getInstalledPartCondition(mech, loc, idx);
+        partsResale += this.getPartResaleValue(cid, cond);
+        partCount += 1;
+      });
+    });
+
+    return {
+      conditionPct,
+      baseHalfOff,
+      chassisResale,
+      partsResale,
+      totalResale: chassisResale + partsResale,
+      partCount
+    };
   },
 
   getMaxInterviewQuestions() {

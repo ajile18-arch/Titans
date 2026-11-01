@@ -135,6 +135,21 @@ window.BattleModule = {
       this.battleStats.damageTaken += this.enemy.dmg;
       this.log(`ALERT: ${this.enemy.name} hits your ${hitLoc} for ${this.enemy.dmg} dmg!`);
 
+      // Damage installed weapons/components in the struck body location
+      window.GameState.ensureMechPartConditions(playerMech);
+      const locComps = playerMech.locations?.[hitLoc] || [];
+      if (locComps.length > 0) {
+        const cIdx = Math.floor(Math.random() * locComps.length);
+        const curCond = playerMech.partConditions[hitLoc][cIdx] ?? 100;
+        const condLoss = playerMech.armor[hitLoc] <= 0 ? 30 : 18;
+        const nextCond = Math.max(15, curCond - condLoss);
+        playerMech.partConditions[hitLoc][cIdx] = nextCond;
+        const compObj = window.GameState.getComponent(locComps[cIdx]);
+        if (compObj) {
+          this.log(`COMPONENT HIT: ${compObj.name} in ${hitLoc} damaged (${nextCond}% condition)!`);
+        }
+      }
+
       if (playerMech.armor.CT <= 0 || playerMech.armor.HD <= 0) {
         this.contractLost = true;
         if (jock) {

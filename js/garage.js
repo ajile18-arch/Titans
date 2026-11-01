@@ -70,6 +70,34 @@ window.GarageModule = {
               + Buy &amp; Commission Titan Chassis
             </button>
           </div>
+
+          ${(st.partStorage || []).length > 0 ? `
+            <div class="panel" style="width:100%; max-width:620px; text-align:left; padding:16px; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="font-size:14px;">Spare Weapons &amp; Components in Hangar Storage (${st.partStorage.length})</strong>
+                <span class="subtext">Sell back at 50% base value (less if damaged)</span>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                ${st.partStorage.map(item => {
+                  const comp = window.GameState.getComponent(item.compId);
+                  if (!comp) return '';
+                  const cond = item.condition ?? 100;
+                  const sellPrice = window.GameState.getPartResaleValue(item.compId, cond);
+                  return `
+                    <div class="card" style="padding:8px 12px; background:var(--bg-main); display:flex; justify-content:space-between; align-items:center;">
+                      <div>
+                        <strong>${comp.name}</strong>
+                        <span class="badge ${cond < 100 ? 'amber' : 'green'} mono" style="margin-left:6px;">${cond}% Cond</span>
+                      </div>
+                      <button class="btn btn-danger" style="padding:4px 10px;" onclick="GarageModule.sellStoredPartByUid('${item.uid}')">
+                        Sell (+${sellPrice.toLocaleString()} Cr)
+                      </button>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
         </div>
       `;
       return;
@@ -90,7 +118,8 @@ window.GarageModule = {
 
     const categories = ['All', 'Energy Weapons', 'Cannons / Ballistic', 'Guided Missiles', 'Close Combat', 'Support'];
     const filteredCatalog = window.TOS_DATA.components.filter(c => this.filterCat === 'All' || c.cat === this.filterCat);
-    const totalSpareParts = Object.values(st.partInventory || {}).reduce((a, b) => a + b, 0);
+    const totalSpareParts = (st.partStorage || []).length;
+    const resaleInfo = window.GameState.getChassisResaleInfo(mech);
 
     container.innerHTML = `
       <div class="grid-12">
@@ -110,18 +139,22 @@ window.GarageModule = {
             <div style="display:flex; flex-direction:column; gap:8px;">
               ${st.mechs.map(m => {
                 const mm = window.GameState.computeMechMetrics(m);
+                const rInfo = window.GameState.getChassisResaleInfo(m);
                 const pilot = st.jocks.find(j => j.assignedMechId === m.id);
                 const isSel = m.id === mech.id;
                 return `
                   <div class="list-item ${isSel ? 'selected' : ''}" onclick="GarageModule.selectMech('${m.id}')">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                       <strong>${m.customName}</strong>
-                      <span class="badge primary">${mm.tpl.weightClass} (${mm.maxTons}t)</span>
+                      <div style="display:flex; gap:6px; align-items:center;">
+                        <span class="badge ${rInfo.conditionPct < 100 ? 'amber' : 'green'} mono">Cond: ${rInfo.conditionPct}%</span>
+                        <span class="badge primary">${mm.tpl.weightClass} (${mm.maxTons}t)</span>
+                      </div>
                     </div>
                     <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:12px;" class="subtext">
                       <span>Pilot: <strong>${pilot ? pilot.callsign : 'Unassigned'}</strong></span>
                       <span class="mono" style="color:${mm.totalTons > mm.maxTons ? 'var(--accent-red)' : 'var(--accent-green)'};">
-                        ${mm.totalTons} / ${mm.maxTons}t
+                        ${mm.totalTons} / ${mm.maxTons}t • Sell: ${rInfo.chassisResale.toLocaleString()} Cr
                       </span>
                     </div>
                   </div>
@@ -159,7 +192,10 @@ window.GarageModule = {
                 <div class="section-title">8-Part Titan Anatomy Diagram</div>
                 <div class="subtext">Click any body section to inspect slots, armor &amp; equip owned parts</div>
               </div>
-              <button class="btn" onclick="GarageModule.maxAllArmor()">Max All Armor</button>
+              <div style="display:flex; gap:6px;">
+                <button class="btn" onclick="GarageModule.repairCurrentMech()">Repair Damage</button>
+                <button class="btn" onclick="GarageModule.maxAllArmor()">Max All Armor</button>
+              </div>
             </div>
 
             <div class="paperdoll-grid">
@@ -173,8 +209,8 @@ window.GarageModule = {
 
               ${this.renderPartBox(mech, tpl, 'LT', activeLoc)}
               <div class="panel" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px;">
-                <span class="subtext">Total Armor</span>
-                <strong class="mono" style="font-size:15px;">${metrics.totalMaxArmor} Pts</strong>
+                <span class="subtext">Armor / Cond</span>
+                <strong class="mono" style="font-size:14px;">${metrics.totalCurrentArmor}/${metrics.totalMaxArmor} (${resaleInfo.conditionPct}%)</strong>
                 <span class="subtext mono">${(metrics.totalMaxArmor * 0.08).toFixed(1)} Tons</span>
               </div>
               ${this.renderPartBox(mech, tpl, 'RT', activeLoc)}
@@ -187,16 +223,16 @@ window.GarageModule = {
 
         </div>
 
-        <!-- Right 7 Cols: Blueprint Telemetry + Selected Body Part Slot Workshop + Mech Parts Shop -->
+        <!-- Right 7 Cols: Blueprint Telemetry & Sell Chassis + Selected Body Part Slot Workshop + Mech Parts Shop -->
         <div class="col-7" style="display:flex; flex-direction:column; gap:16px;">
           
-          <!-- Blueprint Telemetry & Designation Header -->
+          <!-- Blueprint Telemetry, Condition & Chassis Sell-Back Card -->
           <div class="card">
             <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; border-bottom:1px solid var(--border); padding-bottom:12px;">
               <div style="display:flex; align-items:center; gap:8px; flex:1;">
-                <input id="mech-name-inp" class="input" style="max-width:280px; font-weight:700; font-size:15px;" value="${mech.customName}" onchange="GarageModule.renameMech(this.value)" />
+                <input id="mech-name-inp" class="input" style="max-width:240px; font-weight:700; font-size:15px;" value="${mech.customName}" onchange="GarageModule.renameMech(this.value)" />
                 <span class="badge primary">${tpl.weightClass} (${tpl.maxTons}t)</span>
-                <span class="badge">${tpl.baseSpeedHex + metrics.jumpJets} Hex Move</span>
+                <span class="badge ${resaleInfo.conditionPct < 100 ? 'amber' : 'green'} mono">Chassis Cond: ${resaleInfo.conditionPct}%</span>
               </div>
 
               <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -213,20 +249,39 @@ window.GarageModule = {
                   </div>
                 </div>
                 <div class="hud-pill">
-                  <div class="label">Total Value</div>
-                  <div class="val">${metrics.totalCost.toLocaleString()} Cr</div>
+                  <div class="label">Chassis Sell-Back (${Math.round(50 * (resaleInfo.conditionPct / 100))}%)</div>
+                  <div class="val" style="color:var(--accent-amber);">${resaleInfo.chassisResale.toLocaleString()} Cr</div>
                 </div>
               </div>
             </div>
 
+            <!-- Assigned Jock & Sell Back Chassis Controls -->
             <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; font-size:13px;">
               <div>
                 Assigned Jock: <strong>${assignedJock ? `${assignedJock.firstName} "${assignedJock.callsign}" ${assignedJock.lastName}` : 'Unassigned (Assign in HQ)'}</strong>
-                ${metrics.hitBonus ? `<span class="badge green" style="margin-left:8px;">+${metrics.hitBonus}% Battle Computer</span>` : ''}
-                ${metrics.defenseBonus ? `<span class="badge primary" style="margin-left:6px;">+${metrics.defenseBonus}% ECM Jammer</span>` : ''}
-                ${metrics.shieldPts ? `<span class="badge amber" style="margin-left:6px;">+${metrics.shieldPts} Shield</span>` : ''}
+                <div class="subtext" style="margin-top:2px;">
+                  Resale Rule: <strong>50% Base Value</strong> at 100% Condition, reduced proportionally if damaged (${resaleInfo.conditionPct}% Cond = ${resaleInfo.chassisResale.toLocaleString()} Cr for Chassis).
+                </div>
               </div>
-              <span class="badge green mono">Spare Parts in Storage: ${totalSpareParts}</span>
+
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button
+                  class="btn btn-danger"
+                  title="Strip all equipped parts into Hangar Storage and sell the Chassis for ${resaleInfo.chassisResale.toLocaleString()} Cr"
+                  onclick="GarageModule.sellChassis('${mech.id}', false)"
+                >
+                  Sell Chassis Only (+${resaleInfo.chassisResale.toLocaleString()} Cr)
+                </button>
+                ${resaleInfo.partCount > 0 ? `
+                  <button
+                    class="btn btn-danger"
+                    title="Sell both the Chassis and all ${resaleInfo.partCount} equipped parts for ${resaleInfo.totalResale.toLocaleString()} Cr"
+                    onclick="GarageModule.sellChassis('${mech.id}', true)"
+                  >
+                    Sell Chassis + All Parts (+${resaleInfo.totalResale.toLocaleString()} Cr)
+                  </button>
+                ` : ''}
+              </div>
             </div>
           </div>
 
@@ -250,19 +305,29 @@ window.GarageModule = {
             <div class="grid-12">
               <!-- Installed in this Location (5 Cols) -->
               <div class="col-5" style="display:flex; flex-direction:column; gap:8px;">
-                <div class="subtext" style="font-weight:600; text-transform:uppercase;">Equipped in ${activeLoc} (Click to Unequip to Storage)</div>
+                <div class="subtext" style="font-weight:600; text-transform:uppercase;">Equipped in ${activeLoc} (Unequip or Sell Back)</div>
                 ${installedIds.length === 0 ? `<div class="panel subtext">No parts equipped in ${activeLoc}. Buy parts in the Shop on the right, then click <strong>Equip</strong>!</div>` : installedIds.map((cid, idx) => {
                   const comp = window.GameState.getComponent(cid);
                   if (!comp) return '';
+                  const cond = window.GameState.getInstalledPartCondition(mech, activeLoc, idx);
+                  const sellPrice = window.GameState.getPartResaleValue(cid, cond);
                   return `
-                    <div class="list-item" onclick="GarageModule.removeComponent('${activeLoc}', ${idx})" style="display:flex; justify-content:space-between; align-items:center;">
-                      <div>
+                    <div class="panel" style="display:flex; flex-direction:column; gap:6px;">
+                      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
                         <strong>${comp.name}</strong>
-                        <div class="subtext">${comp.cat} ${comp.dmg ? `• ${comp.dmg} Dmg` : ''}</div>
+                        <span class="badge ${cond < 100 ? 'amber' : 'green'} mono">${cond}% Cond</span>
                       </div>
-                      <div class="mono subtext" style="text-align:right;">
-                        <div>${comp.tons}t • ${comp.slots}s</div>
-                        <span style="color:var(--accent-amber); font-size:12px;">Unequip &rarr; Storage</span>
+                      <div class="subtext" style="display:flex; justify-content:space-between;">
+                        <span>${comp.tons}t • ${comp.slots}s ${comp.dmg ? `• ${comp.dmg} Dmg` : ''}</span>
+                        <span class="mono" style="color:var(--accent-amber);">Sell Value: ${sellPrice.toLocaleString()} Cr</span>
+                      </div>
+                      <div style="display:flex; gap:6px; margin-top:2px;">
+                        <button class="btn" style="flex:1; padding:4px 8px; font-size:12px;" onclick="GarageModule.removeComponent('${activeLoc}', ${idx})">
+                          Unequip
+                        </button>
+                        <button class="btn btn-danger" style="flex:1; padding:4px 8px; font-size:12px;" onclick="GarageModule.sellInstalledComponent('${activeLoc}', ${idx})">
+                          Sell (+${sellPrice.toLocaleString()} Cr)
+                        </button>
                       </div>
                     </div>
                   `;
@@ -273,8 +338,8 @@ window.GarageModule = {
               <div class="col-7" style="display:flex; flex-direction:column; gap:8px;">
                 <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:space-between;">
                   <div>
-                    <span class="subtext" style="font-weight:700; text-transform:uppercase; color:#93c5fd;">Mech Parts Shop &amp; Hangar Storage</span>
-                    <div class="subtext" style="font-size:11px;">You must <strong>Buy</strong> a part before you can <strong>Equip</strong> it onto your Mech</div>
+                    <span class="subtext" style="font-weight:700; text-transform:uppercase; color:#93c5fd;">Mech Parts Shop &amp; Hangar Storage (${totalSpareParts} Spare)</span>
+                    <div class="subtext" style="font-size:11px;">Buy parts to equip, or sell back at <strong>50% Base Value</strong> (less if damaged)</div>
                   </div>
                   <div style="display:flex; flex-wrap:wrap; gap:4px;">
                     ${categories.map(cat => `
@@ -287,12 +352,17 @@ window.GarageModule = {
 
                 <div style="display:flex; flex-direction:column; gap:8px; max-height:380px; overflow-y:auto; padding-right:4px;">
                   ${filteredCatalog.map(comp => {
-                    const owned = window.GameState.getOwnedPartCount(comp.id);
+                    const ownedItems = window.GameState.getOwnedPartsByCompId(comp.id);
+                    const owned = ownedItems.length;
+                    const nextToSell = owned > 0 ? ownedItems[ownedItems.length - 1] : null; // sell lowest condition first or show its price
+                    const nextSellCond = nextToSell ? (nextToSell.condition ?? 100) : 100;
+                    const sellValue = window.GameState.getPartResaleValue(comp.id, nextSellCond);
+                    const baseHalfValue = window.GameState.getPartResaleValue(comp.id, 100);
+
                     const fitsSlots = (usedSlots + comp.slots) <= maxSlots;
                     const fitsTons = (metrics.totalTons + comp.tons) <= metrics.maxTons;
                     const canAfford = st.credits >= comp.cost;
                     const canEquip = owned > 0 && fitsSlots && fitsTons;
-                    const sellValue = Math.round(comp.cost * 0.7);
 
                     return `
                       <div class="panel" style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; border-color:${owned > 0 ? 'var(--accent-green)' : 'var(--border)'};">
@@ -305,12 +375,18 @@ window.GarageModule = {
                           <div class="subtext" style="margin-top:3px;">
                             ${comp.dmg > 0 ? `Dmg: ${comp.dmg} • Heat: +${comp.heat}C • Recycle: ${comp.sec}s • Range: ${comp.range} Hex` : `Heat: ${comp.heat}C • Support System`}
                           </div>
-                          <div class="mono" style="font-size:12px; margin-top:4px; color:var(--accent-amber); font-weight:700;">
-                            Shop Price: ${comp.cost.toLocaleString()} Cr
+                          <div class="mono" style="font-size:12px; margin-top:4px;">
+                            <span style="color:var(--accent-amber); font-weight:700;">Buy: ${comp.cost.toLocaleString()} Cr</span>
+                            <span class="subtext" style="margin-left:8px;">• Sell (100%): ${baseHalfValue.toLocaleString()} Cr</span>
                           </div>
+                          ${owned > 0 ? `
+                            <div class="mono subtext" style="font-size:11px; margin-top:2px; color:#93c5fd;">
+                              In Storage: ${ownedItems.map(p => `${p.condition ?? 100}%`).join(', ')}
+                            </div>
+                          ` : ''}
                         </div>
 
-                        <div style="display:flex; flex-direction:column; gap:5px; min-width:148px;">
+                        <div style="display:flex; flex-direction:column; gap:5px; min-width:162px;">
                           <div style="display:flex; gap:4px;">
                             <button
                               class="btn"
@@ -322,12 +398,12 @@ window.GarageModule = {
                             </button>
                             ${owned > 0 ? `
                               <button
-                                class="btn"
-                                style="padding:5px 7px; font-size:11px;"
-                                title="Sell 1 spare part from storage for ${sellValue.toLocaleString()} Cr"
+                                class="btn btn-danger"
+                                style="padding:5px 8px; font-size:11px;"
+                                title="Sell 1 stored ${comp.name} (${nextSellCond}% Condition) for ${sellValue.toLocaleString()} Cr"
                                 onclick="GarageModule.sellPart('${comp.id}')"
                               >
-                                Sell
+                                Sell (+${(sellValue / 1000).toFixed(1)}k)
                               </button>
                             ` : ''}
                           </div>
@@ -426,6 +502,39 @@ window.GarageModule = {
     this.render();
   },
 
+  repairCurrentMech() {
+    const st = window.GameState.data;
+    const mech = st.mechs.find(m => m.id === st.selectedMechId);
+    if (!mech) return;
+    window.GameState.ensureMechPartConditions(mech);
+
+    let missingUnits = 0;
+    Object.keys(mech.armor).forEach(k => {
+      missingUnits += Math.max(0, mech.maxArmorCurrent[k] - mech.armor[k]);
+      mech.armor[k] = mech.maxArmorCurrent[k];
+    });
+    Object.keys(mech.partConditions || {}).forEach(loc => {
+      mech.partConditions[loc] = (mech.partConditions[loc] || []).map(cond => {
+        missingUnits += Math.max(0, Math.round((100 - cond) * 0.5));
+        return 100;
+      });
+    });
+
+    if (missingUnits <= 0) return;
+    const bestMechSkill = Math.max(30, ...st.jocks.map(j => j.skills['Mechanic (Repair)'] || 30));
+    const discount = Math.min(0.5, bestMechSkill / 200);
+    const cost = Math.round(missingUnits * 40 * (1 - discount));
+    if (st.credits < cost) {
+      alert(`Insufficient funds to repair this Mech & its damaged parts (${cost.toLocaleString()} Cr required)!`);
+      return;
+    }
+
+    st.credits -= cost;
+    window.GameState.save();
+    App.updateHUD();
+    this.render();
+  },
+
   buyPart(compId) {
     const st = window.GameState.data;
     const comp = window.GameState.getComponent(compId);
@@ -436,8 +545,24 @@ window.GarageModule = {
     }
 
     st.credits -= comp.cost;
-    if (!st.partInventory) st.partInventory = {};
-    st.partInventory[compId] = (st.partInventory[compId] || 0) + 1;
+    if (!Array.isArray(st.partStorage)) st.partStorage = [];
+    st.partStorage.push({
+      uid: 'part-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      compId,
+      condition: 100
+    });
+    window.GameState.save();
+    App.updateHUD();
+    this.render();
+  },
+
+  sellStoredPartByUid(uid) {
+    const st = window.GameState.data;
+    const item = (st.partStorage || []).find(p => p.uid === uid);
+    if (!item) return;
+    const sellVal = window.GameState.getPartResaleValue(item.compId, item.condition ?? 100);
+    st.partStorage = (st.partStorage || []).filter(p => p.uid !== uid);
+    st.credits += sellVal;
     window.GameState.save();
     App.updateHUD();
     this.render();
@@ -446,12 +571,15 @@ window.GarageModule = {
   sellPart(compId) {
     const st = window.GameState.data;
     const comp = window.GameState.getComponent(compId);
-    const owned = window.GameState.getOwnedPartCount(compId);
-    if (!comp || owned <= 0) return;
+    const ownedItems = window.GameState.getOwnedPartsByCompId(compId);
+    if (!comp || ownedItems.length === 0) return;
 
-    const sellVal = Math.round(comp.cost * 0.7);
-    st.partInventory[compId] = owned - 1;
-    if (st.partInventory[compId] <= 0) delete st.partInventory[compId];
+    // Sell the lowest-condition copy in storage first
+    const targetItem = ownedItems[ownedItems.length - 1];
+    const cond = targetItem.condition ?? 100;
+    const sellVal = window.GameState.getPartResaleValue(compId, cond);
+
+    st.partStorage = (st.partStorage || []).filter(p => p.uid !== targetItem.uid);
     st.credits += sellVal;
     window.GameState.save();
     App.updateHUD();
@@ -462,17 +590,21 @@ window.GarageModule = {
     const st = window.GameState.data;
     const mech = st.mechs.find(m => m.id === st.selectedMechId);
     const comp = window.GameState.getComponent(compId);
-    const owned = window.GameState.getOwnedPartCount(compId);
-    if (!mech || !comp || owned <= 0) return;
+    const ownedItems = window.GameState.getOwnedPartsByCompId(compId);
+    if (!mech || !comp || ownedItems.length === 0) return;
 
     const metrics = window.GameState.computeMechMetrics(mech);
     const usedSlots = (mech.locations[locCode] || []).reduce((a, cid) => a + (window.GameState.getComponent(cid)?.slots || 0), 0);
     if (usedSlots + comp.slots > metrics.tpl.slotLimits[locCode]) return;
     if (metrics.totalTons + comp.tons > metrics.maxTons) return;
 
-    st.partInventory[compId] = owned - 1;
-    if (st.partInventory[compId] <= 0) delete st.partInventory[compId];
+    // Mount the highest-condition owned copy first
+    const bestPart = ownedItems[0];
+    st.partStorage = (st.partStorage || []).filter(p => p.uid !== bestPart.uid);
+
+    window.GameState.ensureMechPartConditions(mech);
     mech.locations[locCode].push(compId);
+    mech.partConditions[locCode].push(bestPart.condition ?? 100);
     window.GameState.save();
     App.updateHUD();
     this.render();
@@ -482,12 +614,74 @@ window.GarageModule = {
     const st = window.GameState.data;
     const mech = st.mechs.find(m => m.id === st.selectedMechId);
     if (!mech || !mech.locations[locCode]) return;
-    const removedArr = mech.locations[locCode].splice(idx, 1);
-    const removedCompId = removedArr[0];
+    window.GameState.ensureMechPartConditions(mech);
+
+    const removedCompId = mech.locations[locCode].splice(idx, 1)[0];
+    const removedCond = mech.partConditions[locCode].splice(idx, 1)[0] ?? 100;
     if (removedCompId) {
-      if (!st.partInventory) st.partInventory = {};
-      st.partInventory[removedCompId] = (st.partInventory[removedCompId] || 0) + 1;
+      if (!Array.isArray(st.partStorage)) st.partStorage = [];
+      st.partStorage.push({
+        uid: 'part-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        compId: removedCompId,
+        condition: removedCond
+      });
     }
+    window.GameState.save();
+    App.updateHUD();
+    this.render();
+  },
+
+  sellInstalledComponent(locCode, idx) {
+    const st = window.GameState.data;
+    const mech = st.mechs.find(m => m.id === st.selectedMechId);
+    if (!mech || !mech.locations[locCode]) return;
+    window.GameState.ensureMechPartConditions(mech);
+
+    const removedCompId = mech.locations[locCode].splice(idx, 1)[0];
+    const removedCond = mech.partConditions[locCode].splice(idx, 1)[0] ?? 100;
+    if (removedCompId) {
+      const sellVal = window.GameState.getPartResaleValue(removedCompId, removedCond);
+      st.credits += sellVal;
+    }
+    window.GameState.save();
+    App.updateHUD();
+    this.render();
+  },
+
+  sellChassis(mechId, includeEquippedParts = false) {
+    const st = window.GameState.data;
+    const mech = st.mechs.find(m => m.id === mechId);
+    if (!mech) return;
+
+    window.GameState.ensureMechPartConditions(mech);
+    const resaleInfo = window.GameState.getChassisResaleInfo(mech);
+
+    if (includeEquippedParts) {
+      st.credits += resaleInfo.totalResale;
+    } else {
+      // Strip all installed parts into Hangar Storage with their condition preserved, then sell the Chassis
+      if (!Array.isArray(st.partStorage)) st.partStorage = [];
+      Object.entries(mech.locations || {}).forEach(([loc, compIds]) => {
+        compIds.forEach((cid, idx) => {
+          const cond = window.GameState.getInstalledPartCondition(mech, loc, idx);
+          st.partStorage.push({
+            uid: 'part-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+            compId: cid,
+            condition: cond
+          });
+        });
+      });
+      st.credits += resaleInfo.chassisResale;
+    }
+
+    // Unassign any Jockey assigned to this Mech
+    (st.jocks || []).forEach(j => {
+      if (j.assignedMechId === mechId) j.assignedMechId = '';
+    });
+
+    st.mechs = st.mechs.filter(m => m.id !== mechId);
+    st.selectedMechId = st.mechs[0]?.id || '';
+
     window.GameState.save();
     App.updateHUD();
     this.render();
@@ -520,16 +714,21 @@ window.GarageModule = {
       armorCopy[k] = mode === 'stripped' ? Math.round(tpl.maxArmor[k] * 0.5) : tpl.maxArmor[k];
     });
 
-    st.mechs.push({
+    const locations = mode === 'stripped'
+      ? { HD: [], CT: [], LT: [], RT: [], LA: [], RA: [], LL: [], RL: [] }
+      : { HD: [], CT: ['hs', 'hs'], LT: [], RT: [], LA: ['mlas'], RA: ['mlas'], LL: [], RL: [] };
+
+    const newMech = {
       id: newId,
       customName: tpl.model,
       templateId: tpl.id,
       armor: { ...armorCopy },
       maxArmorCurrent: { ...armorCopy },
-      locations: mode === 'stripped'
-        ? { HD: [], CT: [], LT: [], RT: [], LA: [], RA: [], LL: [], RL: [] }
-        : { HD: [], CT: ['hs', 'hs'], LT: [], RT: [], LA: ['mlas'], RA: ['mlas'], LL: [], RL: [] }
-    });
+      locations
+    };
+    window.GameState.ensureMechPartConditions(newMech);
+
+    st.mechs.push(newMech);
     st.selectedMechId = newId;
 
     // Auto-assign to the first unassigned Jock if one exists
