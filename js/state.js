@@ -30,6 +30,15 @@ function createDefaultState() {
       lastEvent: 'Company Charter Registered'
     },
 
+    // Active Job Listing & Applicant Waiting Line (Applicants arrive over time as weeks pass)
+    jobListing: {
+      active: false,
+      advertisedBonus: 6000,
+      postedDateText: 'Year 1 • Month 1 • Week 1',
+      weeksActive: 0,
+      applicants: []
+    },
+
     // Start from complete scratch with no Jockeys, no Mechs, and empty Parts Storage
     jocks: [],
     mechs: [],
@@ -114,6 +123,7 @@ window.GameState = {
           this.data.company = createDefaultState().company;
         }
         this.ensureCalendar();
+        this.ensureJobListing();
         if (!Array.isArray(this.data.partStorage)) {
           this.data.partStorage = [];
           // Migrate any count-based partInventory into condition-tracked partStorage items
@@ -176,6 +186,22 @@ window.GameState = {
     this.data.calendar.week = (tw % 4) + 1;
   },
 
+  ensureJobListing() {
+    if (!this.data) return;
+    if (!this.data.jobListing || typeof this.data.jobListing !== 'object') {
+      this.data.jobListing = {
+        active: false,
+        advertisedBonus: 6000,
+        postedDateText: this.getCalendarText(),
+        weeksActive: 0,
+        applicants: []
+      };
+    }
+    if (!Array.isArray(this.data.jobListing.applicants)) {
+      this.data.jobListing.applicants = [];
+    }
+  },
+
   getCalendarText() {
     this.ensureCalendar();
     const c = this.data.calendar;
@@ -207,14 +233,33 @@ window.GameState = {
     return baseWeeks;
   },
 
-  // Advance campaign time by N weeks; processes monthly wage upkeep & contract duration every 4 weeks
+  // Advance campaign time by N weeks; processes monthly wage upkeep, contract durations & incoming Job Listing applicants
   advanceTimeWeeks(weeksToAdd, actionLabel = '') {
     this.ensureCalendar();
+    this.ensureJobListing();
     const st = this.data;
     const wCount = Math.max(1, Math.round(Number(weeksToAdd) || 1));
 
     for (let i = 0; i < wCount; i++) {
       st.calendar.totalWeeks += 1;
+      this.ensureCalendar();
+
+      // If a Jockey Job Listing is active, new applicants line up over time as weeks pass (up to 6 waiting in lobby)
+      if (st.jobListing && st.jobListing.active && window.HQModule && typeof window.HQModule.generateApplicant === 'function') {
+        st.jobListing.weeksActive = (st.jobListing.weeksActive || 0) + 1;
+        if (st.jobListing.applicants.length < 6) {
+          const arrivals = (st.jobListing.applicants.length < 5 && Math.random() < 0.35) ? 2 : 1;
+          for (let a = 0; a < arrivals; a++) {
+            if (st.jobListing.applicants.length >= 6) break;
+            const cand = window.HQModule.generateApplicant(st.jobListing.advertisedBonus || 6000);
+            cand.applicantId = 'app-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+            cand.appliedDate = this.getCalendarText();
+            cand.offeredBonusAtApply = st.jobListing.advertisedBonus || 6000;
+            st.jobListing.applicants.push(cand);
+          }
+        }
+      }
+
       // Every 4 weeks (1 Month), process monthly payroll & contract month countdowns
       if (st.calendar.totalWeeks % 4 === 0) {
         const monthlyUpkeep = (st.jocks || []).reduce((sum, j) => sum + this.getJockSalary(j), 0);

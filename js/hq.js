@@ -41,6 +41,8 @@ window.HQModule = {
     }
 
     // Best Squad Mechanic & Medic
+    window.GameState.ensureJobListing();
+    const jobListing = st.jobListing;
     const bestMechanic = st.jocks.reduce((best, j) => (j.skills['Mechanic (Repair)'] > (best?.skills['Mechanic (Repair)'] || 0) ? j : best), null);
     const bestMedic = st.jocks.reduce((best, j) => (j.skills['Medical (First Aid)'] > (best?.skills['Medical (First Aid)'] || 0) ? j : best), null);
     const comp = st.company || {};
@@ -73,14 +75,16 @@ window.HQModule = {
         <!-- Left 4 Cols: Active Jock Roster + Recruitment Job Board + Crew Support -->
         <div class="col-4" style="display:flex; flex-direction:column; gap:16px;">
           
-          <!-- Mercenary Recruitment Job Posting Card -->
+          <!-- Mercenary Recruitment Job Posting & Calendar Applicant Queue Card -->
           <div class="card" style="border-color:var(--primary);">
             <div class="section-header">
               <div>
-                <div class="section-title">Recruit Jockey — Post Job Listing</div>
-                <div class="subtext">Set your Signing Bonus offer to attract applicants for an interview</div>
+                <div class="section-title">Recruit Jockey — Job Listing &amp; Queue</div>
+                <div class="subtext">Post a listing; applicants line up as Calendar Weeks pass</div>
               </div>
-              <span class="badge primary">Interview Room</span>
+              <span class="badge ${jobListing.active ? 'green' : 'amber'} mono">
+                ${jobListing.active ? `LIVE (${jobListing.applicants.length}/6 In Line)` : 'NO LISTING'}
+              </span>
             </div>
 
             <div class="panel" style="display:flex; flex-direction:column; gap:10px;">
@@ -110,13 +114,87 @@ window.HQModule = {
                 </div>
               </div>
 
-              <div class="subtext" style="line-height:1.4;">
-                Higher signing bonuses attract more experienced pilots and make them more flexible during monthly wage negotiations. You only pay the bonus if you hire them.
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-primary" style="flex:1; padding:9px;" onclick="HQModule.postJobListing()">
+                  ${jobListing.active ? 'Update Job Listing Bonus' : 'Post Job Listing on Comms'}
+                </button>
+                ${jobListing.active ? `
+                  <button class="btn btn-danger" style="padding:9px;" onclick="HQModule.closeJobListing()">
+                    Close Listing
+                  </button>
+                ` : ''}
               </div>
 
-              <button class="btn btn-primary" style="padding:10px; font-size:13px;" ${st.jocks.length >= 8 ? 'disabled' : ''} onclick="HQModule.startJobInterview()">
-                Post Offer &amp; Interview Next Applicant (+1 Wk) &rarr;
-              </button>
+              ${jobListing.active ? `
+                <div class="card" style="background:var(--bg-main); padding:10px; gap:8px; border-color:var(--accent-green);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+                    <span style="color:var(--accent-green); font-weight:700;">&#9679; Active Listing: ${(jobListing.advertisedBonus || 6000).toLocaleString()} Cr Bonus</span>
+                    <span class="mono subtext">Open ${jobListing.weeksActive || 0} Wk${jobListing.weeksActive === 1 ? '' : 's'}</span>
+                  </div>
+                  <div class="subtext" style="font-size:12px;">
+                    Applicants arrive automatically as calendar time passes (while building Mechs, equipping parts, or advancing weeks below).
+                  </div>
+                  <div style="display:flex; gap:6px;">
+                    <button class="btn" style="flex:1; padding:6px 8px; font-size:12px;" onclick="HQModule.waitForApplicants(1)">
+                      &#9201; Advance +1 Week
+                    </button>
+                    <button class="btn" style="flex:1; padding:6px 8px; font-size:12px;" onclick="HQModule.waitForApplicants(4)">
+                      &#9201; Advance +1 Month (4 Wks)
+                    </button>
+                  </div>
+                </div>
+              ` : `
+                <div class="subtext" style="line-height:1.4;">
+                  Post a Job Listing with your Signing Bonus offer above. Once active, applicants will line up over time on the game calendar so you can choose who to interview!
+                </div>
+              `}
+
+              <!-- Waiting Line of Applicants -->
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:2px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="subtext" style="font-weight:700; text-transform:uppercase;">Applicants Lined Up (${jobListing.applicants.length} / 6):</span>
+                </div>
+                ${jobListing.applicants.length === 0 ? `
+                  <div class="card subtext" style="background:var(--bg-main); padding:12px; text-align:center; font-size:12px;">
+                    ${jobListing.active
+                      ? 'No applicants in line yet. Advance calendar time (+1 Week) or work in the Garage while pilots respond to your listing!'
+                      : 'Post a Job Listing above so Jockey applicants begin lining up over time.'}
+                  </div>
+                ` : jobListing.applicants.map(cand => `
+                  <div class="card" style="background:var(--bg-main); padding:10px; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <div style="flex-shrink:0;">${window.GameState.getPortraitSvg(cand.portraitId, 48)}</div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
+                          <strong style="font-size:13px;">${cand.firstName} "${cand.callsign}" ${cand.lastName}</strong>
+                          <span class="badge primary mono" style="font-size:10px;">${cand.appliedDate || 'Just Arrived'}</span>
+                        </div>
+                        <div class="subtext" style="font-size:11px; margin-top:2px;">${cand.bio}</div>
+                        <div class="mono" style="font-size:11px; color:var(--accent-amber); margin-top:3px;">
+                          Est. Wage Target: ~${cand.askingWage.toLocaleString()} Cr/mo
+                        </div>
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                      <button
+                        class="btn btn-primary"
+                        style="flex:1; padding:5px 8px; font-size:12px;"
+                        ${st.jocks.length >= 8 ? 'disabled' : ''}
+                        onclick="HQModule.interviewQueuedApplicant('${cand.applicantId}')"
+                      >
+                        Choose for Interview (+1 Wk) &rarr;
+                      </button>
+                      <button
+                        class="btn"
+                        style="padding:5px 8px; font-size:12px;"
+                        onclick="HQModule.dismissQueuedApplicant('${cand.applicantId}')"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           </div>
 
@@ -226,19 +304,25 @@ window.HQModule = {
 
         </div>
 
-        <!-- Right 8 Cols: Company Roster Overview (Click any Jockey's name to open Dedicated Jockey Page) -->
+        <!-- Right 8 Cols: Company Roster Overview & Applicant Waiting Lobby -->
         <div class="col-8" style="display:flex; flex-direction:column; gap:16px;">
           ${st.jocks.length > 0 ? this.renderSquadOverviewDirectory() : `
             <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:16px;">
               <span class="badge primary">RECRUITMENT &amp; INTERVIEW OFFICE</span>
               <h2 style="font-size:22px; font-weight:800;">No MechJocks Under Contract Yet</h2>
-              <p class="subtext" style="max-width:560px; font-size:14px;">
-                To recruit your first MechJock, specify how much you are willing to offer as a <strong>Signing Bonus</strong> in the Recruitment panel on the left, then conduct a <strong>Job Interview</strong> to probe their combat background and negotiate their monthly wage!
+              <p class="subtext" style="max-width:580px; font-size:14px;">
+                To recruit your first MechJock, <strong>1. Post a Job Listing</strong> on the left with your Signing Bonus offer, <strong>2. Advance the Game Calendar</strong> (or build a Mech in the Garage) as applicants line up over time, and <strong>3. Choose an Applicant from the Line</strong> to conduct a Job Interview!
               </p>
               <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:6px;">
-                <button class="btn btn-primary" style="padding:10px 18px; font-size:13px;" onclick="HQModule.startJobInterview()">
-                  1. Interview a Jockey Applicant (${this.offeredBonusInput.toLocaleString()} Cr Bonus Offer)
-                </button>
+                ${!jobListing.active ? `
+                  <button class="btn btn-primary" style="padding:10px 18px; font-size:13px;" onclick="HQModule.postJobListing()">
+                    1. Post Job Listing (${this.offeredBonusInput.toLocaleString()} Cr Bonus Offer)
+                  </button>
+                ` : `
+                  <button class="btn btn-primary" style="padding:10px 18px; font-size:13px;" onclick="HQModule.waitForApplicants(1)">
+                    &#9201; Advance Calendar +1 Week (${jobListing.applicants.length} Applicant${jobListing.applicants.length === 1 ? '' : 's'} Lined Up)
+                  </button>
+                `}
                 <button class="btn" style="padding:10px 18px; font-size:13px;" onclick="App.switchTab('garage')">
                   2. Commission a Mech in Garage &rarr;
                 </button>
@@ -356,28 +440,85 @@ window.HQModule = {
     };
   },
 
-  startJobInterview() {
+  postJobListing() {
     const st = window.GameState.data;
+    window.GameState.ensureJobListing();
     const bonusInput = document.getElementById('inp-signing-bonus');
     if (bonusInput) this.offeredBonusInput = Math.max(500, Number(bonusInput.value) || 2000);
 
-    if (st.credits < this.offeredBonusInput) {
-      alert(`Insufficient treasury funds to back a ${this.offeredBonusInput.toLocaleString()} Cr signing bonus offer!`);
+    st.jobListing.active = true;
+    st.jobListing.advertisedBonus = this.offeredBonusInput;
+    st.jobListing.postedDateText = window.GameState.getCalendarText();
+    window.GameState.save();
+    App.updateHUD();
+    this.render();
+  },
+
+  closeJobListing() {
+    const st = window.GameState.data;
+    window.GameState.ensureJobListing();
+    st.jobListing.active = false;
+    window.GameState.save();
+    App.updateHUD();
+    this.render();
+  },
+
+  waitForApplicants(weeks = 1) {
+    window.GameState.ensureJobListing();
+    const jl = window.GameState.data.jobListing;
+    if (!jl.active) {
+      this.postJobListing();
+    }
+    window.GameState.advanceTimeWeeks(weeks, 'Recruiting Comms Broadcast');
+    this.render();
+  },
+
+  dismissQueuedApplicant(applicantId) {
+    const st = window.GameState.data;
+    window.GameState.ensureJobListing();
+    st.jobListing.applicants = st.jobListing.applicants.filter(a => a.applicantId !== applicantId);
+    window.GameState.save();
+    this.render();
+  },
+
+  interviewQueuedApplicant(applicantId) {
+    const st = window.GameState.data;
+    window.GameState.ensureJobListing();
+    const cand = st.jobListing.applicants.find(a => a.applicantId === applicantId);
+    if (!cand) return;
+
+    const offerBonus = cand.offeredBonusAtApply || st.jobListing.advertisedBonus || this.offeredBonusInput;
+    if (st.credits < offerBonus) {
+      alert(`Insufficient treasury funds to back a ${offerBonus.toLocaleString()} Cr signing bonus offer!`);
       return;
     }
 
-    this.candidate = this.generateApplicant(this.offeredBonusInput);
+    // Remove chosen applicant from the waiting line as they enter the interview room
+    st.jobListing.applicants = st.jobListing.applicants.filter(a => a.applicantId !== applicantId);
+
+    this.candidate = cand;
     this.askedQuestions = {};
-    this.proposedBonus = this.offeredBonusInput;
+    this.proposedBonus = offerBonus;
     this.proposedWage = this.candidate.askingWage;
     this.proposedContractType = 'years';
     this.proposedYears = 2;
     this.proposedFights = 10;
     this.candidateWalkedOut = false;
-    this.negotiationMessage = `"Thanks for bringing me in, Commander. With a ${this.proposedBonus.toLocaleString()} Cr signing bonus on the table, I'm looking for ${this.candidate.askingWage.toLocaleString()} Cr per month on a standard 2-Year (or 10-Fight) contract. Feel free to ask me anything about my cockpit record."`;
+    this.negotiationMessage = `"Thanks for calling me in from the applicant queue, Commander. Saw your listing on ${cand.appliedDate || 'comms'} with a ${this.proposedBonus.toLocaleString()} Cr signing bonus. I'm looking for ${this.candidate.askingWage.toLocaleString()} Cr/mo on a 2-Year (or 10-Fight) contract. Ask me anything about my cockpit record."`;
     this.interviewOpen = true;
-    window.GameState.advanceTimeWeeks(1, `Recruiting Interview: ${this.candidate.callsign}`);
+    window.GameState.advanceTimeWeeks(1, `Interviewed Applicant ${this.candidate.callsign}`);
     this.render();
+  },
+
+  startJobInterview() {
+    const st = window.GameState.data;
+    window.GameState.ensureJobListing();
+    if (st.jobListing.applicants.length > 0) {
+      this.interviewQueuedApplicant(st.jobListing.applicants[0].applicantId);
+      return;
+    }
+    this.postJobListing();
+    this.waitForApplicants(1);
   },
 
   askInterviewQuestion(qId) {
