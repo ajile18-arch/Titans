@@ -10,6 +10,16 @@ function createDefaultState() {
     selectedMechId: '',
     selectedBodyPart: 'RA',
 
+    company: {
+      registered: false,
+      name: 'Unregistered Mercenary Unit',
+      commander: 'Commander',
+      emblemId: 'emblem-wolf',
+      motto: 'Steel Before Surrender',
+      goalId: 'wealth',
+      customGoals: 'Build a premier MechJock mercenary company from the ground up.'
+    },
+
     // Start from complete scratch with no Jockeys and no Mechs
     jocks: [],
     mechs: [],
@@ -64,12 +74,21 @@ window.GameState = {
     if (saved) {
       try {
         this.data = JSON.parse(saved);
+        if (!this.data.company) {
+          this.data.company = createDefaultState().company;
+        }
       } catch (e) {
         this.data = createDefaultState();
       }
     } else {
       this.data = createDefaultState();
     }
+  },
+
+  getCompanyEmblemSvg(emblemId) {
+    const list = window.TOS_DATA.companyEmblems || [];
+    const found = list.find(e => e.id === emblemId) || list[0];
+    return found ? found.svg : '';
   },
 
   save() {

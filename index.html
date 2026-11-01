@@ -47,9 +47,9 @@
         </p>
 
         <div class="intro-menu-buttons">
-          <button class="intro-btn primary-action" onclick="App.startNewScratchGame()">
-            <span>New Game (From Scratch)</span>
-            <span class="btn-sub">0 JOCKS / 0 MECHS &rarr;</span>
+          <button class="intro-btn primary-action" onclick="App.openCompanyCreator(true)">
+            <span>Create Company</span>
+            <span class="btn-sub">CHARTER &amp; EMBLEM &rarr;</span>
           </button>
           <button class="intro-btn" onclick="App.enterGame('hq')">
             <span>Continue Campaign</span>
@@ -71,8 +71,14 @@
     <!-- Bottom Credits & Version Footer -->
     <div class="intro-footer">
       <div class="mono">SYSTEM: CLASSIC SIM (MODE A) // 6 ATTRIBUTES • 0–100% SKILLS • ACTION-TIME CLOCK</div>
-      <div class="mono">PRESS ANY MENU OPTION TO DEPLOY</div>
+      <div class="mono">REGISTER YOUR MERCENARY COMPANY CHARTER TO DEPLOY</div>
     </div>
+  </section>
+
+  <!-- Create Company / Mercenary Charter Registration Screen -->
+  <section id="company-screen" class="intro-screen hidden" style="background-image: linear-gradient(180deg, rgba(6, 10, 18, 0.92) 0%, rgba(11, 15, 23, 0.96) 100%), url('assets/intro_hero.png');">
+    <div class="intro-scanlines"></div>
+    <div id="company-creator-mount" style="position:relative; z-index:102; max-width:1160px; width:100%; margin:auto;"></div>
   </section>
 
   <div class="app-container">
@@ -81,10 +87,13 @@
     <header class="top-bar">
       <div class="brand-title">
         <button class="btn" onclick="App.showIntro()" title="Return to Title Screen">&larr; Title Screen</button>
-        <span class="brand-badge">Mode A // Classic Sim</span>
+        <div id="top-company-emblem" style="display:flex; align-items:center;"></div>
         <div>
-          <h1 style="font-size:18px; font-weight:800; letter-spacing:0.01em;">MECHJOCKS</h1>
-          <div class="subtext">Jockey HQ • 8-Part Mech Factory • Action-Time Hex Combat</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h1 id="top-company-name" style="font-size:18px; font-weight:800; letter-spacing:0.01em;">MECHJOCKS</h1>
+            <span class="brand-badge">Mode A // Classic Sim</span>
+          </div>
+          <div id="top-company-motto" class="subtext">Jockey HQ • 8-Part Mech Factory • Action-Time Hex Combat</div>
         </div>
       </div>
 

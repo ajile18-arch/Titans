@@ -16,8 +16,31 @@ window.HQModule = {
     // Best Squad Mechanic & Medic
     const bestMechanic = st.jocks.reduce((best, j) => (j.skills['Mechanic (Repair)'] > (best?.skills['Mechanic (Repair)'] || 0) ? j : best), null);
     const bestMedic = st.jocks.reduce((best, j) => (j.skills['Medical (First Aid)'] > (best?.skills['Medical (First Aid)'] || 0) ? j : best), null);
+    const comp = st.company || {};
+    const goalObj = (window.TOS_DATA.companyGoals || []).find(g => g.id === comp.goalId) || window.TOS_DATA.companyGoals[0];
 
     container.innerHTML = `
+      <!-- Company Charter Banner -->
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div class="panel" style="padding:8px; display:flex; align-items:center; justify-content:center;">
+              ${window.GameState.getCompanyEmblemSvg(comp.emblemId)}
+            </div>
+            <div>
+              <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                <h2 style="font-size:18px; font-weight:800;">${comp.name || 'Unregistered Mercenary Unit'}</h2>
+                <span class="badge primary">Cmdr. ${comp.commander || 'Commander'}</span>
+                <span class="badge green">${goalObj ? goalObj.title : 'Mercenary Charter'}</span>
+              </div>
+              <div style="font-style:italic; color:#93c5fd; font-size:13px; margin-top:2px;">"${comp.motto || 'Steel Before Surrender'}"</div>
+              <div class="subtext" style="margin-top:4px;"><strong>Company Goal:</strong> ${comp.customGoals || (goalObj ? goalObj.desc : '')}</div>
+            </div>
+          </div>
+          <button class="btn" onclick="App.openCompanyCreator(false)">Edit Company Charter</button>
+        </div>
+      </div>
+
       <div class="grid-12">
         <!-- Left 4 Cols: Active Jock Roster + Hiring Hall + Squad Crew Support -->
         <div class="col-4" style="display:flex; flex-direction:column; gap:16px;">

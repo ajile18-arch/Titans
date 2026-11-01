@@ -1,6 +1,87 @@
 // Core Catalog & Reference Data for Titans of Steel Remake (Mode A: Classic Sim)
 
 window.TOS_DATA = {
+  companyEmblems: [
+    {
+      id: 'emblem-wolf',
+      label: 'Iron Wolf Crest',
+      svg: `<svg viewBox="0 0 64 64" width="48" height="48" fill="none">
+        <polygon points="32,4 56,16 56,42 32,60 8,42 8,16" fill="#0f172a" stroke="#38bdf8" stroke-width="2.5"/>
+        <path d="M18 22L24 14L28 22L32 18L36 22L40 14L46 22L42 40L32 48L22 40L18 22Z" fill="#0284c7" stroke="#bae6fd" stroke-width="1.8"/>
+        <circle cx="27" cy="30" r="2" fill="#f8fafc"/>
+        <circle cx="37" cy="30" r="2" fill="#f8fafc"/>
+      </svg>`
+    },
+    {
+      id: 'emblem-skull',
+      label: 'Crimson Vanguard',
+      svg: `<svg viewBox="0 0 64 64" width="48" height="48" fill="none">
+        <polygon points="32,4 56,16 56,42 32,60 8,42 8,16" fill="#0f172a" stroke="#f43f5e" stroke-width="2.5"/>
+        <path d="M20 26C20 18 25 14 32 14C39 14 44 18 44 26C44 31 41 34 39 36V44H25V36C23 34 20 31 20 26Z" fill="#e11d48" stroke="#fecdd3" stroke-width="1.8"/>
+        <circle cx="27" cy="26" r="3" fill="#0f172a"/>
+        <circle cx="37" cy="26" r="3" fill="#0f172a"/>
+        <path d="M29 40V44M32 40V44M35 40V44" stroke="#0f172a" stroke-width="2"/>
+      </svg>`
+    },
+    {
+      id: 'emblem-talon',
+      label: 'SolarHawk Talon',
+      svg: `<svg viewBox="0 0 64 64" width="48" height="48" fill="none">
+        <polygon points="32,4 56,16 56,42 32,60 8,42 8,16" fill="#0f172a" stroke="#f59e0b" stroke-width="2.5"/>
+        <path d="M14 24L32 32L50 24L42 40L32 50L22 40L14 24Z" fill="#d97706" stroke="#fde68a" stroke-width="1.8"/>
+        <path d="M32 12L36 26L32 32L28 26L32 12Z" fill="#fef08a"/>
+      </svg>`
+    },
+    {
+      id: 'emblem-aegis',
+      label: 'Emerald Aegis',
+      svg: `<svg viewBox="0 0 64 64" width="48" height="48" fill="none">
+        <polygon points="32,4 56,16 56,42 32,60 8,42 8,16" fill="#0f172a" stroke="#10b981" stroke-width="2.5"/>
+        <path d="M34 12L20 34H31L28 50L44 28H33L34 12Z" fill="#10b981" stroke="#d1fae5" stroke-width="1.6"/>
+      </svg>`
+    },
+    {
+      id: 'emblem-suns',
+      label: 'Twin Suns Nova',
+      svg: `<svg viewBox="0 0 64 64" width="48" height="48" fill="none">
+        <polygon points="32,4 56,16 56,42 32,60 8,42 8,16" fill="#0f172a" stroke="#8b5cf6" stroke-width="2.5"/>
+        <circle cx="32" cy="32" r="12" fill="#7c3aed" stroke="#ddd6fe" stroke-width="2"/>
+        <path d="M32 12V17M32 47V52M12 32H17M47 32H52M18 18L22 22M42 42L46 46M46 18L42 22M22 42L18 46" stroke="#c4b5fd" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>`
+    },
+    {
+      id: 'emblem-anvil',
+      label: 'Titan Forge Anvil',
+      svg: `<svg viewBox="0 0 64 64" width="48" height="48" fill="none">
+        <polygon points="32,4 56,16 56,42 32,60 8,42 8,16" fill="#0f172a" stroke="#94a3b8" stroke-width="2.5"/>
+        <path d="M16 24H48L42 34H22L16 24ZM24 34H40L44 46H20L24 34Z" fill="#475569" stroke="#e2e8f0" stroke-width="1.8"/>
+      </svg>`
+    }
+  ],
+
+  companyGoals: [
+    {
+      id: 'wealth',
+      title: 'Salvage & Fortune Syndicate',
+      desc: 'Accumulate a 2,000,000 Cr mercenary war chest and build a profitable 8-Mech hangar.'
+    },
+    {
+      id: 'champions',
+      title: 'Grand Arena Champions',
+      desc: 'Train an elite roster of Champion-rank MechJocks with 90%+ combat mastery.'
+    },
+    {
+      id: 'assault',
+      title: 'Heavy Assault Hegemony',
+      desc: 'Engineer and field an unstoppable lance of 200-ton Assault Mechs.'
+    },
+    {
+      id: 'custom',
+      title: 'Independent Mercenary Charter',
+      desc: 'Follow your own strategic objectives and mercenary doctrine across the sector.'
+    }
+  ],
+
   ranks: [
     { name: 'Rookie', minXpSpent: 0, salaryMult: 1.0 },
     { name: 'Green', minXpSpent: 400, salaryMult: 1.3 },
