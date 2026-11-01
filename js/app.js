@@ -288,6 +288,12 @@ window.App = {
 
   updateHUD() {
     const st = window.GameState.data;
+    const ver = window.GAME_VERSION || '1.00';
+    const wmEl = document.getElementById('intro-version-watermark');
+    const topVerEl = document.getElementById('intro-top-version');
+    if (wmEl) wmEl.textContent = `VERSION ${ver}`;
+    if (topVerEl) topVerEl.textContent = `MECHJOCKS COMMAND // VER ${ver}`;
+
     const creditsEl = document.getElementById('hud-credits');
     const upkeepEl = document.getElementById('hud-upkeep');
     const jocksEl = document.getElementById('hud-jocks');

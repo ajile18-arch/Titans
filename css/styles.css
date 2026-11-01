@@ -586,6 +586,23 @@ body {
   color: #94a3b8;
 }
 
+.intro-version-watermark {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.85);
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(59, 130, 246, 0.55);
+  border-right: 4px solid var(--accent-amber);
+  padding: 6px 14px;
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  user-select: none;
+}
+
 @media (max-width: 768px) {
   .intro-screen {
     padding: 20px;
