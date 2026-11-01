@@ -44,6 +44,7 @@ window.HQModule = {
               <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
                 <h2 style="font-size:18px; font-weight:800;">${comp.name || 'Unregistered Mercenary Unit'}</h2>
                 <span class="badge primary">Cmdr. ${comp.commander || 'Commander'}</span>
+                <span class="badge amber mono">Reputation Lvl ${window.GameState.getCompanyReputationLevel()} (${window.GameState.getMaxInterviewQuestions()} Interview Qs)</span>
                 <span class="badge green">${goalObj ? goalObj.title : 'Mercenary Charter'}</span>
               </div>
               <div style="font-style:italic; color:#93c5fd; font-size:13px; margin-top:2px;">"${comp.motto || 'Steel Before Surrender'}"</div>
@@ -325,93 +326,60 @@ window.HQModule = {
     this.render();
   },
 
-  askInterviewQuestion(qKey) {
+  askInterviewQuestion(qId) {
     if (!this.candidate || this.candidateWalkedOut) return;
+    if (this.askedQuestions[qId]) return;
+
+    const maxAllowed = window.GameState.getMaxInterviewQuestions();
+    const currentAsked = Object.keys(this.askedQuestions).length;
+    if (currentAsked >= maxAllowed) return;
+
+    const qObj = (window.TOS_DATA.interviewQuestions || []).find(q => q.id === qId);
+    if (!qObj) return;
+
     const c = this.candidate;
-    const s = c.stats;
-    const sk = c.skills;
+    let reply = '';
+    let clue = '';
 
-    if (qKey === 'weapons') {
-      const topWep = c.primaryWeapon;
-      const topVal = sk[topWep];
-      const worstWep = ['Energy Weapons', 'Cannons / Ballistic', 'Guided Missiles', 'Close Combat']
-        .reduce((w, k) => (sk[k] < sk[w] ? k : w), 'Close Combat');
+    if (qObj.type === 'attribute') {
+      const attrName = qObj.target;
+      const val = c.stats[attrName] || 20;
+      const estLow = Math.max(10, val - 3);
+      const estHigh = Math.min(100, val + 3);
 
-      let reply = '';
-      let clue = '';
-      if (topVal >= 75) {
-        reply = `"Put me in a cockpit with ${topWep} and I don't miss—I've drilled target cores at maximum range under heavy fire. Just don't ask me to rely on ${worstWep}; I never cared for them."`;
-        clue = `Strong mastery in ${topWep} (Est. 75–95%), weak in ${worstWep}.`;
-      } else if (topVal >= 55) {
-        reply = `"I'm qualifying-certified and comfortable firing ${topWep} in combat salvos, though I'm still sharpening my edge with ${worstWep}."`;
-        clue = `Solid proficiency in ${topWep} (Est. 55–74%), lower ${worstWep}.`;
+      if (val >= 38) {
+        reply = `"${attrName} is one of my strongest natural traits, Commander. In academy testing and live drops, I consistently ranked in the top tier."`;
+        clue = `${attrName} Reading: Gifted / High (Est. ${estLow}–${estHigh} / 100)`;
+      } else if (val >= 25) {
+        reply = `"I hold my own when it comes to ${attrName}. I'm reliable under standard combat conditions, with room to grow over a long campaign."`;
+        clue = `${attrName} Reading: Solid / Average (Est. ${estLow}–${estHigh} / 100)`;
       } else {
-        reply = `"I've mostly logged academy simulator hours on ${topWep} so far. I'll need live-fire combat XP to really dial in my gunnery."`;
-        clue = `Green gunnery across the board; best is ${topWep} (Est. <55%).`;
+        reply = `"I'll be honest with you—${attrName} has never been my strong suit. I try to compensate for it with positioning and preparation."`;
+        clue = `${attrName} Reading: Raw / Low (Est. ${estLow}–${estHigh} / 100)`;
       }
-      this.askedQuestions.weapons = { q: '1. Weapon Systems & Gunnery Preference', reply, clue };
-    } else if (qKey === 'piloting') {
-      const pil = s.Piloting;
-      const ref = s.Reflexes;
-      let reply = '';
-      let clue = '';
-      if (pil >= 35 && ref >= 35) {
-        reply = `"My neural reaction times tested in the top decile. Rough boulders, swamp mud, jump-jet landings on one leg—I keep the gyro upright when everyone else faceplants."`;
-        clue = `Gifted Piloting & Reflexes (Est. 35–55 / 100).`;
-      } else if (pil >= 24 || ref >= 24) {
-        reply = `"I keep my Titan steady on standard terrain and react fast enough in a torso-twist duel, though extreme jump landings still make me sweat."`;
-        clue = `Solid Piloting & Reflexes (Est. 24–34 / 100).`;
+    } else {
+      const skillName = qObj.target;
+      const val = c.skills[skillName] || 35;
+      const estLow = Math.max(15, val - 4);
+      const estHigh = Math.min(100, val + 4);
+
+      if (val >= 72) {
+        reply = `"${skillName} is my bread and butter. Give me the right equipment and I'll outperform almost anyone in the sector."`;
+        clue = `${skillName} Reading: Veteran Mastery (Est. ${estLow}%–${estHigh}%)`;
+      } else if (val >= 52) {
+        reply = `"I'm combat-certified in ${skillName} and have logged plenty of hours with it, though I'm not a master specialist yet."`;
+        clue = `${skillName} Reading: Competent / Trained (Est. ${estLow}%–${estHigh}%)`;
       } else {
-        reply = `"Truthfully, heavy mechs feel sluggish to me and I've had a couple rough knockdowns in training. Give me wide-open ground if you can."`;
-        clue = `Raw/Low Piloting & Reflexes (Est. 12–23 / 100).`;
+        reply = `"I only have basic academy familiarity with ${skillName}. If you need a specialist there right away, you'll have to train me up."`;
+        clue = `${skillName} Reading: Novice / Untrained (Est. ${estLow}%–${estHigh}%)`;
       }
-      this.askedQuestions.piloting = { q: '2. Reflexes & Terrain Piloting', reply, clue };
-    } else if (qKey === 'pressure') {
-      const brv = s.Bravery;
-      const con = s.Constitution;
-      const dc = sk['Damage Control'];
-      let reply = '';
-      let clue = '';
-      if (brv >= 35 && con >= 32) {
-        reply = `"When the cockpit hits 40 degrees Celsius, alarms are screaming, and chest armor is stripped to the reactor, my pulse doesn't even spike. I override the thermal shutdown and finish the shot."`;
-        clue = `Iron-willed Bravery & Constitution (Est. 35–55 / 100), Damage Control ~${dc >= 65 ? 'High' : 'Moderate'}.`;
-      } else if (brv >= 24) {
-        reply = `"I hold my nerve in a firefight and know how to manage reactor coolant, though I'm not suicidal if a 200-ton Assault mech corners me."`;
-        clue = `Steady Bravery & Constitution (Est. 24–34 / 100).`;
-      } else {
-        reply = `"Look, I'm a professional, not a martyr. If my cockpit canopy cracks or the reactor redlines, I'm reaching for the ejection handle early."`;
-        clue = `Cautious/Low Bravery or Constitution (Est. 12–23 / 100).`;
-      }
-      this.askedQuestions.pressure = { q: '3. Cockpit Stress, Heat & Guts Under Fire', reply, clue };
-    } else if (qKey === 'tech') {
-      const mechSk = sk['Mechanic (Repair)'];
-      const medSk = sk['Medical (First Aid)'];
-      const intStat = s.Intelligence;
-      let reply = '';
-      let clue = '';
-      if (mechSk >= 62 || medSk >= 62) {
-        const bestSupport = mechSk >= medSk ? 'Hangar Gantry Mechanic' : 'Trauma Field Medic';
-        reply = `"Between contracts I don't just sit in the lounge—I worked as a certified ${bestSupport}. I can patch armor plates or stitch up wounded squadmates myself."`;
-        clue = `High Technical/Support value (${bestSupport} Est. 62%+, INT ~${intStat}/100).`;
-      } else {
-        reply = `"I know basic cockpit pre-flight checks and how to slap on a field bandage, but I'm a combat pilot, not a chief engineer or surgeon."`;
-        clue = `Standard/Low Mechanic & Medical skills (Est. 20–55%, INT ~${intStat}/100).`;
-      }
-      this.askedQuestions.tech = { q: '4. Hangar Repair & Medical Triage Skills', reply, clue };
-    } else if (qKey === 'recon') {
-      const scanSk = sk['Recon / Scanner'];
-      const ins = s.Instinct;
-      let reply = '';
-      let clue = '';
-      if (scanSk >= 62 || ins >= 34) {
-        reply = `"I read deep-pulse scanner returns like a book. I'll spot enemy missile boats through dense woods long before they get a lock on our lance."`;
-        clue = `Strong Recon/Scanner & Instinct (Est. 62%+ Scan, INS ~${ins}/100).`;
-      } else {
-        reply = `"I rely on visual line-of-sight and standard targeting computers. Leave the fancy electronic warfare to someone else."`;
-        clue = `Basic Recon/Scanner & Instinct (Est. <60%, INS ~${ins}/100).`;
-      }
-      this.askedQuestions.recon = { q: '5. Electronic Warfare, Scanners & Command', reply, clue };
     }
+
+    this.askedQuestions[qId] = {
+      q: `${qObj.badge} — ${qObj.prompt}`,
+      reply,
+      clue
+    };
 
     this.render();
   },
@@ -555,22 +523,20 @@ window.HQModule = {
   renderInterviewModal() {
     if (!this.interviewOpen || !this.candidate) return '';
     const c = this.candidate;
-    const questions = [
-      { key: 'weapons', label: 'Ask About Weapon & Gunnery Specialties' },
-      { key: 'piloting', label: 'Ask About Piloting, Reflexes & Rough Terrain' },
-      { key: 'pressure', label: 'Ask About Cockpit Heat, Guts & Pressure Under Fire' },
-      { key: 'tech', label: 'Ask About Hangar Mechanic & Medical Experience' },
-      { key: 'recon', label: 'Ask About Scanners, ECM & Squad Leadership' }
-    ];
+    const questions = window.TOS_DATA.interviewQuestions || [];
     const askedList = Object.values(this.askedQuestions);
     const askedCount = askedList.length;
+    const repLvl = window.GameState.getCompanyReputationLevel();
+    const maxAllowed = window.GameState.getMaxInterviewQuestions();
+    const limitReached = askedCount >= maxAllowed;
 
     return `
       <div class="modal-backdrop">
-        <div class="modal-card" style="max-width:880px;">
+        <div class="modal-card" style="max-width:980px; max-height:92vh; overflow-y:auto;">
           <div class="section-header">
             <div>
               <span class="badge primary">MERCENARY RECRUITMENT INTERVIEW</span>
+              <span class="badge amber mono" style="margin-left:6px;">Company Reputation Lvl ${repLvl} (Max ${maxAllowed} Questions Allowed)</span>
               <h3 style="font-size:18px; font-weight:800; margin-top:4px;">
                 Applicant: ${c.firstName} "${c.callsign}" ${c.lastName}
               </h3>
@@ -579,10 +545,10 @@ window.HQModule = {
           </div>
 
           <div class="grid-12">
-            <!-- Left 5 Cols: Applicant Dossier (Stats Hidden until Hired) + Wage Negotiation -->
+            <!-- Left 5 Cols: Applicant Portrait & Dossier (Stats Hidden until Hired) + Wage Negotiation -->
             <div class="col-5" style="display:flex; flex-direction:column; gap:12px;">
-              <div class="panel" style="display:flex; gap:12px; align-items:center;">
-                <div>${window.GameState.getPortraitSvg(c.portraitId)}</div>
+              <div class="panel" style="display:flex; gap:14px; align-items:center;">
+                <div style="flex-shrink:0;">${window.GameState.getPortraitSvg(c.portraitId, 76)}</div>
                 <div>
                   <div style="font-weight:700; font-size:15px;">${c.firstName} "${c.callsign}" ${c.lastName}</div>
                   <div class="subtext" style="margin-top:2px;">${c.bio}</div>
@@ -595,12 +561,12 @@ window.HQModule = {
               <!-- Interviewer Evaluation Notes (Revealed as you ask questions) -->
               <div class="panel" style="display:flex; flex-direction:column; gap:6px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <strong style="font-size:13px;">Commander's Interview Notes</strong>
-                  <span class="mono subtext">${askedCount} / 5 Probed</span>
+                  <strong style="font-size:13px;">Commander's Stat Readings</strong>
+                  <span class="badge ${limitReached ? 'amber' : 'green'} mono">${askedCount} / ${maxAllowed} Questions Used</span>
                 </div>
                 ${askedCount === 0 ? `
                   <div class="subtext" style="font-style:italic; padding:6px 0;">
-                    No questions asked yet. Question the applicant on the right to uncover clues about their true Attributes and Skills!
+                    No questions asked yet. At <strong>Company Reputation Level ${repLvl}</strong>, you may choose up to <strong>${maxAllowed} questions</strong> from the 16 Attribute &amp; Skill topics on the right!
                   </div>
                 ` : askedList.map(item => `
                   <div style="font-size:12px; border-left:2px solid var(--accent-green); padding-left:8px; margin-top:4px;">
@@ -698,32 +664,45 @@ window.HQModule = {
                 </div>
               </div>
 
-              <!-- 5 Interview Questions to Probe Hidden Stats -->
+              <!-- 16 Interview Questions (6 Attributes + 10 Skills) with Reputation Limit -->
               <div style="display:flex; flex-direction:column; gap:6px;">
-                <div class="subtext" style="font-weight:700; text-transform:uppercase;">Ask Interview Questions to Gauge Hidden Stats:</div>
-                ${questions.map(q => {
-                  const alreadyAsked = !!this.askedQuestions[q.key];
-                  return `
-                    <button
-                      class="btn ${alreadyAsked ? '' : 'btn-primary'}"
-                      style="text-align:left; padding:9px 12px; display:flex; justify-content:space-between; align-items:center;"
-                      ${this.candidateWalkedOut ? 'disabled' : ''}
-                      onclick="HQModule.askInterviewQuestion('${q.key}')"
-                    >
-                      <span>${q.label}</span>
-                      <span class="mono" style="font-size:12px;">${alreadyAsked ? '&#9989; Asked' : 'Ask &rarr;'}</span>
-                    </button>
-                  `;
-                }).join('')}
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="subtext" style="font-weight:700; text-transform:uppercase;">
+                    Choose Up to ${maxAllowed} Interview Questions (${maxAllowed - askedCount} Remaining at Rep Lvl ${repLvl}):
+                  </span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px; max-height:245px; overflow-y:auto; padding-right:4px;">
+                  ${questions.map(q => {
+                    const alreadyAsked = !!this.askedQuestions[q.id];
+                    const disabled = this.candidateWalkedOut || (!alreadyAsked && limitReached);
+                    return `
+                      <button
+                        class="btn ${alreadyAsked ? '' : 'btn-primary'}"
+                        style="text-align:left; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; gap:10px;"
+                        ${disabled ? 'disabled' : ''}
+                        onclick="HQModule.askInterviewQuestion('${q.id}')"
+                      >
+                        <div style="flex:1;">
+                          <span class="badge ${q.type === 'attribute' ? 'primary' : 'green'} mono" style="margin-right:6px;">${q.badge}</span>
+                          <span>${q.prompt}</span>
+                        </div>
+                        <span class="mono" style="font-size:12px; flex-shrink:0;">
+                          ${alreadyAsked ? '&#9989; Asked' : limitReached ? 'Locked (Rep Lvl ' + repLvl + ')' : 'Ask &rarr;'}
+                        </span>
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
               </div>
 
               <!-- Full Interview Q&A Transcript -->
-              <div class="panel" style="display:flex; flex-direction:column; gap:8px; max-height:210px; overflow-y:auto;">
-                <div class="subtext" style="font-weight:700; text-transform:uppercase;">Interview Transcript</div>
-                ${askedCount === 0 ? `<div class="subtext">Click any question above to begin interviewing ${c.callsign}.</div>` : askedList.map(item => `
+              <div class="panel" style="display:flex; flex-direction:column; gap:8px; max-height:175px; overflow-y:auto;">
+                <div class="subtext" style="font-weight:700; text-transform:uppercase;">Interview Transcript (${askedCount}/${maxAllowed})</div>
+                ${askedCount === 0 ? `<div class="subtext">Select up to ${maxAllowed} questions above to probe ${c.callsign}'s specific Attributes or Skills.</div>` : askedList.map(item => `
                   <div style="border-bottom:1px solid var(--border); padding-bottom:8px;">
                     <div style="font-weight:700; font-size:12px; color:#93c5fd;">Q: ${item.q}</div>
                     <div style="font-size:13px; font-style:italic; margin-top:3px;">${item.reply}</div>
+                    <div class="mono" style="font-size:12px; color:var(--accent-green); margin-top:2px;">&rarr; ${item.clue}</div>
                   </div>
                 `).join('')}
               </div>
@@ -746,8 +725,8 @@ window.HQModule = {
       <div class="card">
         <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:16px; border-bottom:1px solid var(--border); padding-bottom:14px;">
           <div style="display:flex; gap:14px; align-items:flex-start;">
-            <div class="panel" style="padding:8px;">
-              ${window.GameState.getPortraitSvg(jock.portraitId)}
+            <div class="panel" style="padding:6px;">
+              ${window.GameState.getPortraitSvg(jock.portraitId, 82)}
             </div>
             <div>
               <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
@@ -894,11 +873,11 @@ window.HQModule = {
           </div>
 
           <div>
-            <label class="subtext">Select Jock Portrait Helmet / Visor</label>
+            <label class="subtext">Select Jockey Character Portrait</label>
             <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:6px;">
               ${window.TOS_DATA.portraits.map(p => `
                 <div class="list-item ${this.selectedPortraitId === p.id ? 'selected' : ''}" onclick="HQModule.pickPortrait('${p.id}')" style="display:flex; align-items:center; gap:8px;">
-                  ${p.svg}
+                  ${window.GameState.getPortraitSvg(p.id, 52)}
                   <span style="font-size:12px; font-weight:600;">${p.label}</span>
                 </div>
               `).join('')}

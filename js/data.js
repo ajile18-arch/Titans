@@ -116,7 +116,8 @@ window.TOS_DATA = {
   portraits: [
     {
       id: 'visor-blue',
-      label: 'Strike Visor (Cyan)',
+      label: '"Valkyrie" (Veteran Recon)',
+      img: 'assets/portraits/pilot_1.jpg',
       svg: `<svg viewBox="0 0 64 64" width="54" height="54" fill="none">
         <rect width="64" height="64" rx="12" fill="#0f172a"/>
         <path d="M16 26C16 16 23 10 32 10C41 10 48 16 48 26V42C48 49 41 54 32 54C23 54 16 49 16 42V26Z" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
@@ -126,7 +127,8 @@ window.TOS_DATA = {
     },
     {
       id: 'crimson-ace',
-      label: 'Assault Helm (Crimson)',
+      label: '"Anvil" (Assault Brawler)',
+      img: 'assets/portraits/pilot_2.jpg',
       svg: `<svg viewBox="0 0 64 64" width="54" height="54" fill="none">
         <rect width="64" height="64" rx="12" fill="#0f172a"/>
         <polygon points="32,8 50,20 48,46 32,56 16,46 14,20" fill="#1e293b" stroke="#f43f5e" stroke-width="2"/>
@@ -136,7 +138,8 @@ window.TOS_DATA = {
     },
     {
       id: 'recon-ghost',
-      label: 'Recon Optics (Emerald)',
+      label: '"Ghost" (EW Specialist)',
+      img: 'assets/portraits/pilot_3.jpg',
       svg: `<svg viewBox="0 0 64 64" width="54" height="54" fill="none">
         <rect width="64" height="64" rx="12" fill="#0f172a"/>
         <circle cx="32" cy="32" r="21" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
@@ -147,7 +150,8 @@ window.TOS_DATA = {
     },
     {
       id: 'gold-commander',
-      label: 'Command Crest (Amber)',
+      label: '"Spark" (Plasma Gunner)',
+      img: 'assets/portraits/pilot_4.jpg',
       svg: `<svg viewBox="0 0 64 64" width="54" height="54" fill="none">
         <rect width="64" height="64" rx="12" fill="#0f172a"/>
         <path d="M15 24L32 10L49 24V45L32 55L15 45V24Z" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
@@ -156,8 +160,20 @@ window.TOS_DATA = {
       </svg>`
     },
     {
+      id: 'iron-veteran',
+      label: '"Kodiak" (Heavy Commander)',
+      img: 'assets/portraits/pilot_5.jpg',
+      svg: `<svg viewBox="0 0 64 64" width="54" height="54" fill="none">
+        <rect width="64" height="64" rx="12" fill="#0f172a"/>
+        <rect x="15" y="13" width="34" height="38" rx="6" fill="#334155" stroke="#94a3b8" stroke-width="2"/>
+        <rect x="20" y="22" width="24" height="7" fill="#0f172a"/>
+        <path d="M22 37H42M22 42H42" stroke="#cbd5e1" stroke-width="2"/>
+      </svg>`
+    },
+    {
       id: 'cyber-violet',
-      label: 'Neural Jack (Violet)',
+      label: '"Spectre" (Neural Sniper)',
+      img: 'assets/portraits/pilot_6.jpg',
       svg: `<svg viewBox="0 0 64 64" width="54" height="54" fill="none">
         <rect width="64" height="64" rx="12" fill="#0f172a"/>
         <rect x="16" y="12" width="32" height="40" rx="10" fill="#1e293b" stroke="#8b5cf6" stroke-width="2"/>
@@ -165,16 +181,124 @@ window.TOS_DATA = {
         <circle cx="26" cy="40" r="2.5" fill="#8b5cf6"/>
         <circle cx="38" cy="40" r="2.5" fill="#8b5cf6"/>
       </svg>`
+    }
+  ],
+
+  interviewQuestions: [
+    // 6 Classic Attribute Questions
+    {
+      id: 'attr_Constitution',
+      type: 'attribute',
+      target: 'Constitution',
+      badge: 'ATTR: CON',
+      prompt: 'How does your body hold up under high-G maneuvers, cockpit concussions, and extended campaigns?'
     },
     {
-      id: 'iron-veteran',
-      label: 'Iron Guard (Steel)',
-      svg: `<svg viewBox="0 0 64 64" width="54" height="54" fill="none">
-        <rect width="64" height="64" rx="12" fill="#0f172a"/>
-        <rect x="15" y="13" width="34" height="38" rx="6" fill="#334155" stroke="#94a3b8" stroke-width="2"/>
-        <rect x="20" y="22" width="24" height="7" fill="#0f172a"/>
-        <path d="M22 37H42M22 42H42" stroke="#cbd5e1" stroke-width="2"/>
-      </svg>`
+      id: 'attr_Intelligence',
+      type: 'attribute',
+      target: 'Intelligence',
+      badge: 'ATTR: INT',
+      prompt: 'Walk me through how you analyze complex battlefield telemetry and technical schematics.'
+    },
+    {
+      id: 'attr_Instinct',
+      type: 'attribute',
+      target: 'Instinct',
+      badge: 'ATTR: INS',
+      prompt: 'When an ambush breaks out in zero visibility, how do you read the enemy\'s next move?'
+    },
+    {
+      id: 'attr_Reflexes',
+      type: 'attribute',
+      target: 'Reflexes',
+      badge: 'ATTR: REF',
+      prompt: 'How fast is your neural trigger response when a hostile target flashes across your crosshairs?'
+    },
+    {
+      id: 'attr_Piloting',
+      type: 'attribute',
+      target: 'Piloting',
+      badge: 'ATTR: PIL',
+      prompt: 'How well do you keep a damaged Mech upright across jagged rubble, swamp mud, or deep water?'
+    },
+    {
+      id: 'attr_Bravery',
+      type: 'attribute',
+      target: 'Bravery',
+      badge: 'ATTR: BRV',
+      prompt: 'When your center torso armor is breached and enemy lasers are locked on you, how do you react?'
+    },
+
+    // 10 Classic Skill Questions
+    {
+      id: 'skill_Energy Weapons',
+      type: 'skill',
+      target: 'Energy Weapons',
+      badge: 'SKILL: ENERGY',
+      prompt: 'What is your experience managing beam focus and thermal draw on Lasers, Plasma, and Meson guns?'
+    },
+    {
+      id: 'skill_Cannons / Ballistic',
+      type: 'skill',
+      target: 'Cannons / Ballistic',
+      badge: 'SKILL: BALLISTIC',
+      prompt: 'Tell me about leading moving targets and managing recoil with Autocannons and Gauss rifles.'
+    },
+    {
+      id: 'skill_Guided Missiles',
+      type: 'skill',
+      target: 'Guided Missiles',
+      badge: 'SKILL: MISSILES',
+      prompt: 'How proficient are you at maintaining SRM and LRM missile locks under combat conditions?'
+    },
+    {
+      id: 'skill_Close Combat',
+      type: 'skill',
+      target: 'Close Combat',
+      badge: 'SKILL: MELEE',
+      prompt: 'If an enemy Mech closes to 1 hex with a Power Axe or Vibro-Blade, how do you handle close combat?'
+    },
+    {
+      id: 'skill_Recon / Scanner',
+      type: 'skill',
+      target: 'Recon / Scanner',
+      badge: 'SKILL: RECON',
+      prompt: 'How skilled are you at calibrating deep-pulse scanners and cutting through enemy ECM jamming?'
+    },
+    {
+      id: 'skill_Damage Control',
+      type: 'skill',
+      target: 'Damage Control',
+      badge: 'SKILL: DMG CTRL',
+      prompt: 'When reactor heat redlines and actuators jam mid-battle, how do you handle emergency damage control?'
+    },
+    {
+      id: 'skill_Leadership',
+      type: 'skill',
+      target: 'Leadership',
+      badge: 'SKILL: LEADER',
+      prompt: 'Have you ever called tactical formations or coordinated lance initiative on the comm net?'
+    },
+    {
+      id: 'skill_Survival',
+      type: 'skill',
+      target: 'Survival',
+      badge: 'SKILL: SURVIVAL',
+      prompt: 'If a reactor goes critical, how trained are you in emergency cockpit ejection and field survival?'
+    },
+    {
+      id: 'skill_Mechanic (Repair)',
+      type: 'skill',
+      target: 'Mechanic (Repair)',
+      badge: 'SKILL: MECHANIC',
+      prompt: 'Can you strip a damaged actuator or weld ferro-titanium armor plates in the hangar bay?'
+    },
+    {
+      id: 'skill_Medical (First Aid)',
+      type: 'skill',
+      target: 'Medical (First Aid)',
+      badge: 'SKILL: MEDICAL',
+      prompt: 'Do you have trauma triage training to treat wounded squadmates after a rough combat drop?'
     }
   ],
 

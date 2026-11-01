@@ -17,7 +17,8 @@ function createDefaultState() {
       emblemId: 'emblem-wolf',
       motto: 'Steel Before Surrender',
       goalId: 'wealth',
-      customGoals: 'Build a premier MechJock mercenary company from the ground up.'
+      customGoals: 'Build a premier MechJock mercenary company from the ground up.',
+      reputationLevel: 1
     },
 
     // Start from complete scratch with no Jockeys and no Mechs
@@ -149,9 +150,24 @@ window.GameState = {
     return Math.round(jock.baseSalary * rank.salaryMult);
   },
 
-  getPortraitSvg(portraitId) {
+  getPortraitSvg(portraitId, size = 58) {
     const p = window.TOS_DATA.portraits.find(x => x.id === portraitId) || window.TOS_DATA.portraits[0];
-    return p.svg;
+    if (p && p.img) {
+      return `<img src="${p.img}" alt="${p.label}" style="width:${size}px; height:${size}px; object-fit:cover; border-radius:10px; border:2px solid var(--border-bright); display:block; background:#0f172a;" />`;
+    }
+    return p ? p.svg : '';
+  },
+
+  getCompanyReputationLevel() {
+    const st = this.data;
+    const baseRep = st?.company?.reputationLevel || 1;
+    const bonusFromMissions = Math.floor((st?.missionsCompleted || 0) / 4);
+    return Math.max(1, baseRep + bonusFromMissions);
+  },
+
+  getMaxInterviewQuestions() {
+    // At Company Reputation Level 1, only 3 questions can be asked per interview (2 + RepLevel)
+    return 2 + this.getCompanyReputationLevel();
   },
 
   getMechTemplate(mech) {
