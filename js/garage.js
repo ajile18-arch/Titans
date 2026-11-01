@@ -4,13 +4,15 @@ window.GarageModule = {
   filterCat: 'All',
 
   renderShopkeeperBanner(repLvl, totalSpareParts = 0) {
-    const quote = repLvl >= 4
+    const quote = repLvl >= 5
       ? `"Reputation Level ${repLvl}! You're legends in this sector, Commander. I've unlocked my entire vault—including the 200-ton Sovereign Assault frames."`
-      : repLvl === 3
+      : repLvl === 4
         ? `"Word of your victories is spreading fast (Reputation Level ${repLvl}). I'm now authorized to sell you 160-ton Heavy Marauder chassis!"`
-        : repLvl === 2
-          ? `"Not bad out there, Commander! At Reputation Level ${repLvl}, I can clear you for 120-ton Medium Guillotine frames. Keep winning to unlock Heavy iron."`
-          : `"Welcome to Vos Heavy Salvage & Ordnance! At Reputation Level 1, I can only clear you for Recon and Light chassis. Remember: you gotta buy a part from my shop before bolting it on, and I buy back gear at 50%—less if you bring it back shot up!"`;
+        : repLvl === 3
+          ? `"Strong showing out there, Commander! At Reputation Level ${repLvl}, I can clear you for 120-ton Medium Guillotine frames. Keep winning to unlock Heavy iron."`
+          : repLvl === 2
+            ? `"You've proven your squad can survive a drop (Reputation Level ${repLvl})! I'm now cleared to sell you 80-ton Light Lynx chassis alongside Recon frames."`
+            : `"Welcome to Vos Heavy Salvage & Ordnance! At Reputation Level 1, I can only clear you for 50-ton Recon Wasp chassis. Remember: you gotta buy a part from my shop before bolting it on, and I buy back gear at 50%—less if you bring it back shot up!"`;
 
     return `
       <div class="card" style="margin-bottom:16px; border-color:var(--accent-amber);">
