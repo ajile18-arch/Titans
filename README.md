@@ -1,6 +1,6 @@
-# Titans of Steel: Reborn
+# MechJocks
 
-A modern web-based tactical mech strategy remake inspired by **Titans of Steel** / **Titans of Steel: Warring Suns**, built with a modular HTML5/CSS/JS architecture that can run directly in any browser or be packaged into a standalone desktop executable.
+A tactical mech strategy and pilot command game inspired by classic hex-grid mech simulators, built with a modular HTML5/CSS/JS architecture that runs directly in any browser or packages into a standalone desktop executable.
 
 ## Core Modules (Mode A: Classic Sim Baseline)
 
