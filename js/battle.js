@@ -277,6 +277,42 @@ window.BattleModule = {
     return pts.join(' ');
   },
 
+  getPartDamageColor(cur, max) {
+    const m = max || 1;
+    const pct = (cur / m) * 100;
+    if (cur <= 0) return '#1e293b'; // Breached / Destroyed (Dark Slate)
+    if (pct < 35) return '#ef4444'; // Critical (<35% Crimson Red)
+    if (pct < 70) return '#f59e0b'; // Damaged (35-69% Amber)
+    return '#10b981';               // Nominal (70-100% Emerald Green)
+  },
+
+  renderHexMechSprite(cx, cy, armor, maxArmor, label, borderColor) {
+    const c = loc => this.getPartDamageColor(armor[loc] ?? 0, maxArmor[loc] ?? 1);
+    const s = loc => (armor[loc] <= 0 ? '#ef4444' : '#0f172a');
+
+    return `
+      <g>
+        <!-- Team Indicator Base Ring -->
+        <ellipse cx="${cx}" cy="${cy + 12}" rx="17" ry="5" fill="none" stroke="${borderColor}" stroke-width="1.6" stroke-dasharray="3,2" />
+        <!-- HD (Head) -->
+        <rect x="${cx - 4.5}" y="${cy - 20}" width="9" height="6.5" rx="1.5" fill="${c('HD')}" stroke="${s('HD')}" stroke-width="1" />
+        <!-- CT (Center Torso) -->
+        <rect x="${cx - 5.5}" y="${cy - 12.5}" width="11" height="12.5" rx="1" fill="${c('CT')}" stroke="${s('CT')}" stroke-width="1" />
+        <!-- LT & RT (Side Torsos) -->
+        <rect x="${cx - 11}" y="${cy - 12}" width="5" height="11.5" rx="1" fill="${c('LT')}" stroke="${s('LT')}" stroke-width="1" />
+        <rect x="${cx + 6}" y="${cy - 12}" width="5" height="11.5" rx="1" fill="${c('RT')}" stroke="${s('RT')}" stroke-width="1" />
+        <!-- LA & RA (Arms) -->
+        <rect x="${cx - 16.5}" y="${cy - 11}" width="4.8" height="12.5" rx="1.2" fill="${c('LA')}" stroke="${s('LA')}" stroke-width="1" />
+        <rect x="${cx + 11.7}" y="${cy - 11}" width="4.8" height="12.5" rx="1.2" fill="${c('RA')}" stroke="${s('RA')}" stroke-width="1" />
+        <!-- LL & RL (Legs) -->
+        <rect x="${cx - 8.5}" y="${cy + 1}" width="6.5" height="12.5" rx="1" fill="${c('LL')}" stroke="${s('LL')}" stroke-width="1" />
+        <rect x="${cx + 2}" y="${cy + 1}" width="6.5" height="12.5" rx="1" fill="${c('RL')}" stroke="${s('RL')}" stroke-width="1" />
+        <!-- Callsign / Unit Tag -->
+        <text x="${cx}" y="${cy + 23}" text-anchor="middle" fill="#f8fafc" font-size="8.5" font-weight="bold">${label}</text>
+      </g>
+    `;
+  },
+
   render() {
     const container = document.getElementById('view-battle');
     if (!container) return;
@@ -313,32 +349,39 @@ window.BattleModule = {
     const secs = String(this.clockSec % 60).padStart(2, '0');
     const dist = Math.abs(this.playerPos.r - this.enemy.r) + Math.abs(this.playerPos.c - this.enemy.c);
 
-    // Build SVG Hex Grid
-    const R = 28;
+    // Build SVG Hex Grid with 8-Part Damage-Colored Mini-Mech Sprites
+    const R = 36;
     const dx = R * 1.55;
     const dy = R * 1.75;
     const svgGrid = this.hexes.map(h => {
-      const cx = 44 + h.c * dx;
-      const cy = 36 + h.r * dy + (h.c % 2 === 1 ? dy / 2 : 0);
+      const cx = 54 + h.c * dx;
+      const cy = 48 + h.r * dy + (h.c % 2 === 1 ? dy / 2 : 0);
       const isP = h.r === this.playerPos.r && h.c === this.playerPos.c;
       const isE = h.r === this.enemy.r && h.c === this.enemy.c;
-      const fill = isP ? 'rgba(16, 185, 129, 0.32)'
-                 : isE ? 'rgba(239, 68, 68, 0.32)'
+      const fill = isP ? 'rgba(59, 130, 246, 0.22)'
+                 : isE ? 'rgba(239, 68, 68, 0.22)'
                  : h.terrain === 'woods' ? 'rgba(34, 197, 94, 0.14)'
                  : h.terrain === 'water' ? 'rgba(59, 130, 246, 0.18)'
                  : h.terrain === 'hill' ? 'rgba(245, 158, 11, 0.16)'
                  : 'rgba(148, 163, 184, 0.08)';
-      const stroke = isP ? '#10b981' : isE ? '#ef4444' : '#475569';
-      const label = isP ? (jock ? jock.callsign.slice(0, 5).toUpperCase() : 'YOU')
-                  : isE ? 'HOSTILE'
-                  : h.terrain === 'woods' ? 'WOODS'
-                  : h.terrain === 'water' ? 'WATER'
-                  : h.terrain === 'hill' ? 'HILL'
-                  : `${h.c},${h.r}`;
+      const stroke = isP ? '#38bdf8' : isE ? '#f43f5e' : '#475569';
+      const terrainLabel = h.terrain === 'woods' ? 'WOODS'
+                         : h.terrain === 'water' ? 'WATER'
+                         : h.terrain === 'hill' ? 'HILL'
+                         : `${h.c},${h.r}`;
+
+      let innerContent = `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#94a3b8" font-size="10">${terrainLabel}</text>`;
+      if (isP) {
+        const pLabel = jock ? jock.callsign.slice(0, 7).toUpperCase() : 'PLAYER';
+        innerContent = this.renderHexMechSprite(cx, cy - 2, mech.armor, mech.maxArmorCurrent, pLabel, '#38bdf8');
+      } else if (isE) {
+        innerContent = this.renderHexMechSprite(cx, cy - 2, this.enemy.armor, this.enemy.maxArmor, 'HOSTILE', '#f43f5e');
+      }
+
       return `
         <g onclick="BattleModule.moveHex(${h.r},${h.c})" style="cursor:pointer;">
-          <polygon points="${this.hexPoints(cx, cy, R)}" fill="${fill}" stroke="${stroke}" stroke-width="${isP || isE ? 2.2 : 1}" />
-          <text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#e2e8f0" font-size="10" font-weight="${isP || isE ? 'bold' : 'normal'}">${label}</text>
+          <polygon points="${this.hexPoints(cx, cy, R)}" fill="${fill}" stroke="${stroke}" stroke-width="${isP || isE ? 2.4 : 1}" />
+          ${innerContent}
         </g>
       `;
     }).join('');
@@ -381,11 +424,17 @@ window.BattleModule = {
               </div>
             </div>
 
-            <!-- Interactive SVG Hex Map -->
-            <div class="panel" style="display:flex; justify-content:center; padding:12px;">
-              <svg viewBox="0 0 340 290" style="width:100%; max-width:480px; height:auto; user-select:none;">
+            <!-- Interactive SVG Hex Map with 8-Part Damage-Colored Mech Sprites -->
+            <div class="panel" style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px;">
+              <svg viewBox="0 0 440 375" style="width:100%; max-width:540px; height:auto; user-select:none;">
                 ${svgGrid}
               </svg>
+              <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; font-size:12px;" class="mono subtext">
+                <span><strong style="color:#10b981;">&#9632;</strong> 70–100% Armor</span>
+                <span><strong style="color:#f59e0b;">&#9632;</strong> 35–69% Damaged</span>
+                <span><strong style="color:#ef4444;">&#9632;</strong> 1–34% Critical</span>
+                <span><strong style="color:#475569;">&#9632;</strong> 0% Breached</span>
+              </div>
             </div>
 
             <!-- Action-Time Maneuver Controls -->
