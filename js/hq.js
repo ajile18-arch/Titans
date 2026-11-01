@@ -235,37 +235,37 @@ window.HQModule = {
     const tier = Math.min(1.0, Math.max(0.0, (offeredBonus - 1000) / 22000));
     const randRange = (min, max) => Math.round(min + Math.random() * (max - min));
 
-    // Generate 6 attributes (10 to 19)
-    const baseAttr = Math.round(11 + tier * 5);
+    // Generate 6 Classic Attributes on a 1–100 scale (starting recruits roll 15–48 so maxing to 100 takes a long career)
+    const baseAttr = Math.round(18 + tier * 20);
     const stats = {
-      Constitution: Math.min(20, Math.max(9, baseAttr + randRange(-2, 3))),
-      Intelligence: Math.min(20, Math.max(9, baseAttr + randRange(-2, 3))),
-      Instinct: Math.min(20, Math.max(9, baseAttr + randRange(-2, 3))),
-      Reflexes: Math.min(20, Math.max(9, baseAttr + randRange(-2, 3))),
-      Piloting: Math.min(20, Math.max(9, baseAttr + randRange(-2, 3))),
-      Bravery: Math.min(20, Math.max(9, baseAttr + randRange(-2, 3)))
+      Constitution: Math.min(55, Math.max(12, baseAttr + randRange(-6, 10))),
+      Intelligence: Math.min(55, Math.max(12, baseAttr + randRange(-6, 10))),
+      Instinct: Math.min(55, Math.max(12, baseAttr + randRange(-6, 10))),
+      Reflexes: Math.min(55, Math.max(12, baseAttr + randRange(-6, 10))),
+      Piloting: Math.min(55, Math.max(12, baseAttr + randRange(-6, 10))),
+      Bravery: Math.min(55, Math.max(12, baseAttr + randRange(-6, 10)))
     };
 
     // Pick 1 primary weapon specialty and 1 secondary weapon skill
     const weaponKeys = ['Energy Weapons', 'Cannons / Ballistic', 'Guided Missiles', 'Close Combat'];
     const primaryWeapon = pick(weaponKeys);
-    const baseSkill = Math.round(40 + tier * 38);
+    const baseSkill = Math.round(32 + tier * 34);
 
     const skills = {};
     weaponKeys.forEach(wk => {
       if (wk === primaryWeapon) {
-        skills[wk] = Math.min(95, baseSkill + randRange(8, 18));
+        skills[wk] = Math.min(82, baseSkill + randRange(6, 15));
       } else {
-        skills[wk] = Math.min(90, Math.max(25, baseSkill + randRange(-15, 8)));
+        skills[wk] = Math.min(75, Math.max(20, baseSkill + randRange(-14, 6)));
       }
     });
 
-    skills['Recon / Scanner'] = Math.min(92, Math.max(25, baseSkill + randRange(-12, 14)));
-    skills['Damage Control'] = Math.min(92, Math.max(25, baseSkill + randRange(-10, 12)));
-    skills['Leadership'] = Math.min(90, Math.max(25, baseSkill + randRange(-15, 10)));
-    skills['Survival'] = Math.min(90, Math.max(30, baseSkill + randRange(-10, 12)));
-    skills['Mechanic (Repair)'] = Math.min(90, Math.max(25, baseSkill + randRange(-15, 18)));
-    skills['Medical (First Aid)'] = Math.min(90, Math.max(25, baseSkill + randRange(-15, 18)));
+    skills['Recon / Scanner'] = Math.min(80, Math.max(20, baseSkill + randRange(-12, 12)));
+    skills['Damage Control'] = Math.min(80, Math.max(20, baseSkill + randRange(-10, 10)));
+    skills['Leadership'] = Math.min(78, Math.max(20, baseSkill + randRange(-14, 8)));
+    skills['Survival'] = Math.min(80, Math.max(25, baseSkill + randRange(-10, 10)));
+    skills['Mechanic (Repair)'] = Math.min(80, Math.max(20, baseSkill + randRange(-14, 15)));
+    skills['Medical (First Aid)'] = Math.min(80, Math.max(20, baseSkill + randRange(-14, 15)));
 
     // Calculate candidate's true skill score to determine XP spent & wage expectations
     const avgAttr = Object.values(stats).reduce((a, b) => a + b, 0) / 6;
@@ -285,7 +285,7 @@ window.HQModule = {
       callsign: pick(callsigns),
       portraitId: portrait.id,
       bio: pick(bios),
-      xp: randRange(250, 500),
+      xp: randRange(300, 650),
       xpSpent,
       stats,
       skills,
@@ -349,15 +349,15 @@ window.HQModule = {
       const ref = s.Reflexes;
       let reply = '';
       let clue = '';
-      if (pil >= 16 && ref >= 16) {
+      if (pil >= 35 && ref >= 35) {
         reply = `"My neural reaction times tested in the top decile. Rough boulders, swamp mud, jump-jet landings on one leg—I keep the gyro upright when everyone else faceplants."`;
-        clue = `High Piloting & Reflexes (Est. 16–20).`;
-      } else if (pil >= 13 || ref >= 13) {
+        clue = `Gifted Piloting & Reflexes (Est. 35–55 / 100).`;
+      } else if (pil >= 24 || ref >= 24) {
         reply = `"I keep my Titan steady on standard terrain and react fast enough in a torso-twist duel, though extreme jump landings still make me sweat."`;
-        clue = `Moderate Piloting & Reflexes (Est. 13–15).`;
+        clue = `Solid Piloting & Reflexes (Est. 24–34 / 100).`;
       } else {
         reply = `"Truthfully, heavy mechs feel sluggish to me and I've had a couple rough knockdowns in training. Give me wide-open ground if you can."`;
-        clue = `Below-average Piloting/Reflexes (Est. 9–12).`;
+        clue = `Raw/Low Piloting & Reflexes (Est. 12–23 / 100).`;
       }
       this.askedQuestions.piloting = { q: '2. Reflexes & Terrain Piloting', reply, clue };
     } else if (qKey === 'pressure') {
@@ -366,15 +366,15 @@ window.HQModule = {
       const dc = sk['Damage Control'];
       let reply = '';
       let clue = '';
-      if (brv >= 16 && con >= 15) {
+      if (brv >= 35 && con >= 32) {
         reply = `"When the cockpit hits 40 degrees Celsius, alarms are screaming, and chest armor is stripped to the reactor, my pulse doesn't even spike. I override the thermal shutdown and finish the shot."`;
-        clue = `Iron-willed Bravery & Constitution (Est. 16+), Damage Control ~${dc >= 65 ? 'High' : 'Moderate'}.`;
-      } else if (brv >= 13) {
+        clue = `Iron-willed Bravery & Constitution (Est. 35–55 / 100), Damage Control ~${dc >= 65 ? 'High' : 'Moderate'}.`;
+      } else if (brv >= 24) {
         reply = `"I hold my nerve in a firefight and know how to manage reactor coolant, though I'm not suicidal if a 200-ton Assault mech corners me."`;
-        clue = `Steady Bravery & Constitution (Est. 13–15).`;
+        clue = `Steady Bravery & Constitution (Est. 24–34 / 100).`;
       } else {
         reply = `"Look, I'm a professional, not a martyr. If my cockpit canopy cracks or the reactor redlines, I'm reaching for the ejection handle early."`;
-        clue = `Cautious/Low Bravery or Constitution (Est. 9–12).`;
+        clue = `Cautious/Low Bravery or Constitution (Est. 12–23 / 100).`;
       }
       this.askedQuestions.pressure = { q: '3. Cockpit Stress, Heat & Guts Under Fire', reply, clue };
     } else if (qKey === 'tech') {
@@ -383,27 +383,26 @@ window.HQModule = {
       const intStat = s.Intelligence;
       let reply = '';
       let clue = '';
-      if (mechSk >= 65 || medSk >= 65) {
+      if (mechSk >= 62 || medSk >= 62) {
         const bestSupport = mechSk >= medSk ? 'Hangar Gantry Mechanic' : 'Trauma Field Medic';
         reply = `"Between contracts I don't just sit in the lounge—I worked as a certified ${bestSupport}. I can patch armor plates or stitch up wounded squadmates myself."`;
-        clue = `High Technical/Support value (${bestSupport} Est. 65%+, INT ~${intStat}).`;
+        clue = `High Technical/Support value (${bestSupport} Est. 62%+, INT ~${intStat}/100).`;
       } else {
         reply = `"I know basic cockpit pre-flight checks and how to slap on a field bandage, but I'm a combat pilot, not a chief engineer or surgeon."`;
-        clue = `Standard/Low Mechanic & Medical skills (Est. 25–55%).`;
+        clue = `Standard/Low Mechanic & Medical skills (Est. 20–55%, INT ~${intStat}/100).`;
       }
       this.askedQuestions.tech = { q: '4. Hangar Repair & Medical Triage Skills', reply, clue };
     } else if (qKey === 'recon') {
       const scanSk = sk['Recon / Scanner'];
-      const leadSk = sk['Leadership'];
       const ins = s.Instinct;
       let reply = '';
       let clue = '';
-      if (scanSk >= 65 || ins >= 16) {
+      if (scanSk >= 62 || ins >= 34) {
         reply = `"I read deep-pulse scanner returns like a book. I'll spot enemy missile boats through dense woods long before they get a lock on our lance."`;
-        clue = `Strong Recon/Scanner & Instinct (Est. 65%+ Scan, INS ~${ins}).`;
+        clue = `Strong Recon/Scanner & Instinct (Est. 62%+ Scan, INS ~${ins}/100).`;
       } else {
         reply = `"I rely on visual line-of-sight and standard targeting computers. Leave the fancy electronic warfare to someone else."`;
-        clue = `Basic Recon/Scanner & Leadership (Est. <60%).`;
+        clue = `Basic Recon/Scanner & Instinct (Est. <60%, INS ~${ins}/100).`;
       }
       this.askedQuestions.recon = { q: '5. Electronic Warfare, Scanners & Command', reply, clue };
     }
@@ -716,14 +715,15 @@ window.HQModule = {
         <div class="col-5 card">
           <div class="section-header">
             <div>
-              <div class="section-title">6 Classic Attributes</div>
-              <div class="subtext">Cost: 100 XP per +1 Attribute Point (Max 20)</div>
+              <div class="section-title">6 Classic Attributes (1–100 Scale)</div>
+              <div class="subtext">Escalating XP cost per +1 (Rare to max out; choose carefully)</div>
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:10px;">
             ${window.TOS_DATA.attributes.map(attr => {
-              const val = jock.stats[attr.key] || 10;
-              const pct = Math.min(100, Math.round((val / 20) * 100));
+              const val = jock.stats[attr.key] || 20;
+              const cost = window.GameState.getAttrUpgradeCost(val);
+              const pct = Math.min(100, Math.round(val));
               return `
                 <div class="panel" style="display:flex; flex-direction:column; gap:6px;">
                   <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -731,9 +731,9 @@ window.HQModule = {
                       <strong>${attr.key}</strong> <span class="subtext mono">(${attr.abbr})</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
-                      <span class="mono" style="font-size:15px; font-weight:700;">${val}</span>
-                      <button class="btn btn-primary" ${jock.xp < 100 || val >= 20 ? 'disabled' : ''} onclick="HQModule.trainAttr('${attr.key}')">
-                        +1 (100 XP)
+                      <span class="mono" style="font-size:15px; font-weight:700;">${val} / 100</span>
+                      <button class="btn btn-primary" ${jock.xp < cost || val >= 100 ? 'disabled' : ''} onclick="HQModule.trainAttr('${attr.key}')">
+                        +1 (${cost} XP)
                       </button>
                     </div>
                   </div>
@@ -750,12 +750,13 @@ window.HQModule = {
           <div class="section-header">
             <div>
               <div class="section-title">Combat, Recon &amp; Crew Skills (0–100%)</div>
-              <div class="subtext">Cost: 50 XP per +5% Skill Increase</div>
+              <div class="subtext">Escalating XP cost per +3% Skill Training</div>
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:10px;">
             ${window.TOS_DATA.skills.map(sk => {
               const val = jock.skills[sk.key] || 30;
+              const cost = window.GameState.getSkillUpgradeCost(val);
               const barClass = sk.cat === 'Weapon' ? '' : sk.cat === 'Support' ? 'green' : 'amber';
               return `
                 <div class="panel" style="display:flex; flex-direction:column; gap:5px;">
@@ -766,8 +767,8 @@ window.HQModule = {
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span class="mono" style="font-size:14px; font-weight:700;">${val}%</span>
-                      <button class="btn btn-primary" ${jock.xp < 50 || val >= 100 ? 'disabled' : ''} onclick="HQModule.trainSkill('${sk.key}')">
-                        +5% (50 XP)
+                      <button class="btn btn-primary" ${jock.xp < cost || val >= 100 ? 'disabled' : ''} onclick="HQModule.trainSkill('${sk.key}')">
+                        +3% (${cost} XP)
                       </button>
                     </div>
                   </div>
@@ -856,10 +857,13 @@ window.HQModule = {
   trainAttr(attrKey) {
     const st = window.GameState.data;
     const jock = st.jocks.find(j => j.id === st.selectedJockId);
-    if (!jock || jock.xp < 100 || jock.stats[attrKey] >= 20) return;
-    jock.xp -= 100;
-    jock.xpSpent += 100;
-    jock.stats[attrKey] += 1;
+    if (!jock) return;
+    const curVal = jock.stats[attrKey] || 20;
+    const cost = window.GameState.getAttrUpgradeCost(curVal);
+    if (jock.xp < cost || curVal >= 100) return;
+    jock.xp -= cost;
+    jock.xpSpent += cost;
+    jock.stats[attrKey] = curVal + 1;
     window.GameState.save();
     App.updateHUD();
     this.render();
@@ -868,10 +872,13 @@ window.HQModule = {
   trainSkill(skillKey) {
     const st = window.GameState.data;
     const jock = st.jocks.find(j => j.id === st.selectedJockId);
-    if (!jock || jock.xp < 50 || jock.skills[skillKey] >= 100) return;
-    jock.xp -= 50;
-    jock.xpSpent += 50;
-    jock.skills[skillKey] = Math.min(100, jock.skills[skillKey] + 5);
+    if (!jock) return;
+    const curVal = jock.skills[skillKey] || 30;
+    const cost = window.GameState.getSkillUpgradeCost(curVal);
+    if (jock.xp < cost || curVal >= 100) return;
+    jock.xp -= cost;
+    jock.xpSpent += cost;
+    jock.skills[skillKey] = Math.min(100, curVal + 3);
     window.GameState.save();
     App.updateHUD();
     this.render();

@@ -122,7 +122,7 @@ window.BattleModule = {
     // Fire at player
     const playerHex = this.hexes.find(h => h.r === this.playerPos.r && h.c === this.playerPos.c);
     const coverMod = playerHex?.terrain === 'woods' ? -15 : 0;
-    const pilotEvade = jock ? Math.round((jock.stats.Piloting - 10) * 1.5) : 0;
+    const pilotEvade = jock ? Math.round((jock.stats.Piloting - 20) * 0.25) : 0;
     const toHit = Math.max(20, Math.min(85, this.enemy.hit + coverMod - pilotEvade));
     const roll = Math.floor(Math.random() * 100) + 1;
 
@@ -203,7 +203,7 @@ window.BattleModule = {
 
   calcWeaponHitChance(jock, metrics, weapon) {
     const skillVal = jock ? (jock.skills[weapon.cat] || 55) : 55;
-    const refBonus = jock ? Math.round((jock.stats.Reflexes - 12) * 1.5) : 0;
+    const refBonus = jock ? Math.round((jock.stats.Reflexes - 20) * 0.25) : 0;
     const dist = Math.abs(this.playerPos.r - this.enemy.r) + Math.abs(this.playerPos.c - this.enemy.c);
     const rangePenalty = dist > weapon.range ? -35 : -(dist - 1) * 3;
     const heatPenalty = this.playerPos.heat > metrics.coolingCap ? -15 : 0;

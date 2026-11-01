@@ -37,7 +37,7 @@ function createDefaultState() {
         xpSpent: 0,
         hireCost: 4500,
         baseSalary: 900,
-        stats: { Constitution: 13, Intelligence: 16, Instinct: 15, Reflexes: 16, Piloting: 14, Bravery: 14 },
+        stats: { Constitution: 22, Intelligence: 28, Instinct: 25, Reflexes: 27, Piloting: 24, Bravery: 23 },
         skills: {
           'Energy Weapons': 60, 'Cannons / Ballistic': 40, 'Guided Missiles': 45, 'Close Combat': 35,
           'Recon / Scanner': 55, 'Damage Control': 50, 'Leadership': 40, 'Survival': 45,
@@ -55,7 +55,7 @@ function createDefaultState() {
         xpSpent: 0,
         hireCost: 4500,
         baseSalary: 900,
-        stats: { Constitution: 16, Intelligence: 13, Instinct: 15, Reflexes: 14, Piloting: 15, Bravery: 16 },
+        stats: { Constitution: 28, Intelligence: 21, Instinct: 25, Reflexes: 23, Piloting: 26, Bravery: 29 },
         skills: {
           'Energy Weapons': 40, 'Cannons / Ballistic': 60, 'Guided Missiles': 60, 'Close Combat': 45,
           'Recon / Scanner': 45, 'Damage Control': 55, 'Leadership': 45, 'Survival': 50,
@@ -77,12 +77,35 @@ window.GameState = {
         if (!this.data.company) {
           this.data.company = createDefaultState().company;
         }
+        // Migrate any old 1-20 attributes to the new 1-100 scale
+        (this.data.jocks || []).forEach(j => {
+          if (j.stats) {
+            const maxStat = Math.max(...Object.values(j.stats));
+            if (maxStat <= 20) {
+              Object.keys(j.stats).forEach(k => {
+                j.stats[k] = Math.round(j.stats[k] * 2);
+              });
+            }
+          }
+        });
       } catch (e) {
         this.data = createDefaultState();
       }
     } else {
       this.data = createDefaultState();
     }
+  },
+
+  // Escalating XP cost to raise a 1-100 Attribute by +1 (starts high and climbs steep)
+  getAttrUpgradeCost(currentVal) {
+    const v = Number(currentVal) || 20;
+    return Math.round((250 + v * 12) / 10) * 10;
+  },
+
+  // Escalating XP cost to raise a 0-100% Skill by +3%
+  getSkillUpgradeCost(currentVal) {
+    const v = Number(currentVal) || 30;
+    return Math.round((80 + v * 2.5) / 10) * 10;
   },
 
   getCompanyEmblemSvg(emblemId) {
