@@ -485,7 +485,7 @@ window.BattleModule = {
           <div class="card">
             <div class="section-header">
               <div>
-                <div class="section-title">Tactical Hex Arena — Mode A (Action-Time Clock)</div>
+                <div class="section-title">Tactical Hex Arena (Action-Time Clock)</div>
                 <div class="subtext">Click adjacent hexes (up to 2 hexes away) to move. Woods grant cover; Water cools heat.</div>
               </div>
               <button class="btn btn-primary" onclick="BattleModule.initEncounter(); BattleModule.render();">New Contract</button>
