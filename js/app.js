@@ -291,8 +291,17 @@ window.App = {
     const ver = window.GAME_VERSION || '1.00';
     const wmEl = document.getElementById('intro-version-watermark');
     const topVerEl = document.getElementById('intro-top-version');
+    const introCalEl = document.getElementById('intro-top-calendar');
+    const hudCalEl = document.getElementById('hud-calendar');
+    const hudCalSubEl = document.getElementById('hud-calendar-sub');
+    const calText = window.GameState.getCalendarText();
+    const lastEvt = st.calendar?.lastEvent || 'Campaign Active';
+
     if (wmEl) wmEl.textContent = `VERSION ${ver}`;
     if (topVerEl) topVerEl.textContent = `MECHJOCKS COMMAND // VER ${ver}`;
+    if (introCalEl) introCalEl.textContent = `CAMPAIGN TIME // ${calText.toUpperCase()}`;
+    if (hudCalEl) hudCalEl.textContent = calText;
+    if (hudCalSubEl) hudCalSubEl.textContent = lastEvt;
 
     const creditsEl = document.getElementById('hud-credits');
     const upkeepEl = document.getElementById('hud-upkeep');

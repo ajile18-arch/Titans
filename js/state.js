@@ -21,6 +21,15 @@ function createDefaultState() {
       reputationLevel: 1
     },
 
+    // Campaign Time Counter (1 Month = 4 Weeks, 1 Year = 12 Months = 48 Weeks)
+    calendar: {
+      totalWeeks: 0,
+      year: 1,
+      month: 1,
+      week: 1,
+      lastEvent: 'Company Charter Registered'
+    },
+
     // Start from complete scratch with no Jockeys, no Mechs, and empty Parts Storage
     jocks: [],
     mechs: [],
@@ -104,6 +113,7 @@ window.GameState = {
         if (!this.data.company) {
           this.data.company = createDefaultState().company;
         }
+        this.ensureCalendar();
         if (!Array.isArray(this.data.partStorage)) {
           this.data.partStorage = [];
           // Migrate any count-based partInventory into condition-tracked partStorage items
@@ -145,6 +155,100 @@ window.GameState = {
       }
     } else {
       this.data = createDefaultState();
+    }
+  },
+
+  ensureCalendar() {
+    if (!this.data) return;
+    if (!this.data.calendar || typeof this.data.calendar.totalWeeks !== 'number') {
+      this.data.calendar = {
+        totalWeeks: 0,
+        year: 1,
+        month: 1,
+        week: 1,
+        lastEvent: 'Company Charter Registered'
+      };
+    }
+    const tw = Math.max(0, Math.floor(this.data.calendar.totalWeeks || 0));
+    this.data.calendar.totalWeeks = tw;
+    this.data.calendar.year = Math.floor(tw / 48) + 1;
+    this.data.calendar.month = (Math.floor(tw / 4) % 12) + 1;
+    this.data.calendar.week = (tw % 4) + 1;
+  },
+
+  getCalendarText() {
+    this.ensureCalendar();
+    const c = this.data.calendar;
+    return `Year ${c.year} • Month ${c.month} • Week ${c.week}`;
+  },
+
+  formatWeeksDuration(weeks) {
+    const w = Math.max(1, Math.round(Number(weeks) || 1));
+    const years = Math.floor(w / 48);
+    const remAfterYears = w % 48;
+    const months = Math.floor(remAfterYears / 4);
+    const remWeeks = remAfterYears % 4;
+    const parts = [];
+    if (years > 0) parts.push(`${years} Yr${years > 1 ? 's' : ''}`);
+    if (months > 0) parts.push(`${months} Mo${months > 1 ? 's' : ''}`);
+    if (remWeeks > 0) parts.push(`${remWeeks} Wk${remWeeks > 1 ? 's' : ''}`);
+    return parts.join(', ');
+  },
+
+  // Larger Mech Chassis take more Months to manufacture/commission
+  getChassisBuildWeeks(tpl, mode = 'stripped') {
+    const tons = tpl?.maxTons || 50;
+    let baseWeeks = 4; // 50t Recon = 1 Month (4 Weeks)
+    if (tons >= 200) baseWeeks = 16;      // 200t Assault = 4 Months (16 Weeks)
+    else if (tons >= 160) baseWeeks = 12; // 160t Heavy   = 3 Months (12 Weeks)
+    else if (tons >= 120) baseWeeks = 8;  // 120t Medium  = 2 Months (8 Weeks)
+    else if (tons >= 80) baseWeeks = 6;   // 80t Light    = 1 Mo, 2 Wks (6 Weeks)
+    if (mode === 'standard') baseWeeks += 2; // +2 Weeks for factory starter weapon/armor package
+    return baseWeeks;
+  },
+
+  // Advance campaign time by N weeks; processes monthly wage upkeep & contract duration every 4 weeks
+  advanceTimeWeeks(weeksToAdd, actionLabel = '') {
+    this.ensureCalendar();
+    const st = this.data;
+    const wCount = Math.max(1, Math.round(Number(weeksToAdd) || 1));
+
+    for (let i = 0; i < wCount; i++) {
+      st.calendar.totalWeeks += 1;
+      // Every 4 weeks (1 Month), process monthly payroll & contract month countdowns
+      if (st.calendar.totalWeeks % 4 === 0) {
+        const monthlyUpkeep = (st.jocks || []).reduce((sum, j) => sum + this.getJockSalary(j), 0);
+        if (monthlyUpkeep > 0) {
+          st.credits = Math.max(0, st.credits - monthlyUpkeep);
+        }
+        // Decrement monthsRemaining on Year-based or Mercenary contracts
+        const expiredIds = [];
+        (st.jocks || []).forEach(j => {
+          if (j.contract && (j.contract.type === 'years' || j.contract.type === 'mercenary')) {
+            if (typeof j.contract.monthsRemaining === 'number') {
+              j.contract.monthsRemaining = Math.max(0, j.contract.monthsRemaining - 1);
+              if (j.contract.monthsRemaining <= 0) {
+                expiredIds.push(j.id);
+              }
+            }
+          }
+        });
+        if (expiredIds.length > 0) {
+          st.jocks = st.jocks.filter(j => !expiredIds.includes(j.id));
+          if (expiredIds.includes(st.selectedJockId)) {
+            st.selectedJockId = st.jocks[0]?.id || '';
+          }
+        }
+      }
+    }
+
+    this.ensureCalendar();
+    if (actionLabel) {
+      st.calendar.lastEvent = `${actionLabel} (+${this.formatWeeksDuration(wCount)})`;
+    }
+    this.save();
+    if (window.App && typeof window.App.updateHUD === 'function') {
+      window.App.updateHUD();
     }
   },
 

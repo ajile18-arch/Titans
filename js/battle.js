@@ -158,7 +158,8 @@ window.BattleModule = {
           jock.xp = (jock.xp || 0) + 75;
           this.recordBattleHistory(jock, playerMech, 'EJECTED', 'Core Breach — Emergency Ejection', 75, 'EJECT');
         }
-        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered (+75 Survival XP).`);
+        window.GameState.advanceTimeWeeks(4, 'Combat Drop & Recovery');
+        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered (+75 Survival XP • +1 Month Elapsed).`);
       }
     } else {
       this.log(`${this.enemy.name} fires salvos — evaded! (Roll ${roll} > ${toHit}%)`);
@@ -285,22 +286,18 @@ window.BattleModule = {
           if (jock.contract) {
             if (jock.contract.type === 'mercenary') {
               jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
-              jock.contract.monthsRemaining = Math.max(0, (jock.contract.monthsRemaining ?? jock.contract.totalMonths) - 1);
-              if (jock.contract.fightsRemaining <= 0 || jock.contract.monthsRemaining <= 0) {
+              if (jock.contract.fightsRemaining <= 0) {
                 this.log(`NOTICE: Mercenary ${jock.callsign}'s short-term flat-fee contract has concluded and they have departed the company.`);
                 st.jocks = st.jocks.filter(x => x.id !== jock.id);
                 if (st.selectedJockId === jock.id) st.selectedJockId = st.jocks[0]?.id || '';
               }
             } else if (jock.contract.type === 'fights') {
               jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
-            } else {
-              jock.contract.monthsRemaining = Math.max(0, (jock.contract.monthsRemaining ?? (jock.contract.totalYears * 12)) - 1);
             }
           }
         }
-        this.log(`VICTORY! ${this.enemy.name} neutralized! Earned +35,000 Cr and +250 XP for ${jock ? jock.callsign : 'Pilot'}!`);
-        window.GameState.save();
-        App.updateHUD();
+        window.GameState.advanceTimeWeeks(4, `Victory vs. ${this.enemy.name}`);
+        this.log(`VICTORY! ${this.enemy.name} neutralized! Earned +35,000 Cr and +250 XP for ${jock ? jock.callsign : 'Pilot'} (+1 Month Elapsed)!`);
       }
     } else {
       this.log(`MISS! ${weapon.name} wide of Enemy ${this.aimTarget} (Roll ${roll}>${hitChance}%).`);
@@ -357,6 +354,7 @@ window.BattleModule = {
 
     jock.fightHistory.unshift({
       fightNumber,
+      campaignDate: window.GameState.getCalendarText(),
       enemyName: this.enemy.name,
       enemyWeight: this.enemy.weight,
       mechName: mech ? mech.customName : 'Titan-AT',

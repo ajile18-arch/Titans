@@ -115,7 +115,7 @@ window.HQModule = {
               </div>
 
               <button class="btn btn-primary" style="padding:10px; font-size:13px;" ${st.jocks.length >= 8 ? 'disabled' : ''} onclick="HQModule.startJobInterview()">
-                Post Offer &amp; Interview Next Applicant &rarr;
+                Post Offer &amp; Interview Next Applicant (+1 Wk) &rarr;
               </button>
             </div>
           </div>
@@ -218,8 +218,8 @@ window.HQModule = {
                 <strong>${bestMedic ? `${bestMedic.callsign} (${bestMedic.skills['Medical (First Aid)']}% Skill)` : 'None'}</strong>
               </div>
               <div style="display:flex; gap:8px; padding-top:6px;">
-                <button class="btn" style="flex:1;" onclick="HQModule.repairAllMechs()">Repair All Mechs</button>
-                <button class="btn" style="flex:1;" onclick="HQModule.healAllJocks()">Treat Wounded Jocks</button>
+                <button class="btn" style="flex:1;" onclick="HQModule.repairAllMechs()">Repair All Mechs (+2 Wks)</button>
+                <button class="btn" style="flex:1;" onclick="HQModule.healAllJocks()">Treat Wounded Jocks (+2 Wks)</button>
               </div>
             </div>
           </div>
@@ -376,6 +376,7 @@ window.HQModule = {
     this.candidateWalkedOut = false;
     this.negotiationMessage = `"Thanks for bringing me in, Commander. With a ${this.proposedBonus.toLocaleString()} Cr signing bonus on the table, I'm looking for ${this.candidate.askingWage.toLocaleString()} Cr per month on a standard 2-Year (or 10-Fight) contract. Feel free to ask me anything about my cockpit record."`;
     this.interviewOpen = true;
+    window.GameState.advanceTimeWeeks(1, `Recruiting Interview: ${this.candidate.callsign}`);
     this.render();
   },
 
@@ -564,8 +565,7 @@ window.HQModule = {
     st.selectedJockId = newId;
     this.interviewOpen = false;
     this.candidate = null;
-    window.GameState.save();
-    App.updateHUD();
+    window.GameState.advanceTimeWeeks(1, `Hired & Onboarded Jockey ${c.callsign}`);
     this.render();
   },
 
@@ -1041,6 +1041,7 @@ window.HQModule = {
                   <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;">
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                       <span class="badge ${isWin ? 'green' : 'red'} mono">FIGHT #${f.fightNumber} — ${f.outcome}</span>
+                      ${f.campaignDate ? `<span class="badge primary mono">${f.campaignDate}</span>` : ''}
                       <strong style="font-size:14px;">vs. ${f.enemyName} (${f.enemyWeight || 'Hostile Titan'})</strong>
                       <span class="subtext">in <strong>${f.mechName || 'Assigned Titan'}</strong></span>
                     </div>
@@ -1153,7 +1154,7 @@ window.HQModule = {
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span class="mono" style="font-size:15px; font-weight:700;">${val} / 100</span>
                       <button class="btn btn-primary" ${jock.xp < cost || val >= 100 ? 'disabled' : ''} onclick="HQModule.trainAttr('${attr.key}')">
-                        +1 (${cost} XP)
+                        +1 (${cost} XP • 3 Wks)
                       </button>
                     </div>
                   </div>
@@ -1188,7 +1189,7 @@ window.HQModule = {
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span class="mono" style="font-size:14px; font-weight:700;">${val}%</span>
                       <button class="btn btn-primary" ${jock.xp < cost || val >= 100 ? 'disabled' : ''} onclick="HQModule.trainSkill('${sk.key}')">
-                        +1% (${cost} XP)
+                        +1% (${cost} XP • 1 Wk)
                       </button>
                     </div>
                   </div>
@@ -1284,8 +1285,7 @@ window.HQModule = {
     jock.xp -= cost;
     jock.xpSpent += cost;
     jock.stats[attrKey] = curVal + 1;
-    window.GameState.save();
-    App.updateHUD();
+    window.GameState.advanceTimeWeeks(3, `${jock.callsign} Trained ${attrKey} +1`);
     this.render();
   },
 
@@ -1299,8 +1299,7 @@ window.HQModule = {
     jock.xp -= cost;
     jock.xpSpent += cost;
     jock.skills[skillKey] = Math.min(100, curVal + 1);
-    window.GameState.save();
-    App.updateHUD();
+    window.GameState.advanceTimeWeeks(1, `${jock.callsign} Trained ${skillKey} +1%`);
     this.render();
   },
 
@@ -1369,16 +1368,20 @@ window.HQModule = {
     const cost = Math.round(totalMissing * 40 * (1 - discount));
     if (totalMissing > 0 && st.credits >= cost) {
       st.credits -= cost;
-      window.GameState.save();
-      App.updateHUD();
+      window.GameState.advanceTimeWeeks(2, 'Repaired All Hangar Mechs');
       this.render();
     }
   },
 
   healAllJocks() {
     const st = window.GameState.data;
+    const anyWounded = st.jocks.some(j => j.health < 100);
     st.jocks.forEach(j => { j.health = 100; });
-    window.GameState.save();
+    if (anyWounded) {
+      window.GameState.advanceTimeWeeks(2, 'Medical Bay Trauma Treatment');
+    } else {
+      window.GameState.save();
+    }
     this.render();
   },
 
@@ -1425,8 +1428,7 @@ window.HQModule = {
 
     st.recruits.splice(idx, 1);
     st.selectedJockId = newId;
-    window.GameState.save();
-    App.updateHUD();
+    window.GameState.advanceTimeWeeks(1, `Hired Mercenary ${r.callsign}`);
     this.render();
   },
 
@@ -1461,8 +1463,7 @@ window.HQModule = {
       };
     });
 
-    window.GameState.save();
-    App.updateHUD();
+    window.GameState.advanceTimeWeeks(1, 'Scouted Freelance Mercenaries');
     this.render();
   }
 };

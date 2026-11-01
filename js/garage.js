@@ -77,14 +77,15 @@ window.GarageModule = {
 
           <div class="panel" style="display:flex; flex-direction:column; gap:14px; width:100%; max-width:620px; text-align:left; padding:18px;">
             <div>
-              <label class="subtext" style="font-weight:600;">1. Select Available Mech Chassis (Limited by Company Reputation Lvl ${repLvl})</label>
+              <label class="subtext" style="font-weight:600;">1. Select Available Mech Chassis (Larger Chassis Take More Months to Build)</label>
               <select id="new-chassis-select" class="select" style="margin-top:6px;">
                 ${window.TOS_DATA.chassisTemplates.map(t => {
                   const req = t.reqRepLevel || 1;
                   const locked = repLvl < req;
+                  const buildTime = window.GameState.formatWeeksDuration(window.GameState.getChassisBuildWeeks(t, 'stripped'));
                   return `
                     <option value="${t.id}" ${locked ? 'disabled' : ''}>
-                      ${locked ? `[LOCKED — Requires Rep Lvl ${req}] ` : '✔ '}${t.model} (${t.maxTons}t ${t.weightClass}) — ${t.baseCost.toLocaleString()} Cr
+                      ${locked ? `[LOCKED — Requires Rep Lvl ${req}] ` : '✔ '}${t.model} (${t.maxTons}t ${t.weightClass}) — ${t.baseCost.toLocaleString()} Cr [${buildTime}]
                     </option>
                   `;
                 }).join('')}
@@ -96,6 +97,7 @@ window.GarageModule = {
               ${window.TOS_DATA.chassisTemplates.map(t => {
                 const req = t.reqRepLevel || 1;
                 const unlocked = repLvl >= req;
+                const buildTime = window.GameState.formatWeeksDuration(window.GameState.getChassisBuildWeeks(t, 'stripped'));
                 return `
                   <div class="card" style="padding:8px 10px; background:var(--bg-main); opacity:${unlocked ? '1' : '0.55'}; border-color:${unlocked ? 'var(--accent-green)' : 'var(--border)'};">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -103,6 +105,7 @@ window.GarageModule = {
                       <span class="badge ${unlocked ? 'green' : 'amber'} mono">Rep Lvl ${req}</span>
                     </div>
                     <div class="subtext" style="font-size:11px; margin-top:2px;">${t.model} • ${t.baseCost.toLocaleString()} Cr</div>
+                    <div class="mono" style="font-size:11px; color:#93c5fd; margin-top:2px;">Build Time: ${buildTime}</div>
                   </div>
                 `;
               }).join('')}
@@ -111,8 +114,8 @@ window.GarageModule = {
             <div>
               <label class="subtext" style="font-weight:600;">2. Choose Factory Frame Package</label>
               <select id="new-chassis-mode" class="select" style="margin-top:6px;">
-                <option value="stripped">Stripped Bare Frame (0 Weapons / 50% Armor — Buy &amp; Equip Parts in the Shop)</option>
-                <option value="standard">Basic Starter Package (+28,000 Cr: Includes 2x Medium Lasers, 2x Heat Sinks &amp; Full Armor)</option>
+                <option value="stripped">Stripped Bare Frame (0 Weapons / 50% Armor — Standard Build Time)</option>
+                <option value="standard">Basic Starter Package (+28,000 Cr / +2 Wks: Includes 2x Medium Lasers, 2x Heat Sinks &amp; Full Armor)</option>
               </select>
             </div>
 
@@ -223,9 +226,10 @@ window.GarageModule = {
                   ${window.TOS_DATA.chassisTemplates.map(t => {
                     const req = t.reqRepLevel || 1;
                     const locked = repLvl < req;
+                    const buildTime = window.GameState.formatWeeksDuration(window.GameState.getChassisBuildWeeks(t, 'stripped'));
                     return `
                       <option value="${t.id}" ${locked ? 'disabled' : ''}>
-                        ${locked ? `[Locked: Req Rep Lvl ${req}] ` : ''}${t.model} (${t.maxTons}t ${t.weightClass}) — ${t.baseCost.toLocaleString()} Cr
+                        ${locked ? `[Locked: Req Rep Lvl ${req}] ` : ''}${t.model} (${t.maxTons}t ${t.weightClass}) — ${t.baseCost.toLocaleString()} Cr [${buildTime}]
                       </option>
                     `;
                   }).join('')}
@@ -243,8 +247,8 @@ window.GarageModule = {
                 <div class="subtext">Click any body section to inspect slots, armor &amp; equip owned parts</div>
               </div>
               <div style="display:flex; gap:6px;">
-                <button class="btn" onclick="GarageModule.repairCurrentMech()">Repair Damage</button>
-                <button class="btn" onclick="GarageModule.maxAllArmor()">Max All Armor</button>
+                <button class="btn" onclick="GarageModule.repairCurrentMech()">Repair Damage (+2 Wks)</button>
+                <button class="btn" onclick="GarageModule.maxAllArmor()">Max All Armor (+1 Wk)</button>
               </div>
             </div>
 
@@ -373,7 +377,7 @@ window.GarageModule = {
                       </div>
                       <div style="display:flex; gap:6px; margin-top:2px;">
                         <button class="btn" style="flex:1; padding:4px 8px; font-size:12px;" onclick="GarageModule.removeComponent('${activeLoc}', ${idx})">
-                          Unequip
+                          Unequip (+1 Wk)
                         </button>
                         <button class="btn btn-danger" style="flex:1; padding:4px 8px; font-size:12px;" onclick="GarageModule.sellInstalledComponent('${activeLoc}', ${idx})">
                           Sell (+${sellPrice.toLocaleString()} Cr)
@@ -464,7 +468,7 @@ window.GarageModule = {
                             ${!canEquip ? 'disabled' : ''}
                             onclick="GarageModule.mountComponent('${activeLoc}', '${comp.id}')"
                           >
-                            ${owned <= 0 ? 'Buy First to Equip' : (!fitsSlots ? 'No Slot Room' : (!fitsTons ? 'Over Tonnage' : `+ Equip in ${activeLoc}`))}
+                            ${owned <= 0 ? 'Buy First to Equip' : (!fitsSlots ? 'No Slot Room' : (!fitsTons ? 'Over Tonnage' : `+ Equip in ${activeLoc} (+1 Wk)`))}
                           </button>
                         </div>
                       </div>
@@ -548,7 +552,7 @@ window.GarageModule = {
       mech.maxArmorCurrent[k] = tpl.maxArmor[k];
       mech.armor[k] = tpl.maxArmor[k];
     });
-    window.GameState.save();
+    window.GameState.advanceTimeWeeks(1, `Refitted Full Armor on ${mech.customName}`);
     this.render();
   },
 
@@ -580,8 +584,7 @@ window.GarageModule = {
     }
 
     st.credits -= cost;
-    window.GameState.save();
-    App.updateHUD();
+    window.GameState.advanceTimeWeeks(2, `Repaired ${mech.customName} & Components`);
     this.render();
   },
 
@@ -655,8 +658,7 @@ window.GarageModule = {
     window.GameState.ensureMechPartConditions(mech);
     mech.locations[locCode].push(compId);
     mech.partConditions[locCode].push(bestPart.condition ?? 100);
-    window.GameState.save();
-    App.updateHUD();
+    window.GameState.advanceTimeWeeks(1, `Equipped ${comp.name} in ${locCode}`);
     this.render();
   },
 
@@ -676,8 +678,8 @@ window.GarageModule = {
         condition: removedCond
       });
     }
-    window.GameState.save();
-    App.updateHUD();
+    const compObj = window.GameState.getComponent(removedCompId);
+    window.GameState.advanceTimeWeeks(1, `Stripped ${compObj ? compObj.name : 'Component'} from ${locCode}`);
     this.render();
   },
 
@@ -787,8 +789,8 @@ window.GarageModule = {
       unassignedJock.assignedMechId = newId;
     }
 
-    window.GameState.save();
-    App.updateHUD();
+    const buildWeeks = window.GameState.getChassisBuildWeeks(tpl, mode);
+    window.GameState.advanceTimeWeeks(buildWeeks, `Built ${tpl.model} (${tpl.weightClass})`);
     this.render();
   }
 };
