@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Titans of Steel: Reborn — HQ, Factory &amp; Tactical Arena</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- Top Command Navigation Bar -->
+    <header class="top-bar">
+      <div class="brand-title">
+        <span class="brand-badge">Mode A // Classic Sim</span>
+        <div>
+          <h1 style="font-size:18px; font-weight:800; letter-spacing:0.01em;">TITANS OF STEEL: REBORN</h1>
+          <div class="subtext">Jockey HQ • 8-Part Mech Factory • Action-Time Hex Combat</div>
+        </div>
+      </div>
+
+      <!-- Module Switcher Tabs -->
+      <nav class="nav-tabs">
+        <button id="nav-hq" class="nav-btn active" onclick="App.switchTab('hq')">
+          1. HQ &amp; Jockey Roster
+        </button>
+        <button id="nav-garage" class="nav-btn" onclick="App.switchTab('garage')">
+          2. Garage &amp; Mech Factory
+        </button>
+        <button id="nav-battle" class="nav-btn" onclick="App.switchTab('battle')">
+          3. Tactical Battle Arena
+        </button>
+      </nav>
+
+      <!-- Squad Finance & Status Telemetry -->
+      <div class="hud-stats">
+        <div class="hud-pill">
+          <div class="label">Squad Funds</div>
+          <div id="hud-credits" class="val" style="color:var(--accent-green);">520,000 Cr</div>
+        </div>
+        <div class="hud-pill">
+          <div class="label">Upkeep</div>
+          <div id="hud-upkeep" class="val" style="color:var(--accent-amber);">-5,500 Cr/mo</div>
+        </div>
+        <div class="hud-pill">
+          <div class="label">Active Jocks</div>
+          <div id="hud-jocks" class="val">3 / 8</div>
+        </div>
+        <div class="hud-pill">
+          <div class="label">Hangar Titans</div>
+          <div id="hud-mechs" class="val">3 Units</div>
+        </div>
+        <button class="btn btn-danger" onclick="App.resetSave()" title="Reset Save Data">Reset</button>
+      </div>
+    </header>
+
+    <!-- View 1: HQ & Jockey Management -->
+    <main id="view-hq"></main>
+
+    <!-- View 2: Garage & Mech Factory -->
+    <main id="view-garage" class="hidden"></main>
+
+    <!-- View 3: Tactical Battle Arena -->
+    <main id="view-battle" class="hidden"></main>
+
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/hq.js"></script>
+  <script src="js/garage.js"></script>
+  <script src="js/battle.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
