@@ -9,6 +9,22 @@ window.App = {
     this.switchTab('hq');
   },
 
+  enterGame(tab) {
+    const intro = document.getElementById('intro-screen');
+    if (intro) intro.classList.add('hidden');
+    this.switchTab(tab || 'hq');
+  },
+
+  showIntro() {
+    const intro = document.getElementById('intro-screen');
+    if (intro) intro.classList.remove('hidden');
+  },
+
+  startNewSquadFromIntro() {
+    this.enterGame('hq');
+    window.HQModule.openCreator(false);
+  },
+
   switchTab(tab) {
     this.currentTab = tab;
     ['hq', 'garage', 'battle'].forEach(t => {
