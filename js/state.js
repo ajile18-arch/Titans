@@ -21,9 +21,10 @@ function createDefaultState() {
       reputationLevel: 1
     },
 
-    // Start from complete scratch with no Jockeys and no Mechs
+    // Start from complete scratch with no Jockeys, no Mechs, and empty Parts Inventory
     jocks: [],
     mechs: [],
+    partInventory: {},
 
     // Short-Term Freelance Mercenaries available on the main HQ screen for a flat fee (short time & small number of fights)
     recruits: [
@@ -101,6 +102,9 @@ window.GameState = {
         this.data = JSON.parse(saved);
         if (!this.data.company) {
           this.data.company = createDefaultState().company;
+        }
+        if (!this.data.partInventory) {
+          this.data.partInventory = {};
         }
         // Ensure recruits have the new flat-fee short-term mercenary fields
         if (!this.data.recruits || !this.data.recruits.length || !this.data.recruits[0].flatFee) {
@@ -194,8 +198,12 @@ window.GameState = {
   getCompanyReputationLevel() {
     const st = this.data;
     const baseRep = st?.company?.reputationLevel || 1;
-    const bonusFromMissions = Math.floor((st?.missionsCompleted || 0) / 4);
+    const bonusFromMissions = Math.floor((st?.missionsCompleted || 0) / 2);
     return Math.max(1, baseRep + bonusFromMissions);
+  },
+
+  getOwnedPartCount(compId) {
+    return this.data?.partInventory?.[compId] || 0;
   },
 
   getMaxInterviewQuestions() {
