@@ -103,7 +103,7 @@ window.HQModule = {
                 <div class="subtext">Post a listing; applicants line up as Calendar Weeks pass</div>
               </div>
               <span class="badge ${jobListing.active ? 'green' : 'amber'} mono">
-                ${jobListing.active ? `LIVE (${jobListing.applicants.length}/6 In Line)` : 'NO LISTING'}
+                ${jobListing.active ? `LIVE (${jobListing.applicants.length}/4 In Line)` : 'NO LISTING'}
               </span>
             </div>
 
@@ -172,12 +172,12 @@ window.HQModule = {
               <!-- Waiting Line of Applicants -->
               <div style="display:flex; flex-direction:column; gap:8px; margin-top:2px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span class="subtext" style="font-weight:700; text-transform:uppercase;">Applicants Lined Up (${jobListing.applicants.length} / 6):</span>
+                  <span class="subtext" style="font-weight:700; text-transform:uppercase;">Applicants Lined Up (${jobListing.applicants.length} / 4):</span>
                 </div>
                 ${jobListing.applicants.length === 0 ? `
                   <div class="card subtext" style="background:var(--bg-main); padding:12px; text-align:center; font-size:12px;">
                     ${jobListing.active
-                      ? 'No applicants in line yet. Advance calendar time (+1 Week) or work in the Garage while pilots respond to your listing!'
+                      ? 'No applicants in line yet. Pilots hear about your listing and apply periodically over calendar time (roughly ~1 pilot per month) while you build or maintain Titans!'
                       : 'Post a Job Listing above so Jockey applicants begin lining up over time.'}
                   </div>
                 ` : jobListing.applicants.map(cand => `

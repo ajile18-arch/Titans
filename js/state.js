@@ -275,13 +275,18 @@ window.GameState = {
       st.calendar.totalWeeks += 1;
       this.ensureCalendar();
 
-      // If a Jockey Job Listing is active, new applicants line up over time as weeks pass (up to 6 waiting in lobby)
+      // If a Jockey Job Listing is active, applicants respond at a measured, realistic pace (roughly once every 3 to 4 weeks)
       if (st.jobListing && st.jobListing.active && window.HQModule && typeof window.HQModule.generateApplicant === 'function') {
         st.jobListing.weeksActive = (st.jobListing.weeksActive || 0) + 1;
-        if (st.jobListing.applicants.length < 6) {
-          const arrivals = (st.jobListing.applicants.length < 5 && Math.random() < 0.35) ? 2 : 1;
-          for (let a = 0; a < arrivals; a++) {
-            if (st.jobListing.applicants.length >= 6) break;
+        const maxApplicants = 4;
+        if (st.jobListing.applicants.length < maxApplicants) {
+          // Controlled arrival rate: ~25% chance per week (roughly 1 applicant per month)
+          // Higher signing bonuses give a modest boost (+4% to +8%)
+          const bonus = Number(st.jobListing.advertisedBonus) || 5000;
+          const bonusMod = bonus >= 15000 ? 0.08 : (bonus >= 8000 ? 0.04 : 0.0);
+          const arrivalChance = 0.25 + bonusMod;
+
+          if (Math.random() < arrivalChance) {
             const cand = window.HQModule.generateApplicant(st.jobListing.advertisedBonus || 6000);
             cand.applicantId = 'app-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
             cand.appliedDate = this.getCalendarText();
