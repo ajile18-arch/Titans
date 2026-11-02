@@ -273,7 +273,7 @@ window.App = {
 
   switchTab(tab) {
     this.currentTab = tab;
-    ['hq', 'garage', 'battle'].forEach(t => {
+    ['hq', 'garage', 'battle', 'company', 'commander'].forEach(t => {
       const view = document.getElementById('view-' + t);
       const btn = document.getElementById('nav-' + t);
       if (view) view.classList.toggle('hidden', t !== tab);
@@ -284,6 +284,8 @@ window.App = {
     if (tab === 'hq') window.HQModule.render();
     else if (tab === 'garage') window.GarageModule.render();
     else if (tab === 'battle') window.BattleModule.render();
+    else if (tab === 'company') window.CompanyModule.render();
+    else if (tab === 'commander') window.CommanderModule.render();
   },
 
   updateHUD() {
