@@ -175,6 +175,10 @@ window.BattleModule = {
       this.battleStats.damageTaken += this.enemy.dmg;
       this.log(`ALERT: ${this.enemy.name} hits your ${hitLoc} for ${this.enemy.dmg} dmg!`, 'hostile');
 
+      if (window.SoundFX) {
+        window.SoundFX.playIncomingShot(true);
+      }
+
       // Damage installed weapons/components in the struck body location
       window.GameState.ensureMechPartConditions(playerMech);
       const locComps = playerMech.locations?.[hitLoc] || [];
@@ -198,6 +202,9 @@ window.BattleModule = {
       }
     } else {
       this.log(`${this.enemy.name} fires salvos — evaded! (Roll ${roll} > ${toHit}%)`, 'hostile');
+      if (window.SoundFX) {
+        window.SoundFX.playIncomingShot(false);
+      }
     }
     window.GameState.save();
   },
@@ -314,6 +321,10 @@ window.BattleModule = {
       this.battleStats.damageDealt += weapon.dmg;
       this.log(`HIT! ${weapon.name} strikes Enemy ${hitLoc} for ${weapon.dmg} dmg (Roll ${roll}<=${hitChance}%).`, 'player');
 
+      if (window.SoundFX) {
+        window.SoundFX.playWeaponShot(weapon, true);
+      }
+
       // Check Victory (Head, CT, or both Legs destroyed)
       const legsGone = this.enemy.armor.LL <= 0 && this.enemy.armor.RL <= 0;
       if (this.enemy.armor.HD <= 0 || this.enemy.armor.CT <= 0 || legsGone) {
@@ -331,6 +342,10 @@ window.BattleModule = {
       }
     } else {
       this.log(`MISS! ${weapon.name} wide of Enemy ${this.aimTarget} (Roll ${roll}>${hitChance}%).`, 'player');
+
+      if (window.SoundFX) {
+        window.SoundFX.playWeaponShot(weapon, false);
+      }
     }
 
     this.advanceTime(3, mech, metrics);
