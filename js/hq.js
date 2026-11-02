@@ -593,6 +593,7 @@ window.HQModule = {
 
     this.askedQuestions[qId] = {
       q: `${qObj.badge} — ${qObj.prompt}`,
+      fullPrompt: `"${qObj.prompt}"`,
       reply,
       clue
     };
@@ -845,12 +846,28 @@ window.HQModule = {
               <span>${c.callsign}'s Spoken Response:</span>
               ${latestClue ? `<span class="mono" style="color:var(--accent-green);">&rarr; ${latestClue}</span>` : '<span class="subtext mono">Awaiting Topic</span>'}
             </div>
-            <div id="interview-question-line" style="font-size:13px; font-weight:700; color:#93c5fd; margin-bottom:6px; text-align:left;">
-              ${this.getInterviewQuestionLineHtml()}
-            </div>
-            <div style="font-size:14px; font-style:italic; color:#f8fafc; line-height:1.45;">
-              ${this.negotiationMessage}
-            </div>
+            ${limitReached ? `
+              <div style="text-align:left; max-height:210px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
+                <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--accent-amber); letter-spacing:0.06em;">Interview Recap (${askedCount}/${maxAllowed} Questions Asked)</div>
+                ${askedList.map((item, i) => `
+                  <div style="border-left:2px solid var(--accent-green); padding-left:8px;">
+                    <div style="font-size:12px; font-weight:700; color:#93c5fd;">Q${i + 1}: ${item.fullPrompt || item.q}</div>
+                    <div style="font-size:13px; font-style:italic; color:#f8fafc; margin-top:2px;">${item.reply}</div>
+                    <div class="mono" style="font-size:11px; color:var(--accent-green); margin-top:2px;">&rarr; ${item.clue}</div>
+                  </div>
+                `).join('')}
+                ${this.lastAskedQId ? '' : `
+                  <div style="border-top:1px solid rgba(148,163,184,0.3); padding-top:6px; font-size:14px; font-style:italic; color:#f8fafc;">${this.negotiationMessage}</div>
+                `}
+              </div>
+            ` : `
+              <div id="interview-question-line" style="font-size:13px; font-weight:700; color:#93c5fd; margin-bottom:6px; text-align:left;">
+                ${this.getInterviewQuestionLineHtml()}
+              </div>
+              <div style="font-size:14px; font-style:italic; color:#f8fafc; line-height:1.45;">
+                ${this.negotiationMessage}
+              </div>
+            `}
           </div>
         </div>
 
