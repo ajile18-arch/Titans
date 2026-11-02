@@ -207,12 +207,12 @@ window.BattleModule = {
         const dmgPct = (this.enemy.dmg / maxLeg) * 100;
 
         if (dmgPct >= 15 || playerMech.armor[hitLoc] <= 0) {
-          let fallChance = Math.min(85, Math.round(dmgPct * 1.6));
-          if (playerMech.armor[hitLoc] <= 0) fallChance += 25;
+          let fallChance = Math.min(42, Math.round(dmgPct * 0.8));
+          if (playerMech.armor[hitLoc] <= 0) fallChance += 12;
 
           const pilotSkill = jock ? (jock.stats.Piloting || 30) : 30;
-          const pilotResist = Math.round((pilotSkill - 15) * 0.45);
-          const finalFallChance = Math.max(10, Math.min(90, fallChance - pilotResist));
+          const pilotResist = Math.round((pilotSkill - 15) * 0.25);
+          const finalFallChance = Math.max(5, Math.min(45, fallChance - pilotResist));
 
           const fallRoll = Math.floor(Math.random() * 100) + 1;
           if (fallRoll <= finalFallChance) {
@@ -440,10 +440,10 @@ window.BattleModule = {
         const dmgPct = (weapon.dmg / maxLeg) * 100;
 
         if (dmgPct >= 15 || this.enemy.armor[hitLoc] <= 0) {
-          let fallChance = Math.min(85, Math.round(dmgPct * 1.6));
-          if (this.enemy.armor[hitLoc] <= 0) fallChance += 25;
-          const enemyPilotResist = 12;
-          const finalFallChance = Math.max(10, Math.min(85, fallChance - enemyPilotResist));
+          let fallChance = Math.min(42, Math.round(dmgPct * 0.8));
+          if (this.enemy.armor[hitLoc] <= 0) fallChance += 12;
+          const enemyPilotResist = 6;
+          const finalFallChance = Math.max(5, Math.min(45, fallChance - enemyPilotResist));
 
           const fallRoll = Math.floor(Math.random() * 100) + 1;
           if (fallRoll <= finalFallChance) {
