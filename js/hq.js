@@ -20,6 +20,8 @@ window.HQModule = {
   proposedFights: 10,
   negotiationMessage: '',
   candidateWalkedOut: false,
+  interviewSubTab: 'inquire', // 'inquire' | 'terms' | 'notes'
+  interviewQuestionCategory: 'all', // 'all' | 'attribute' | 'weapon' | 'support'
 
   // Contract Expiration Prompt & Renegotiation State
   renegotiateOpen: false,
@@ -38,6 +40,12 @@ window.HQModule = {
     const st = window.GameState.data;
     const container = document.getElementById('view-hq');
     if (!container) return;
+
+    // First-Person POV Interview Screen (Interviewer POV, table, interviewee seated across)
+    if (this.interviewOpen && this.candidate) {
+      container.innerHTML = this.renderInterviewPOVScreen();
+      return;
+    }
 
     const jock = st.jocks.find(j => j.id === st.selectedJockId) || st.jocks[0];
     if (jock && st.selectedJockId !== jock.id) st.selectedJockId = jock.id;
@@ -344,7 +352,6 @@ window.HQModule = {
         </div>
       </div>
 
-      ${this.renderInterviewModal()}
       ${this.renderCreatorModal(jock)}
     `;
   },
@@ -512,11 +519,12 @@ window.HQModule = {
     this.askedQuestions = {};
     this.proposedBonus = offerBonus;
     this.proposedWage = this.candidate.askingWage;
-    this.proposedContractType = 'years';
     this.proposedYears = 2;
     this.proposedFights = 10;
     this.candidateWalkedOut = false;
-    this.negotiationMessage = `"Thanks for calling me in from the applicant queue, Commander. Saw your listing on ${cand.appliedDate || 'comms'} with a ${this.proposedBonus.toLocaleString()} Cr signing bonus. I'm looking for ${this.candidate.askingWage.toLocaleString()} Cr/mo on a 2-Year (or 10-Fight) contract. Ask me anything about my cockpit record."`;
+    this.interviewSubTab = 'inquire';
+    this.interviewQuestionCategory = 'all';
+    this.negotiationMessage = `"Thanks for calling me in from the applicant queue, Commander. I'm ready to discuss joining your company. Ask me anything about my combat training or cockpit record."`;
     this.interviewOpen = true;
     window.GameState.advanceTimeWeeks(1, `Interviewed Applicant ${this.candidate.callsign}`);
     this.render();
@@ -587,6 +595,7 @@ window.HQModule = {
       reply,
       clue
     };
+    this.negotiationMessage = reply;
 
     this.render();
   },
@@ -725,8 +734,20 @@ window.HQModule = {
     this.render();
   },
 
-  renderInterviewModal() {
+  setInterviewSubTab(tab) {
+    this.updateNegotiationInputs();
+    this.interviewSubTab = tab;
+    this.render();
+  },
+
+  setInterviewCategory(cat) {
+    this.interviewQuestionCategory = cat;
+    this.render();
+  },
+
+  renderInterviewPOVScreen() {
     if (!this.interviewOpen || !this.candidate) return '';
+    const st = window.GameState.data;
     const c = this.candidate;
     const questions = window.TOS_DATA.interviewQuestions || [];
     const askedList = Object.values(this.askedQuestions);
@@ -735,171 +756,216 @@ window.HQModule = {
     const maxAllowed = window.GameState.getMaxInterviewQuestions();
     const limitReached = askedCount >= maxAllowed;
 
+    const lengthMod = this.getContractLengthModifier();
+    const targetAsking = Math.max(450, c.askingWage + lengthMod);
+    const p = window.TOS_DATA.portraits.find(x => x.id === c.portraitId) || window.TOS_DATA.portraits[0];
+    const portraitHtml = p && p.img
+      ? `<img src="${p.img}" alt="${c.callsign}" />`
+      : (p ? p.svg : '');
+
+    // Filter questions by selected category
+    const cat = this.interviewQuestionCategory || 'all';
+    const filteredQuestions = questions.filter(q => {
+      if (cat === 'attribute') return q.type === 'attribute';
+      if (cat === 'weapon') return q.badge.includes('ENERGY') || q.badge.includes('CANNON') || q.badge.includes('MISSILE') || q.badge.includes('MELEE');
+      if (cat === 'support') return q.badge.includes('RECON') || q.badge.includes('DAMAGE') || q.badge.includes('LEADERSHIP') || q.badge.includes('SURVIVAL') || q.badge.includes('MECHANIC') || q.badge.includes('MEDICAL');
+      return true;
+    });
+
+    const latestAskedKey = Object.keys(this.askedQuestions).pop();
+    const latestClue = latestAskedKey ? this.askedQuestions[latestAskedKey]?.clue : '';
+
     return `
-      <div class="modal-backdrop">
-        <div class="modal-card" style="max-width:980px; max-height:92vh; overflow-y:auto;">
-          <div class="section-header">
+      <div class="interview-pov-stage">
+        <!-- Top Bar / POV HUD -->
+        <div class="interview-pov-top">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <button class="btn" onclick="HQModule.closeInterview()" style="background:rgba(15,23,42,0.85); border-color:#64748b; font-weight:700;">
+              &larr; Dismiss Applicant (Exit Interview)
+            </button>
+            <span class="badge primary">MERCENARY RECRUITMENT INTERVIEW // FIRST-PERSON POV</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span class="badge amber mono">Company Reputation Lvl ${repLvl}</span>
+            <span class="badge green mono">Treasury: ${st.credits.toLocaleString()} Cr</span>
+          </div>
+        </div>
+
+        <!-- Center View Across Desk: Seated Applicant & Spoken Dialogue -->
+        <div class="interview-pov-center">
+          <div class="interview-candidate-portrait-frame">
+            ${portraitHtml}
+            ${this.candidateWalkedOut ? `
+              <div style="position:absolute; inset:0; background:rgba(239,68,68,0.78); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:13px; text-transform:uppercase; letter-spacing:0.08em;">
+                Walked Out
+              </div>
+            ` : ''}
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center;">
+            <h2 style="font-size:18px; font-weight:800; color:#f8fafc; text-shadow:0 2px 8px rgba(0,0,0,0.9);">
+              ${c.firstName} "${c.callsign}" ${c.lastName}
+            </h2>
+            <span class="badge ${this.candidateWalkedOut ? 'red' : 'green'} mono">
+              ${this.candidateWalkedOut ? 'Interview Concluded' : `Patience: ${c.patience}/3`}
+            </span>
+          </div>
+          <div class="subtext" style="color:#cbd5e1; font-size:12px; margin-top:2px; text-shadow:0 2px 6px rgba(0,0,0,0.9);">
+            Asking Wage: <strong class="mono" style="color:var(--accent-amber);">${targetAsking.toLocaleString()} Cr/mo</strong> • ${c.bio}
+          </div>
+
+          <!-- Spoken Dialogue Across the Table -->
+          <div class="interview-speech-bubble">
+            <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:#38bdf8; letter-spacing:0.06em; margin-bottom:4px; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <span>${c.callsign}'s Spoken Response:</span>
+              ${latestClue ? `<span class="mono" style="color:var(--accent-green);">&rarr; ${latestClue}</span>` : '<span class="subtext mono">Awaiting Topic</span>'}
+            </div>
+            <div style="font-size:14px; font-style:italic; color:#f8fafc; line-height:1.45;">
+              ${this.negotiationMessage}
+            </div>
+          </div>
+        </div>
+
+        <!-- Foreground: Commander's Table / Tactical Datapad (Uncluttered) -->
+        <div class="interview-pov-desk">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; border-bottom:1px solid rgba(148,163,184,0.25); padding-bottom:10px;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:#94a3b8; letter-spacing:0.06em; margin-right:4px;">Commander's Desk Datapad:</span>
+              <button class="interview-datapad-tab ${this.interviewSubTab === 'inquire' ? 'active' : ''}" onclick="HQModule.setInterviewSubTab('inquire')">
+                💬 1. Ask Questions (${maxAllowed - askedCount} Remaining)
+              </button>
+              <button class="interview-datapad-tab ${this.interviewSubTab === 'terms' ? 'active' : ''}" onclick="HQModule.setInterviewSubTab('terms')">
+                📝 2. Contract Terms &amp; Hire
+              </button>
+              <button class="interview-datapad-tab ${this.interviewSubTab === 'notes' ? 'active' : ''}" onclick="HQModule.setInterviewSubTab('notes')">
+                📋 3. Intel Notes &amp; Transcript (${askedCount})
+              </button>
+            </div>
+            <div class="subtext mono" style="font-size:12px;">
+              Reputation Limit: <strong>${askedCount} / ${maxAllowed} Questions Used</strong>
+            </div>
+          </div>
+
+          <!-- TAB 1: Inquire (Categorized, Uncluttered Questions) -->
+          ${this.interviewSubTab === 'inquire' ? `
             <div>
-              <span class="badge primary">MERCENARY RECRUITMENT INTERVIEW</span>
-              <span class="badge amber mono" style="margin-left:6px;">Company Reputation Lvl ${repLvl} (Max ${maxAllowed} Questions Allowed)</span>
-              <h3 style="font-size:18px; font-weight:800; margin-top:4px;">
-                Applicant: ${c.firstName} "${c.callsign}" ${c.lastName}
-              </h3>
-            </div>
-            <button class="btn" onclick="HQModule.closeInterview()">Dismiss Applicant (Pay 0 Cr)</button>
-          </div>
-
-          <div class="grid-12">
-            <!-- Left 5 Cols: Applicant Portrait & Dossier (Stats Hidden until Hired) + Wage Negotiation -->
-            <div class="col-5" style="display:flex; flex-direction:column; gap:12px;">
-              <div class="panel" style="display:flex; gap:14px; align-items:center;">
-                <div style="flex-shrink:0;">${window.GameState.getPortraitSvg(c.portraitId, 76)}</div>
-                <div>
-                  <div style="font-weight:700; font-size:15px;">${c.firstName} "${c.callsign}" ${c.lastName}</div>
-                  <div class="subtext" style="margin-top:2px;">${c.bio}</div>
-                  <div style="margin-top:6px;">
-                    <span class="badge amber">Exact Stats Hidden Until Hired</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Interviewer Evaluation Notes (Revealed as you ask questions) -->
-              <div class="panel" style="display:flex; flex-direction:column; gap:6px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <strong style="font-size:13px;">Commander's Stat Readings</strong>
-                  <span class="badge ${limitReached ? 'amber' : 'green'} mono">${askedCount} / ${maxAllowed} Questions Used</span>
-                </div>
-                ${askedCount === 0 ? `
-                  <div class="subtext" style="font-style:italic; padding:6px 0;">
-                    No questions asked yet. At <strong>Company Reputation Level ${repLvl}</strong>, you may choose up to <strong>${maxAllowed} questions</strong> from the 16 Attribute &amp; Skill topics on the right!
-                  </div>
-                ` : askedList.map(item => `
-                  <div style="font-size:12px; border-left:2px solid var(--accent-green); padding-left:8px; margin-top:4px;">
-                    <div style="color:var(--accent-green); font-weight:700;">${item.clue}</div>
-                  </div>
-                `).join('')}
-              </div>
-
-              <!-- Contract & Monthly Wage Negotiation Box -->
-              <div class="panel" style="display:flex; flex-direction:column; gap:10px; border-color:var(--primary);">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <strong style="font-size:13px;">Contract Terms &amp; Wage Negotiation</strong>
-                  <span class="badge ${this.candidateWalkedOut ? 'red' : 'green'}">
-                    ${this.candidateWalkedOut ? 'Walked Out' : `Patience: ${c.patience}/3`}
-                  </span>
-                </div>
-
-                <!-- Dual-Condition Contract Structure (Both Fights & Max Length of Time, Whichever Comes First) -->
-                <div>
-                  <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:4px;">
-                    <label class="subtext" style="font-weight:700; color:var(--text);">1. Contract Length (Fights &amp; Max Time — Whichever Comes First):</label>
-                  </div>
-                  <div class="grid-12">
-                    <div class="col-6">
-                      <label class="subtext" style="font-weight:600;">Combat Fights:</label>
-                      <select id="neg-inp-fights" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
-                        ${[3, 5, 10, 15, 25].map(f => `
-                          <option value="${f}" ${this.proposedFights === f ? 'selected' : ''}>${f} Fights</option>
-                        `).join('')}
-                      </select>
-                    </div>
-                    <div class="col-6">
-                      <label class="subtext" style="font-weight:600;">Max Time Limit:</label>
-                      <select id="neg-inp-years" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
-                        ${[1, 2, 3, 4, 5].map(yr => `
-                          <option value="${yr}" ${this.proposedYears === yr ? 'selected' : ''}>${yr} Yr${yr > 1 ? 's' : ''} (${yr * 12} Mos)</option>
-                        `).join('')}
-                      </select>
-                    </div>
-                  </div>
-                  <div class="subtext" style="font-size:11px; margin-top:4px;">
-                    Contract concludes after <strong>${this.proposedFights} Fights</strong> OR <strong>${this.proposedYears * 12} Months (${this.proposedYears} Yr${this.proposedYears > 1 ? 's' : ''})</strong>, whichever comes first.
-                  </div>
-                </div>
-
-                <div style="display:flex; justify-content:space-between; font-size:12px;">
-                  <span class="subtext">Asking Wage (${this.getContractTermLabel()}):</span>
-                  <strong class="mono" style="color:var(--accent-amber);">${Math.max(450, c.askingWage + this.getContractLengthModifier()).toLocaleString()} Cr / month</strong>
-                </div>
-
-                <div class="grid-12">
-                  <div class="col-6">
-                    <label class="subtext">Signing Bonus (Cr)</label>
-                    <input id="neg-inp-bonus" type="number" step="500" class="input mono" value="${this.proposedBonus}" onchange="HQModule.updateNegotiationInputs()" ${this.candidateWalkedOut ? 'disabled' : ''} />
-                  </div>
-                  <div class="col-6">
-                    <label class="subtext">Your Wage Offer (Cr/mo)</label>
-                    <input id="neg-inp-wage" type="number" step="50" class="input mono" value="${this.proposedWage}" onchange="HQModule.updateNegotiationInputs()" ${this.candidateWalkedOut ? 'disabled' : ''} />
-                  </div>
-                </div>
-
-                <div style="display:flex; gap:8px;">
-                  <button class="btn" style="flex:1;" ${this.candidateWalkedOut ? 'disabled' : ''} onclick="HQModule.testCounterOffer()">
-                    Propose Counter-Offer
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button class="btn ${cat === 'all' ? 'btn-primary' : ''}" style="padding:6px 12px; font-size:12px;" onclick="HQModule.setInterviewCategory('all')">
+                    All Topics (${questions.length})
                   </button>
-                  <button class="btn btn-primary" style="flex:1;" ${this.candidateWalkedOut ? 'disabled' : ''} onclick="HQModule.signInterviewContract()">
-                    Hire &amp; Sign Contract
+                  <button class="btn ${cat === 'attribute' ? 'btn-primary' : ''}" style="padding:6px 12px; font-size:12px;" onclick="HQModule.setInterviewCategory('attribute')">
+                    Attributes (6)
+                  </button>
+                  <button class="btn ${cat === 'weapon' ? 'btn-primary' : ''}" style="padding:6px 12px; font-size:12px;" onclick="HQModule.setInterviewCategory('weapon')">
+                    Weapons (4)
+                  </button>
+                  <button class="btn ${cat === 'support' ? 'btn-primary' : ''}" style="padding:6px 12px; font-size:12px;" onclick="HQModule.setInterviewCategory('support')">
+                    Support &amp; Crew (6)
                   </button>
                 </div>
-              </div>
-            </div>
-
-            <!-- Right 7 Cols: Interview Question Prompts & Applicant Transcript -->
-            <div class="col-7" style="display:flex; flex-direction:column; gap:12px;">
-              
-              <!-- Candidate's Current Statement -->
-              <div class="panel" style="border-left:3px solid var(--primary); padding:12px;">
-                <div class="subtext" style="font-weight:700; text-transform:uppercase;">${c.callsign}'s Statement:</div>
-                <div style="font-size:13px; margin-top:4px; font-style:italic; color:#e2e8f0;">
-                  ${this.negotiationMessage}
-                </div>
-              </div>
-
-              <!-- 16 Interview Questions (6 Attributes + 10 Skills) with Reputation Limit -->
-              <div style="display:flex; flex-direction:column; gap:6px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span class="subtext" style="font-weight:700; text-transform:uppercase;">
-                    Choose Up to ${maxAllowed} Interview Questions (${maxAllowed - askedCount} Remaining at Rep Lvl ${repLvl}):
+                ${limitReached ? `
+                  <button class="btn btn-primary" onclick="HQModule.setInterviewSubTab('terms')">
+                    Proceed to Contract Terms &rarr;
+                  </button>
+                ` : `
+                  <span class="subtext mono" style="font-size:12px; color:var(--accent-green);">
+                    ✔ Click any topic below to question ${c.callsign}
                   </span>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:6px; max-height:245px; overflow-y:auto; padding-right:4px;">
-                  ${questions.map(q => {
-                    const alreadyAsked = !!this.askedQuestions[q.id];
-                    const disabled = this.candidateWalkedOut || (!alreadyAsked && limitReached);
-                    return `
-                      <button
-                        class="btn ${alreadyAsked ? '' : 'btn-primary'}"
-                        style="text-align:left; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; gap:10px;"
-                        ${disabled ? 'disabled' : ''}
-                        onclick="HQModule.askInterviewQuestion('${q.id}')"
-                      >
-                        <div style="flex:1;">
-                          <span class="badge ${q.type === 'attribute' ? 'primary' : 'green'} mono" style="margin-right:6px;">${q.badge}</span>
-                          <span>${q.prompt}</span>
-                        </div>
-                        <span class="mono" style="font-size:12px; flex-shrink:0;">
-                          ${alreadyAsked ? '&#9989; Asked' : limitReached ? 'Locked (Rep Lvl ' + repLvl + ')' : 'Ask &rarr;'}
-                        </span>
-                      </button>
-                    `;
-                  }).join('')}
-                </div>
+                `}
               </div>
 
-              <!-- Full Interview Q&A Transcript -->
-              <div class="panel" style="display:flex; flex-direction:column; gap:8px; max-height:175px; overflow-y:auto;">
-                <div class="subtext" style="font-weight:700; text-transform:uppercase;">Interview Transcript (${askedCount}/${maxAllowed})</div>
-                ${askedCount === 0 ? `<div class="subtext">Select up to ${maxAllowed} questions above to probe ${c.callsign}'s specific Attributes or Skills.</div>` : askedList.map(item => `
-                  <div style="border-bottom:1px solid var(--border); padding-bottom:8px;">
-                    <div style="font-weight:700; font-size:12px; color:#93c5fd;">Q: ${item.q}</div>
-                    <div style="font-size:13px; font-style:italic; margin-top:3px;">${item.reply}</div>
-                    <div class="mono" style="font-size:12px; color:var(--accent-green); margin-top:2px;">&rarr; ${item.clue}</div>
-                  </div>
-                `).join('')}
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:8px; max-height:220px; overflow-y:auto; padding-right:4px;">
+                ${filteredQuestions.map(q => {
+                  const alreadyAsked = !!this.askedQuestions[q.id];
+                  const disabled = this.candidateWalkedOut || (!alreadyAsked && limitReached);
+                  return `
+                    <button
+                      class="btn ${alreadyAsked ? '' : 'btn-primary'}"
+                      style="text-align:left; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px;"
+                      ${disabled ? 'disabled' : ''}
+                      onclick="HQModule.askInterviewQuestion('${q.id}')"
+                    >
+                      <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                        <span class="badge ${q.type === 'attribute' ? 'primary' : 'green'} mono" style="margin-right:6px; font-size:10px;">${q.badge}</span>
+                        <span>${q.prompt}</span>
+                      </div>
+                      <span class="mono" style="font-size:11px; flex-shrink:0;">
+                        ${alreadyAsked ? '&#9989; Asked' : limitReached ? 'Locked' : 'Ask &rarr;'}
+                      </span>
+                    </button>
+                  `;
+                }).join('')}
               </div>
-
             </div>
-          </div>
+          ` : ''}
+
+          <!-- TAB 2: Contract Terms & Hiring -->
+          ${this.interviewSubTab === 'terms' ? `
+            <div>
+              <div class="grid-12" style="gap:14px; align-items:flex-end;">
+                <div class="col-3">
+                  <label class="subtext" style="font-weight:700;">1. Contract Fights:</label>
+                  <select id="neg-inp-fights" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
+                    ${[3, 5, 10, 15, 25].map(f => `
+                      <option value="${f}" ${this.proposedFights === f ? 'selected' : ''}>${f} Combat Fights</option>
+                    `).join('')}
+                  </select>
+                </div>
+                <div class="col-3">
+                  <label class="subtext" style="font-weight:700;">2. Max Length of Time:</label>
+                  <select id="neg-inp-years" class="select mono" style="margin-top:4px;" onchange="HQModule.updateNegotiationInputs(); HQModule.render();" ${this.candidateWalkedOut ? 'disabled' : ''}>
+                    ${[1, 2, 3, 4, 5].map(yr => `
+                      <option value="${yr}" ${this.proposedYears === yr ? 'selected' : ''}>${yr} Year${yr > 1 ? 's' : ''} (${yr * 12} Mos Max)</option>
+                    `).join('')}
+                  </select>
+                </div>
+                <div class="col-3">
+                  <label class="subtext" style="font-weight:700;">3. Signing Bonus Offer (Cr):</label>
+                  <input id="neg-inp-bonus" type="number" step="500" class="input mono" style="margin-top:4px;" value="${this.proposedBonus}" onchange="HQModule.updateNegotiationInputs()" ${this.candidateWalkedOut ? 'disabled' : ''} />
+                </div>
+                <div class="col-3">
+                  <label class="subtext" style="font-weight:700;">4. Monthly Wage Offer (Cr/mo):</label>
+                  <input id="neg-inp-wage" type="number" step="50" class="input mono" style="margin-top:4px;" value="${this.proposedWage}" onchange="HQModule.updateNegotiationInputs()" ${this.candidateWalkedOut ? 'disabled' : ''} />
+                </div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:10px; font-size:12px; border-top:1px solid rgba(148,163,184,0.15); padding-top:8px;">
+                <div class="subtext">
+                  Contract Rule: Concludes after <strong>${this.proposedFights} Fights</strong> OR <strong>${this.proposedYears * 12} Months (${this.proposedYears} Yr${this.proposedYears > 1 ? 's' : ''})</strong>, whichever comes first.
+                </div>
+                <div class="mono" style="font-size:12px;">
+                  Target Asking: <strong style="color:var(--accent-amber);">${targetAsking.toLocaleString()} Cr/mo</strong> • Treasury: <strong style="color:var(--accent-green);">${st.credits.toLocaleString()} Cr</strong>
+                </div>
+              </div>
+
+              <div style="display:flex; gap:12px; margin-top:12px;">
+                <button class="btn" style="flex:1; padding:11px; font-weight:700;" ${this.candidateWalkedOut ? 'disabled' : ''} onclick="HQModule.testCounterOffer()">
+                  Propose Counter-Offer
+                </button>
+                <button class="btn btn-primary" style="flex:1.5; padding:11px; font-weight:800; font-size:14px;" ${this.candidateWalkedOut ? 'disabled' : ''} onclick="HQModule.signInterviewContract()">
+                  &#128221; Sign Contract &amp; Onboard Jockey (+1 Wk)
+                </button>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- TAB 3: Notes & Evaluation Transcript -->
+          ${this.interviewSubTab === 'notes' ? `
+            <div style="max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+              ${askedCount === 0 ? `
+                <div class="panel subtext" style="text-align:center; padding:16px;">
+                  No questions asked yet. Switch to <strong>1. Ask Questions</strong> above to interrogate the applicant.
+                </div>
+              ` : askedList.map(item => `
+                <div class="panel" style="padding:10px 14px; display:flex; flex-direction:column; gap:4px;">
+                  <div style="font-weight:700; font-size:12px; color:#93c5fd;">Q: ${item.q}</div>
+                  <div style="font-size:13px; font-style:italic; color:#f8fafc;">"${item.reply}"</div>
+                  <div class="mono" style="font-size:12px; color:var(--accent-green); font-weight:700;">&rarr; ${item.clue}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
 
         </div>
       </div>
