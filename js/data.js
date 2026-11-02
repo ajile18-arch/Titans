@@ -505,6 +505,112 @@ window.TOS_DATA = {
     { code: 'RA', name: 'Right Arm (RA)' },
     { code: 'LL', name: 'Left Leg (LL)' },
     { code: 'RL', name: 'Right Leg (RL)' }
+  ],
+
+  battleClients: [
+    {
+      id: 'solaris',
+      name: 'Solaris VII Duel Circuit',
+      category: 'Gladiatorial Arena',
+      badge: 'ARENA CIRCUIT',
+      bountyMultiplier: 1.25,
+      baseSalvagePct: 15,
+      introQuote: 'The crowd wants steel, sparks, and high-stakes tonnage. Bring a clean Titan and deliver a spectacle.',
+      emblem: '⚔️'
+    },
+    {
+      id: 'mining',
+      name: 'Aegis Asteroid & Mineral Syndicate',
+      category: 'Corporate Defense',
+      badge: 'CORP DEFENSE',
+      bountyMultiplier: 1.05,
+      baseSalvagePct: 30,
+      introQuote: 'Rogue marauders are encroaching on our excavation claim. Secure the perimeter and salvage rights are yours.',
+      emblem: '⛏️'
+    },
+    {
+      id: 'militia',
+      name: 'Colonial Security Directorate',
+      category: 'Security Contract',
+      badge: 'SECURITY FORCES',
+      bountyMultiplier: 1.15,
+      baseSalvagePct: 20,
+      introQuote: 'Official bounty authorized by sector authorities. Eliminate hostile vanguard elements before civilian infrastructure is damaged.',
+      emblem: '🛡️'
+    },
+    {
+      id: 'freeholders',
+      name: 'Frontier Freeholder Alliance',
+      category: 'Militia League',
+      badge: 'FRONTIER MILITIA',
+      bountyMultiplier: 0.95,
+      baseSalvagePct: 25,
+      introQuote: 'We pooled our harvest credits together. We need certified MechJocks to drive off these raiders.',
+      emblem: '🌾'
+    }
+  ],
+
+  enemyTitans: [
+    {
+      id: 'en-recon',
+      model: 'Hostile TAT-50R "Stinger"',
+      weightClass: 'Recon (50t)',
+      reqRep: 1,
+      dmg: 10,
+      hit: 66,
+      armor: { HD: 16, CT: 30, LT: 24, RT: 24, LA: 20, RA: 20, LL: 24, RL: 24 },
+      maxArmor: { HD: 16, CT: 30, LT: 24, RT: 24, LA: 20, RA: 20, LL: 24, RL: 24 },
+      pilot: 'Raid Scout',
+      threat: 'Low'
+    },
+    {
+      id: 'en-light',
+      model: 'Hostile TAT-80L "Jackal"',
+      weightClass: 'Light (80t)',
+      reqRep: 1,
+      dmg: 13,
+      hit: 64,
+      armor: { HD: 18, CT: 42, LT: 32, RT: 32, LA: 28, RA: 28, LL: 32, RL: 32 },
+      maxArmor: { HD: 18, CT: 42, LT: 32, RT: 32, LA: 28, RA: 28, LL: 32, RL: 32 },
+      pilot: 'Skirmisher',
+      threat: 'Moderate'
+    },
+    {
+      id: 'en-medium',
+      model: 'Hostile TAT-120M "Enforcer"',
+      weightClass: 'Medium (120t)',
+      reqRep: 2,
+      dmg: 16,
+      hit: 62,
+      armor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
+      maxArmor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
+      pilot: 'Veteran Duelist',
+      threat: 'Challenging'
+    },
+    {
+      id: 'en-heavy',
+      model: 'Hostile TAT-160H "Warhammer"',
+      weightClass: 'Heavy (160t)',
+      reqRep: 3,
+      dmg: 20,
+      hit: 68,
+      armor: { HD: 24, CT: 74, LT: 54, RT: 54, LA: 46, RA: 46, LL: 52, RL: 52 },
+      maxArmor: { HD: 24, CT: 74, LT: 54, RT: 54, LA: 46, RA: 46, LL: 52, RL: 52 },
+      pilot: 'Syndicate Enforcer',
+      threat: 'High'
+    },
+    {
+      id: 'en-assault',
+      model: 'Hostile TAT-200A "Colossus"',
+      weightClass: 'Assault (200t)',
+      reqRep: 4,
+      dmg: 25,
+      hit: 72,
+      armor: { HD: 28, CT: 94, LT: 70, RT: 70, LA: 58, RA: 58, LL: 68, RL: 68 },
+      maxArmor: { HD: 28, CT: 94, LT: 70, RT: 70, LA: 58, RA: 58, LL: 68, RL: 68 },
+      pilot: 'Arena Champion',
+      threat: 'Deadly'
+    }
   ]
 };
 

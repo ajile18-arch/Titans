@@ -124,6 +124,7 @@ window.GameState = {
         }
         this.ensureCalendar();
         this.ensureJobListing();
+        this.ensureBattleOffers();
         if (!Array.isArray(this.data.partStorage)) {
           this.data.partStorage = [];
           // Migrate any count-based partInventory into condition-tracked partStorage items
@@ -233,10 +234,102 @@ window.GameState = {
     }
   },
 
+  getCalendarTextForWeeks(tw) {
+    const w = Math.max(0, Math.floor(Number(tw) || 0));
+    const y = Math.floor(w / 48) + 1;
+    const m = (Math.floor(w / 4) % 12) + 1;
+    const wk = (w % 4) + 1;
+    return `Year ${y} • Month ${m} • Week ${wk}`;
+  },
+
   getCalendarText() {
     this.ensureCalendar();
-    const c = this.data.calendar;
-    return `Year ${c.year} • Month ${c.month} • Week ${c.week}`;
+    return this.getCalendarTextForWeeks(this.data.calendar.totalWeeks);
+  },
+
+  ensureBattleOffers() {
+    if (!this.data) return;
+    if (!Array.isArray(this.data.battleOffers)) this.data.battleOffers = [];
+    if (!Array.isArray(this.data.scheduledBattles)) this.data.scheduledBattles = [];
+    if (!Array.isArray(this.data.completedBattles)) this.data.completedBattles = [];
+
+    // Update readiness of all scheduled battles based on current calendar week
+    const curWeeks = this.data.calendar?.totalWeeks || 0;
+    this.data.scheduledBattles.forEach(b => {
+      b.isReady = (curWeeks >= b.targetTotalWeeks);
+      b.weeksRemaining = Math.max(0, b.targetTotalWeeks - curWeeks);
+    });
+
+    // Populate offers if low
+    while (this.data.battleOffers.length < 3) {
+      this.data.battleOffers.push(this.generateBattleOffer());
+    }
+  },
+
+  generateBattleOffer() {
+    this.ensureCalendar();
+    const repLvl = this.getCompanyReputationLevel();
+    const clients = window.TOS_DATA.battleClients || [];
+    const client = clients[Math.floor(Math.random() * clients.length)] || clients[0];
+
+    // Pick enemy titan appropriate for company reputation level
+    const allEnemies = window.TOS_DATA.enemyTitans || [];
+    const eligibleEnemies = allEnemies.filter(e => (e.reqRep || 1) <= Math.max(1, repLvl));
+    const enemyTpl = eligibleEnemies[Math.floor(Math.random() * eligibleEnemies.length)] || allEnemies[0];
+
+    const terrains = [
+      { id: 'woods', name: 'Dense Forest Basin', desc: 'Heavy foliage provides defensive cover (+10% Evasion)' },
+      { id: 'water', name: 'Flooded River Valley', desc: 'Cool water hexes accelerate heat venting by +2 C/sec' },
+      { id: 'hill', name: 'Granite High Ridge', desc: 'Elevated terrain provides line-of-sight advantages' },
+      { id: 'clear', name: 'Open Sand Flats', desc: 'Flat scorched terrain, ideal for direct long-range gunnery' }
+    ];
+    const terrain = terrains[Math.floor(Math.random() * terrains.length)];
+
+    const opsPrefix = ['Iron', 'Crimson', 'Obsidian', 'Solar', 'Vanguard', 'Apex', 'Thunder', 'Ghost', 'Cobalt'];
+    const opsSuffix = ['Recon', 'Siege', 'Intercept', 'Dawn', 'Horizon', 'Strike', 'Breach', 'Protocol'];
+    const pfx = opsPrefix[Math.floor(Math.random() * opsPrefix.length)];
+    const sfx = opsSuffix[Math.floor(Math.random() * opsSuffix.length)];
+    const opName = `Operation ${pfx} ${sfx}`;
+
+    // Base Bounty calculation (28k–55k scaling with enemy tonnage and client multiplier)
+    const baseFee = Math.round((28000 + (enemyTpl.reqRep || 1) * 7500) * (client.bountyMultiplier || 1) / 500) * 500;
+    const curWeeks = this.data.calendar?.totalWeeks || 0;
+    const defaultPrepWeeks = 2; // Suggested 2 weeks prep
+    const targetWeeks = curWeeks + defaultPrepWeeks;
+
+    return {
+      id: 'offer-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      title: opName,
+      client: {
+        id: client.id,
+        name: client.name,
+        badge: client.badge,
+        category: client.category,
+        emblem: client.emblem,
+        introQuote: client.introQuote
+      },
+      enemy: {
+        id: enemyTpl.id,
+        name: enemyTpl.model,
+        weight: enemyTpl.weightClass,
+        dmg: enemyTpl.dmg,
+        hit: enemyTpl.hit,
+        armor: { ...enemyTpl.armor },
+        maxArmor: { ...enemyTpl.maxArmor },
+        pilot: enemyTpl.pilot,
+        threat: enemyTpl.threat
+      },
+      terrain: terrain,
+      baseBounty: baseFee,
+      negotiatedBounty: baseFee,
+      baseSalvagePct: client.baseSalvagePct || 20,
+      negotiatedSalvagePct: client.baseSalvagePct || 20,
+      suggestedPrepWeeks: defaultPrepWeeks,
+      targetTotalWeeks: targetWeeks,
+      targetDateText: this.getCalendarTextForWeeks(targetWeeks),
+      patience: 3,
+      status: 'offered' // 'offered' | 'signed'
+    };
   },
 
   formatWeeksDuration(weeks) {
@@ -268,6 +361,7 @@ window.GameState = {
   advanceTimeWeeks(weeksToAdd, actionLabel = '') {
     this.ensureCalendar();
     this.ensureJobListing();
+    this.ensureBattleOffers();
     const st = this.data;
     const wCount = Math.max(1, Math.round(Number(weeksToAdd) || 1));
 

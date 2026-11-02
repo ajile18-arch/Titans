@@ -1,7 +1,8 @@
-// Tactical Battle & Hex Arena Module (Mode A: Classic Action-Time Seconds)
+// Tactical Battle & Hex Arena Module (Featuring Battle Offers, Contract Negotiations & Scheduled Future Dates)
 
 window.BattleModule = {
   active: false,
+  arenaTab: 'offers', // 'offers' | 'negotiate' | 'combat'
   clockSec: 0,
   aimTarget: 'General',
   playerPos: { r: 3, c: 1, facing: 'NE', heat: 0 },
@@ -14,12 +15,23 @@ window.BattleModule = {
   contractLost: false,
   battleStats: { shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 },
 
-  initEncounter() {
+  // Battle Offer Negotiation State
+  currentContract: null,
+  negotiatingOffer: null,
+  proposedBounty: 35000,
+  proposedSalvage: 20,
+  proposedPrepWeeks: 2,
+  patience: 3,
+  negotiationMessage: '',
+
+  initEncounter(contract = null) {
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
     const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
 
     this.active = true;
+    this.arenaTab = 'combat';
+    this.currentContract = contract;
     this.clockSec = 0;
     this.aimTarget = 'General';
     this.playerPos = { r: 3, c: 1, facing: 'NE', heat: 0 };
@@ -28,39 +40,70 @@ window.BattleModule = {
     this.contractLost = false;
     this.battleStats = { shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 };
 
-    // Build 5x6 Hex Grid
+    // Build 5x6 Hex Grid matching the contract's terrain profile
+    const terrainType = contract?.terrain?.id || 'woods';
     this.hexes = [];
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 6; c++) {
-        let terrain = 'clear';
-        if ((r === 1 && c === 2) || (r === 2 && c === 3) || (r === 3 && c === 2)) terrain = 'woods';
-        else if ((r === 2 && c === 1) || (r === 1 && c === 4)) terrain = 'water';
-        else if (r === 0 && c === 3) terrain = 'hill';
-        this.hexes.push({ r, c, terrain });
+        let t = 'clear';
+        if (terrainType === 'woods') {
+          if ((r === 1 && c === 2) || (r === 2 && c === 3) || (r === 3 && c === 2) || (r === 0 && c === 4)) t = 'woods';
+          else if ((r === 2 && c === 1) || (r === 1 && c === 4)) t = 'water';
+          else if (r === 0 && c === 3) t = 'hill';
+        } else if (terrainType === 'water') {
+          if (c === 2 || c === 3 || (r === 2 && c === 1) || (r === 1 && c === 4)) t = 'water';
+          else if ((r === 1 && c === 1) || (r === 3 && c === 4)) t = 'woods';
+          else if (r === 0 && c === 5) t = 'hill';
+        } else if (terrainType === 'hill') {
+          if (r === 0 || (r === 1 && c === 3) || (r === 2 && c === 2)) t = 'hill';
+          else if ((r === 3 && c === 1) || (r === 2 && c === 4)) t = 'woods';
+          else if (r === 4 && c === 2) t = 'water';
+        } else {
+          // clear
+          if ((r === 1 && c === 2) || (r === 3 && c === 3)) t = 'hill';
+          else if (r === 2 && c === 4) t = 'water';
+        }
+        this.hexes.push({ r, c, terrain: t });
       }
     }
 
-    // Spawn Enemy Titan
-    const enemyTemplates = [
-      { name: 'Enemy TAT-110M "Enforcer"', weight: '110t Medium', dmg: 12, hit: 64 },
-      { name: 'Enemy TAT-155H "Warhammer"', weight: '155t Heavy', dmg: 16, hit: 68 },
-      { name: 'Enemy TAT-190A "Colossus"', weight: '190t Assault', dmg: 20, hit: 72 }
-    ];
-    const pick = enemyTemplates[st.missionsCompleted % enemyTemplates.length];
-    this.enemy = {
-      name: pick.name,
-      weight: pick.weight,
-      r: 1,
-      c: 4,
-      dmg: pick.dmg,
-      hit: pick.hit,
-      armor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
-      maxArmor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 }
-    };
+    // Spawn Enemy Titan from negotiated contract (or fallback)
+    if (contract && contract.enemy) {
+      this.enemy = {
+        name: contract.enemy.name,
+        weight: contract.enemy.weight,
+        r: 1,
+        c: 4,
+        dmg: contract.enemy.dmg,
+        hit: contract.enemy.hit,
+        armor: { ...contract.enemy.armor },
+        maxArmor: { ...contract.enemy.maxArmor },
+        pilot: contract.enemy.pilot || 'Hostile Pilot'
+      };
+    } else {
+      const enemyTemplates = [
+        { name: 'Enemy TAT-110M "Enforcer"', weight: '110t Medium', dmg: 12, hit: 64 },
+        { name: 'Enemy TAT-155H "Warhammer"', weight: '155t Heavy', dmg: 16, hit: 68 },
+        { name: 'Enemy TAT-190A "Colossus"', weight: '190t Assault', dmg: 20, hit: 72 }
+      ];
+      const pick = enemyTemplates[(st.missionsCompleted || 0) % enemyTemplates.length];
+      this.enemy = {
+        name: pick.name,
+        weight: pick.weight,
+        r: 1,
+        c: 4,
+        dmg: pick.dmg,
+        hit: pick.hit,
+        armor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
+        maxArmor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
+        pilot: 'Arena Opponent'
+      };
+    }
     this.enemyCooldown = 6;
 
     this.logs = [
-      `[00:00s] Contract Initiated: ${jock ? jock.callsign : 'Pilot'} deployed in ${mech ? mech.customName : 'Titan'}.`,
+      `[00:00s] Combat Deployment: ${contract ? contract.title : 'Combat Match'} (${contract?.client?.name || 'Sector Comms'}).`,
+      `[00:00s] Pilot: ${jock ? jock.callsign : 'Pilot'} deployed in ${mech ? mech.customName : 'Titan'}.`,
       `[00:00s] Hostile contact locked: ${this.enemy.name} at Hex (4,1).`
     ];
   },
@@ -152,6 +195,21 @@ window.BattleModule = {
 
       if (playerMech.armor.CT <= 0 || playerMech.armor.HD <= 0) {
         this.contractLost = true;
+        if (!Array.isArray(st.completedBattles)) st.completedBattles = [];
+        st.completedBattles.unshift({
+          id: 'comp-' + Date.now(),
+          title: this.currentContract?.title || `Encounter vs. ${this.enemy.name}`,
+          client: this.currentContract?.client?.name || 'Sector Comms',
+          enemy: this.enemy.name,
+          outcome: 'DEFEAT / EJECTED',
+          payout: 0,
+          dateText: window.GameState.getCalendarText(),
+          jockCallsign: jock ? jock.callsign : 'Pilot'
+        });
+        if (this.currentContract) {
+          st.scheduledBattles = (st.scheduledBattles || []).filter(b => b.id !== this.currentContract.id);
+        }
+
         if (jock) {
           jock.health = Math.max(25, jock.health - 30);
           jock.missions = (jock.missions || 0) + 1;
@@ -160,8 +218,8 @@ window.BattleModule = {
           jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
           this.recordBattleHistory(jock, playerMech, 'EJECTED', 'Core Breach — Emergency Ejection', 75, 'EJECT');
         }
-        window.GameState.advanceTimeWeeks(4, 'Combat Drop & Recovery');
-        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered (+75 Survival XP • +1 Month Elapsed).`);
+        window.GameState.advanceTimeWeeks(2, 'Combat Drop Recovery');
+        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered (+75 Survival XP • +2 Wks Elapsed).`);
       }
     } else {
       this.log(`${this.enemy.name} fires salvos — evaded! (Roll ${roll} > ${toHit}%)`);
@@ -271,8 +329,43 @@ window.BattleModule = {
       const legsGone = this.enemy.armor.LL <= 0 && this.enemy.armor.RL <= 0;
       if (this.enemy.armor.HD <= 0 || this.enemy.armor.CT <= 0 || legsGone) {
         this.contractWon = true;
-        st.credits += 35000;
+        const bounty = this.currentContract?.negotiatedBounty || 35000;
+        const salvagePct = this.currentContract?.negotiatedSalvagePct || 20;
+        const salvageBonus = Math.round(bounty * (salvagePct / 100));
+        const totalPayout = bounty + salvageBonus;
+        st.credits += totalPayout;
         st.missionsCompleted += 1;
+
+        if (!Array.isArray(st.completedBattles)) st.completedBattles = [];
+        st.completedBattles.unshift({
+          id: 'comp-' + Date.now(),
+          title: this.currentContract?.title || `Encounter vs. ${this.enemy.name}`,
+          client: this.currentContract?.client?.name || 'Sector Comms',
+          enemy: this.enemy.name,
+          outcome: 'VICTORY',
+          payout: totalPayout,
+          dateText: window.GameState.getCalendarText(),
+          jockCallsign: jock ? jock.callsign : 'Pilot'
+        });
+        if (this.currentContract) {
+          st.scheduledBattles = (st.scheduledBattles || []).filter(b => b.id !== this.currentContract.id);
+        }
+
+        // Possible salvage component recovery into storage
+        let salvagedCompName = '';
+        if (salvagePct >= 25 && Array.isArray(st.partStorage)) {
+          const comps = window.TOS_DATA.components || [];
+          const dropped = comps[Math.floor(Math.random() * comps.length)];
+          if (dropped) {
+            st.partStorage.push({
+              uid: 'part-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+              compId: dropped.id,
+              condition: 80
+            });
+            salvagedCompName = dropped.name;
+          }
+        }
+
         const killCode = this.enemy.armor.HD <= 0 ? 'HD' : (this.enemy.armor.CT <= 0 ? 'CT' : 'LEGS');
         const killMethod = killCode === 'HD'
           ? `Headshot Decapitation (HD) via ${weapon.name}`
@@ -288,8 +381,8 @@ window.BattleModule = {
           jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
           this.recordBattleHistory(jock, mech, 'VICTORY', killMethod, 250, killCode);
         }
-        window.GameState.advanceTimeWeeks(4, `Victory vs. ${this.enemy.name}`);
-        this.log(`VICTORY! ${this.enemy.name} neutralized! Earned +35,000 Cr and +250 XP for ${jock ? jock.callsign : 'Pilot'} (+1 Month Elapsed)!`);
+        window.GameState.advanceTimeWeeks(1, `Combat Drop vs. ${this.enemy.name}`);
+        this.log(`VICTORY! ${this.enemy.name} neutralized! Earned ${totalPayout.toLocaleString()} Cr (${bounty.toLocaleString()} Cr bounty + ${salvageBonus.toLocaleString()} Cr salvage)${salvagedCompName ? ` and recovered a ${salvagedCompName}!` : ''} (+250 XP for ${jock ? jock.callsign : 'Pilot'})`);
       }
     } else {
       this.log(`MISS! ${weapon.name} wide of Enemy ${this.aimTarget} (Roll ${roll}>${hitChance}%).`);
@@ -407,38 +500,653 @@ window.BattleModule = {
     `;
   },
 
-  render() {
-    const container = document.getElementById('view-battle');
-    if (!container) return;
-
+  openNegotiation(offerId) {
     const st = window.GameState.data;
-    const jock = this.getActiveCombatJock();
-    const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
+    window.GameState.ensureBattleOffers();
+    const offer = st.battleOffers.find(o => o.id === offerId);
+    if (!offer) return;
+    this.negotiatingOffer = JSON.parse(JSON.stringify(offer));
+    this.proposedBounty = offer.baseBounty;
+    this.proposedSalvage = offer.baseSalvagePct || 20;
+    this.proposedPrepWeeks = offer.suggestedPrepWeeks || 2;
+    this.patience = offer.patience || 3;
+    this.negotiationMessage = `Liaison: "${offer.client.introQuote || 'We need an experienced mercenary lance for this assignment.'}"`;
+    this.arenaTab = 'negotiate';
+    this.render();
+  },
 
-    if (!jock || !mech) {
-      container.innerHTML = `
-        <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:16px;">
-          <span class="badge amber">PRE-FLIGHT CHECKLIST INCOMPLETE</span>
-          <h2 style="font-size:22px; font-weight:800;">Squad Not Ready for Combat Deployment</h2>
-          <p class="subtext" style="max-width:520px; font-size:14px;">
-            Before deploying to the Hex Arena, you need at least <strong>1 Jock</strong> and <strong>1 Titan Mech</strong> built and assigned:
-          </p>
-          <div class="panel" style="display:flex; flex-direction:column; gap:10px; text-align:left; min-width:340px;">
-            <div>${jock ? '&#9989;' : '&#10060;'} <strong>Step 1:</strong> Create or Hire a Jock in HQ (${st.jocks.length} in Roster)</div>
-            <div>${mech ? '&#9989;' : '&#10060;'} <strong>Step 2:</strong> Commission &amp; Equip a Titan in the Garage (${st.mechs.length} in Hangar)</div>
-          </div>
-          <div style="display:flex; gap:12px; margin-top:6px;">
-            <button class="btn btn-primary" onclick="App.switchTab('hq')">Go to 1. HQ &amp; Jockey Roster</button>
-            <button class="btn btn-primary" onclick="App.switchTab('garage')">Go to 2. Garage &amp; Mech Factory</button>
-          </div>
-        </div>
-      `;
+  closeNegotiation() {
+    this.negotiatingOffer = null;
+    this.arenaTab = 'offers';
+    this.render();
+  },
+
+  updateNegotiationInputs() {
+    const bountyEl = document.getElementById('neg-inp-bounty');
+    const salvageEl = document.getElementById('neg-inp-salvage');
+    if (bountyEl) this.proposedBounty = parseInt(bountyEl.value) || this.proposedBounty;
+    if (salvageEl) this.proposedSalvage = parseInt(salvageEl.value) || this.proposedSalvage;
+    this.render();
+  },
+
+  setQuickBountyPct(pctMultiplier) {
+    if (!this.negotiatingOffer) return;
+    this.proposedBounty = Math.round((this.negotiatingOffer.baseBounty * (pctMultiplier / 100)) / 500) * 500;
+    this.render();
+  },
+
+  setQuickSalvage(pct) {
+    this.proposedSalvage = pct;
+    this.render();
+  },
+
+  setPrepWeeks(wks) {
+    this.proposedPrepWeeks = wks;
+    this.render();
+  },
+
+  testContractOffer() {
+    if (!this.negotiatingOffer) return;
+    const baseB = this.negotiatingOffer.baseBounty;
+    const baseS = this.negotiatingOffer.baseSalvagePct || 20;
+    const ratioB = this.proposedBounty / baseB;
+    const ratioS = this.proposedSalvage / baseS;
+    const pressure = (ratioB - 1.0) * 1.5 + (ratioS - 1.0) * 0.9;
+
+    if (pressure <= 0.05) {
+      this.negotiationMessage = `Liaison: "These terms are fully acceptable to our directors. Sign the charter and prep your lance."`;
+      this.patience = Math.min(3, this.patience + 1);
+    } else if (pressure <= 0.35) {
+      this.negotiationMessage = `Liaison: "Your counter-offer is slightly above standard guild rates, but given the operational threat, we will authorize this budget."`;
+    } else if (pressure <= 0.70) {
+      this.patience = Math.max(0, this.patience - 1);
+      if (this.patience <= 0) {
+        this.rejectOfferRevoked();
+        return;
+      }
+      this.negotiationMessage = `Liaison: "That exceeds our regional allowance. Lower your demands before our directors pull out." (Client Patience: ${this.patience}/3)`;
+    } else {
+      this.patience = Math.max(0, this.patience - 2);
+      if (this.patience <= 0) {
+        this.rejectOfferRevoked();
+        return;
+      }
+      this.negotiationMessage = `Liaison: "Gross mercenary extortion! We will not be shaken down. One more absurd term and this contract is voided." (Client Patience: ${this.patience}/3)`;
+    }
+    this.render();
+  },
+
+  rejectOfferRevoked() {
+    const st = window.GameState.data;
+    if (this.negotiatingOffer) {
+      const offId = this.negotiatingOffer.id;
+      st.battleOffers = st.battleOffers.filter(o => o.id !== offId);
+      window.GameState.ensureBattleOffers();
+    }
+    this.negotiationMessage = `Liaison: "CONTRACT REVOKED: Your excessive demands have severed our negotiations. Good day."`;
+    this.render();
+    setTimeout(() => {
+      this.closeNegotiation();
+    }, 1800);
+  },
+
+  signBattleContract() {
+    if (!this.negotiatingOffer) return;
+    const st = window.GameState.data;
+    window.GameState.ensureCalendar();
+    const curWeeks = st.calendar.totalWeeks || 0;
+    const targetTotalWeeks = curWeeks + this.proposedPrepWeeks;
+
+    const scheduled = {
+      id: 'scheduled-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      title: this.negotiatingOffer.title,
+      client: this.negotiatingOffer.client,
+      enemy: this.negotiatingOffer.enemy,
+      terrain: this.negotiatingOffer.terrain,
+      negotiatedBounty: this.proposedBounty,
+      negotiatedSalvagePct: this.proposedSalvage,
+      prepWeeks: this.proposedPrepWeeks,
+      targetTotalWeeks: targetTotalWeeks,
+      targetDateText: window.GameState.getCalendarTextForWeeks(targetTotalWeeks),
+      dateSigned: window.GameState.getCalendarText(),
+      isReady: (curWeeks >= targetTotalWeeks),
+      weeksRemaining: Math.max(0, targetTotalWeeks - curWeeks)
+    };
+
+    st.scheduledBattles.unshift(scheduled);
+    st.battleOffers = st.battleOffers.filter(o => o.id !== this.negotiatingOffer.id);
+    window.GameState.ensureBattleOffers();
+    window.GameState.save();
+
+    this.negotiatingOffer = null;
+    this.arenaTab = 'offers';
+    this.render();
+  },
+
+  cancelScheduledBattle(battleId) {
+    const st = window.GameState.data;
+    st.scheduledBattles = (st.scheduledBattles || []).filter(b => b.id !== battleId);
+    window.GameState.save();
+    this.render();
+  },
+
+  advanceToScheduledBattle(battleId) {
+    const st = window.GameState.data;
+    const battle = (st.scheduledBattles || []).find(b => b.id === battleId);
+    if (!battle) return;
+    const curWeeks = st.calendar.totalWeeks || 0;
+    const diff = battle.targetTotalWeeks - curWeeks;
+    if (diff > 0) {
+      window.GameState.advanceTimeWeeks(diff, `Transit & Tactical Prep for ${battle.title}`);
+    }
+    window.GameState.ensureBattleOffers();
+    window.GameState.save();
+    window.App.updateHUD();
+    this.render();
+  },
+
+  deployScheduledBattle(battleId) {
+    const st = window.GameState.data;
+    const battle = (st.scheduledBattles || []).find(b => b.id === battleId);
+    if (!battle) return;
+    this.initEncounter(battle);
+    this.render();
+  },
+
+  refreshBattleOffers() {
+    const st = window.GameState.data;
+    if (st.credits < 500) {
+      alert("Insufficient funds (500 Cr required) to scan mercenary comms network.");
       return;
     }
+    st.credits -= 500;
+    st.battleOffers = [];
+    window.GameState.ensureBattleOffers();
+    window.GameState.save();
+    window.App.updateHUD();
+    this.render();
+  },
 
-    if (!this.active) this.initEncounter();
-    const metrics = window.GameState.computeMechMetrics(mech);
+  abortCombatToOperations() {
+    if (this.contractWon || this.contractLost) {
+      this.active = false;
+      this.arenaTab = 'offers';
+      this.render();
+      return;
+    }
+    if (confirm("Tactical Retreat: Forfeit this combat drop and withdraw to the Sector Operations Board?")) {
+      const st = window.GameState.data;
+      if (this.currentContract) {
+        st.completedBattles.unshift({
+          title: this.currentContract.title,
+          client: this.currentContract.client?.name || 'Mercenary Guild',
+          enemyName: this.enemy.name,
+          payout: 0,
+          date: window.GameState.getCalendarText(),
+          outcome: 'RETREAT'
+        });
+        st.scheduledBattles = (st.scheduledBattles || []).filter(b => b.id !== this.currentContract.id);
+      }
+      this.active = false;
+      this.arenaTab = 'offers';
+      window.GameState.advanceTimeWeeks(1, `Lance retreat from ${this.enemy.name}`);
+      window.GameState.save();
+      window.App.updateHUD();
+      this.render();
+    }
+  },
 
+  returnFromVictoryOrDefeat() {
+    this.active = false;
+    this.arenaTab = 'offers';
+    this.render();
+  },
+
+  renderOperationsBoard(jock, mech, metrics) {
+    const st = window.GameState.data;
+    window.GameState.ensureBattleOffers();
+    const curWeeks = st.calendar?.totalWeeks || 0;
+    const curCalText = window.GameState.getCalendarText();
+
+    const scheduledHtml = st.scheduledBattles.length === 0 ? `
+      <div class="panel" style="padding:22px; text-align:center; color:var(--text-muted);">
+        <div style="font-weight:700; font-size:15px; margin-bottom:6px; color:var(--text-bright);">No Scheduled Drops on the Campaign Calendar</div>
+        <div style="font-size:13px; max-width:540px; margin:0 auto;">
+          Review the <strong>Incoming Battle Offers</strong> below, negotiate terms (bounty, salvage, match date), and sign a contract to lock a battle into your schedule.
+        </div>
+      </div>
+    ` : `
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        ${st.scheduledBattles.map(b => {
+          const isReady = curWeeks >= b.targetTotalWeeks;
+          const wksLeft = Math.max(0, b.targetTotalWeeks - curWeeks);
+          const terrainDesc = b.terrain ? `${b.terrain.name} (${b.terrain.desc})` : 'Standard Hex Terrain';
+          return `
+            <div class="panel" style="border-left:4px solid ${isReady ? 'var(--accent-green)' : 'var(--accent-blue)'}; display:flex; flex-direction:column; gap:10px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge ${isReady ? 'green' : 'primary'}">${isReady ? 'DROP WINDOW READY' : `T-MINUS ${wksLeft} WK${wksLeft > 1 ? 'S' : ''}`}</span>
+                    <strong style="font-size:16px; color:var(--text-bright);">${b.title}</strong>
+                  </div>
+                  <div class="subtext" style="margin-top:3px;">
+                    Sponsor: <strong>${b.client?.name || 'Mercenary Guild'}</strong> • Signed: ${b.dateSigned || 'Earlier'}
+                  </div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="mono" style="font-size:14px; font-weight:800; color:var(--accent-amber);">
+                    Target Date: ${b.targetDateText || window.GameState.getCalendarTextForWeeks(b.targetTotalWeeks)}
+                  </div>
+                  <div class="subtext" style="font-size:12px;">Campaign Week #${b.targetTotalWeeks} (Current: #${curWeeks})</div>
+                </div>
+              </div>
+
+              <!-- Contract Terms & Target Intel -->
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; background:rgba(0,0,0,0.25); padding:10px; border-radius:6px; font-size:13px;">
+                <div>
+                  <span class="subtext">Target Unit:</span><br>
+                  <strong style="color:var(--accent-red);">${b.enemy?.name || 'Hostile Titan'}</strong> (${b.enemy?.weight || 'Heavy'})
+                </div>
+                <div>
+                  <span class="subtext">Combat Theater:</span><br>
+                  <span style="color:var(--text-bright);">${terrainDesc}</span>
+                </div>
+                <div>
+                  <span class="subtext">Negotiated Bounty:</span><br>
+                  <strong style="color:var(--accent-green);">${(b.negotiatedBounty || 35000).toLocaleString()} Cr</strong>
+                </div>
+                <div>
+                  <span class="subtext">Salvage Rights:</span><br>
+                  <strong style="color:var(--accent-cyan);">${b.negotiatedSalvagePct || 20}% Salvage</strong>
+                </div>
+              </div>
+
+              <!-- Action Bar -->
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:4px;">
+                <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; color:var(--accent-red);" onclick="BattleModule.cancelScheduledBattle('${b.id}')">
+                  Abort Contract
+                </button>
+                <div style="display:flex; gap:10px;">
+                  ${!isReady ? `
+                    <button class="btn btn-primary" onclick="BattleModule.advanceToScheduledBattle('${b.id}')">
+                      Advance Time to Drop Date (${wksLeft} Wk${wksLeft > 1 ? 's' : ''}) &rarr;
+                    </button>
+                  ` : `
+                    <button class="btn btn-primary" style="background:var(--accent-green); color:#000; font-weight:800; padding:10px 20px; font-size:14px; box-shadow:0 0 16px rgba(16,185,129,0.4);" onclick="BattleModule.deployScheduledBattle('${b.id}')">
+                      &#9876; DEPLOY LANCE TO HEX ARENA
+                    </button>
+                  `}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    const offersHtml = st.battleOffers.map(o => {
+      const terrainDesc = o.terrain ? `${o.terrain.name} • ${o.terrain.desc}` : 'Standard Terrain';
+      const enemyThreat = o.enemy?.threat || 'Standard Threat';
+      return `
+        <div class="panel" style="display:flex; flex-direction:column; justify-content:space-between; gap:12px; padding:16px;">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div>
+                <span class="badge primary" style="font-size:11px;">${o.client?.badge || 'CONTRACT'}</span>
+                <div style="font-size:16px; font-weight:800; color:var(--text-bright); margin-top:4px;">${o.title}</div>
+                <div class="subtext">${o.client?.name || 'Client Sponsor'}</div>
+              </div>
+              <div class="mono" style="font-size:15px; font-weight:800; color:var(--accent-green); text-align:right;">
+                ${o.baseBounty.toLocaleString()} Cr
+                <div class="subtext" style="font-size:11px;">Base Bounty</div>
+              </div>
+            </div>
+
+            <div style="margin-top:10px; font-size:13px; font-style:italic; color:var(--text-bright); background:rgba(0,0,0,0.2); padding:8px 10px; border-radius:4px; border-left:3px solid var(--accent-amber);">
+              "${o.client?.introQuote || 'We require an elite mercenary unit for a surgical strike.'}"
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; font-size:12px;">
+              <div>
+                <span class="subtext">Target:</span><br>
+                <strong style="color:var(--accent-red);">${o.enemy?.name}</strong> (${o.enemy?.weight})
+              </div>
+              <div>
+                <span class="subtext">Threat Rating:</span><br>
+                <span class="badge ${enemyThreat.includes('High') || enemyThreat.includes('Assault') ? 'red' : 'amber'}" style="font-size:11px;">${enemyThreat}</span>
+              </div>
+              <div style="grid-column:1 / -1;">
+                <span class="subtext">Combat Zone:</span><br>
+                <span style="color:var(--text-bright);">${terrainDesc}</span>
+              </div>
+              <div>
+                <span class="subtext">Base Salvage:</span><br>
+                <strong>${o.baseSalvagePct || 20}% Share</strong>
+              </div>
+              <div>
+                <span class="subtext">Lead Time:</span><br>
+                <strong>${o.suggestedPrepWeeks || 2} Weeks Prep</strong>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%; padding:10px; font-weight:700; margin-top:6px;" onclick="BattleModule.openNegotiation('${o.id}')">
+            Negotiate Contract &amp; Match Date &rarr;
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    const completedHtml = (st.completedBattles && st.completedBattles.length > 0) ? `
+      <div class="panel mono" style="font-size:12px; display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;">
+        ${st.completedBattles.slice(0, 8).map(cb => `
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:4px;">
+            <div>
+              <span class="badge ${cb.outcome === 'VICTORY' ? 'green' : 'red'}" style="font-size:10px; padding:2px 6px;">${cb.outcome}</span>
+              <strong style="color:var(--text-bright); margin-left:6px;">${cb.title || 'Tactical Drop'}</strong> vs. ${cb.enemyName} (${cb.client})
+            </div>
+            <div style="text-align:right;">
+              <span style="color:var(--accent-green); font-weight:700;">+${(cb.payout || 0).toLocaleString()} Cr</span> • <span class="subtext">${cb.date}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    ` : `<div class="subtext mono" style="padding:8px;">No combat operations recorded in company archive yet.</div>`;
+
+    return `
+      <div style="display:flex; flex-direction:column; gap:20px;">
+        <!-- Top Operations Command Bar -->
+        <div class="card" style="padding:18px 24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="badge primary">SECTOR 04 COMBAT OPERATIONS</span>
+                <span class="badge green">COMMS LINK ACTIVE</span>
+              </div>
+              <h2 style="font-size:24px; font-weight:900; margin-top:4px; text-transform:uppercase; letter-spacing:0.02em;">
+                Tactical Battle Arena &amp; Contract Registry
+              </h2>
+              <div class="subtext">
+                Negotiate combat match dates on the campaign calendar, lock in bounty and salvage terms, and deploy lance mechs into action-time hex arenas.
+              </div>
+            </div>
+
+            <!-- Ready Lance Telemetry -->
+            <div style="display:flex; align-items:center; gap:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle); padding:10px 16px; border-radius:8px;">
+              <div style="text-align:right;">
+                <div class="subtext" style="font-size:11px; text-transform:uppercase;">Active Deploy Lance</div>
+                <div style="font-weight:800; color:var(--text-bright); font-size:14px;">
+                  ${jock ? jock.callsign : 'No Jock'} &bull; ${mech ? mech.customName : 'No Mech'}
+                </div>
+                <div class="subtext" style="font-size:12px;">
+                  Current Date: <strong style="color:var(--accent-amber);">${curCalText}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Scheduled Future Battles -->
+        <div class="card">
+          <div class="section-header">
+            <div>
+              <div class="section-title">1. Scheduled Tactical Drops (${st.scheduledBattles.length} in Calendar Queue)</div>
+              <div class="subtext">Contracts negotiated and locked for future calendar drop dates. Advance time or perform HQ activities until mission window opens.</div>
+            </div>
+          </div>
+          ${scheduledHtml}
+        </div>
+
+        <!-- Section 2: Incoming Sector Battle Offers -->
+        <div class="card">
+          <div class="section-header">
+            <div>
+              <div class="section-title">2. Incoming Sector Battle Offers (Awaiting Negotiation)</div>
+              <div class="subtext">Sector sponsors offering tactical bounties. Inspect threats, negotiate match terms, and schedule on campaign calendar.</div>
+            </div>
+            <button class="btn btn-secondary" style="font-size:12px;" onclick="BattleModule.refreshBattleOffers()">
+              Scan Comms Wire (-500 Cr)
+            </button>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px;">
+            ${offersHtml}
+          </div>
+        </div>
+
+        <!-- Section 3: Operations Archive -->
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title">3. Sector Operations Archive</div>
+            <span class="subtext">Recent combat drop telemetry and payout logs</span>
+          </div>
+          ${completedHtml}
+        </div>
+      </div>
+    `;
+  },
+
+  renderNegotiationScreen(jock, mech, metrics) {
+    const offer = this.negotiatingOffer;
+    if (!offer) {
+      this.closeNegotiation();
+      return '';
+    }
+
+    const st = window.GameState.data;
+    const curWeeks = st.calendar?.totalWeeks || 0;
+    const targetWeeks = curWeeks + this.proposedPrepWeeks;
+    const targetDatePreview = window.GameState.getCalendarTextForWeeks(targetWeeks);
+
+    const baseBounty = offer.baseBounty;
+    const minBounty = Math.round((baseBounty * 0.7) / 500) * 500;
+    const maxBounty = Math.round((baseBounty * 1.6) / 500) * 500;
+
+    const terrainDesc = offer.terrain ? `${offer.terrain.name} (${offer.terrain.desc})` : 'Standard Hex Grid';
+
+    const patiencePips = [1, 2, 3].map(i => {
+      const active = i <= this.patience;
+      const color = this.patience === 3 ? 'var(--accent-green)' : this.patience === 2 ? 'var(--accent-amber)' : 'var(--accent-red)';
+      return `<span style="font-size:18px; color:${active ? color : 'var(--border-subtle)'};">&#9679;</span>`;
+    }).join(' ');
+
+    return `
+      <div style="display:flex; flex-direction:column; gap:16px; max-width:1100px; margin:0 auto;">
+        
+        <!-- Header & Breadcrumb -->
+        <div class="card" style="padding:16px 20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="BattleModule.closeNegotiation()">
+                  &larr; Back to Operations Board
+                </button>
+                <span class="badge primary">${offer.client?.badge || 'CONTRACT SPONSOR'}</span>
+              </div>
+              <h2 style="font-size:22px; font-weight:900; margin-top:6px; text-transform:uppercase;">
+                Contract Negotiation: ${offer.title}
+              </h2>
+              <div class="subtext">
+                Client Liaison: <strong>${offer.client?.name}</strong> • Current Date: ${window.GameState.getCalendarText()}
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div class="subtext" style="font-size:11px;">LIAISON PATIENCE</div>
+              <div style="letter-spacing:4px;">${patiencePips}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-12" style="gap:16px;">
+          <!-- Left 5 Cols: Tactical Intelligence & Liaison Comms -->
+          <div class="col-5" style="display:flex; flex-direction:column; gap:16px;">
+            
+            <!-- Hostile Titan Intel -->
+            <div class="card">
+              <div class="section-header">
+                <div class="section-title">Hostile Threat Telemetry</div>
+                <span class="badge red">${offer.enemy?.threat || 'Hostile'}</span>
+              </div>
+              <div class="panel" style="display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Hostile Chassis:</span>
+                  <strong style="color:var(--text-bright);">${offer.enemy?.name}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Weight Class:</span>
+                  <strong>${offer.enemy?.weight}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Designated Pilot:</span>
+                  <strong>${offer.enemy?.pilot || 'Unknown Opponent'}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Estimated Firepower:</span>
+                  <span class="mono" style="color:var(--accent-red);">${offer.enemy?.dmg || 14} Dmg / salvo (~${offer.enemy?.hit || 65}% Acc)</span>
+                </div>
+              </div>
+
+              <!-- Hostile Armor Layout -->
+              <div style="margin-top:12px;">
+                <div class="subtext" style="font-weight:700; margin-bottom:6px; font-size:11px; text-transform:uppercase;">
+                  Target Armor Profile (Estimated Max)
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;">
+                  ${Object.entries(offer.enemy?.maxArmor || { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 }).map(([loc, val]) => `
+                    <div class="panel" style="text-align:center; padding:4px;">
+                      <div style="font-size:11px; font-weight:700;">${loc}</div>
+                      <div class="mono subtext" style="font-size:11px;">${val} pts</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+
+              <!-- Combat Theater Profile -->
+              <div style="margin-top:14px; background:rgba(0,0,0,0.25); border:1px solid var(--border-subtle); padding:10px; border-radius:6px;">
+                <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:700;">Battlefield Environment</div>
+                <div style="font-weight:700; color:var(--text-bright); margin-top:2px;">${offer.terrain?.name || 'Standard Basin'}</div>
+                <div class="subtext" style="font-size:12px; margin-top:2px;">${offer.terrain?.desc || 'Standard terrain conditions.'}</div>
+              </div>
+            </div>
+
+            <!-- Client Comms Readout -->
+            <div class="card">
+              <div class="section-header">
+                <div class="section-title">Comms Telemetry Feed</div>
+              </div>
+              <div class="panel" style="background:#050b14; border-left:3px solid var(--accent-cyan); min-height:80px; display:flex; align-items:center;">
+                <div class="mono" style="font-size:13px; color:var(--text-bright); line-height:1.5;">
+                  ${this.negotiationMessage}
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right 7 Cols: Interactive Terms Negotiation Terminal -->
+          <div class="col-7" style="display:flex; flex-direction:column; gap:16px;">
+            
+            <div class="card">
+              <div class="section-header">
+                <div>
+                  <div class="section-title">Counter-Offer Terms Console</div>
+                  <div class="subtext">Adjust bounty, salvage allocation, and scheduled future drop date.</div>
+                </div>
+              </div>
+
+              <!-- Term 1: Bounty (Credits) -->
+              <div class="panel" style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <strong style="font-size:15px; color:var(--text-bright);">1. Mission Bounty (Credits)</strong>
+                    <div class="subtext">Standard client offer: ${baseBounty.toLocaleString()} Cr</div>
+                  </div>
+                  <div class="mono" style="font-size:20px; font-weight:900; color:var(--accent-green);">
+                    ${this.proposedBounty.toLocaleString()} Cr
+                  </div>
+                </div>
+
+                <input type="range" id="neg-inp-bounty" min="${minBounty}" max="${maxBounty}" step="500" value="${this.proposedBounty}" oninput="BattleModule.updateNegotiationInputs()" style="width:100%; cursor:pointer;">
+
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button class="btn btn-secondary" style="font-size:12px; flex:1;" onclick="BattleModule.setQuickBountyPct(100)">Standard (100%)</button>
+                  <button class="btn btn-secondary" style="font-size:12px; flex:1;" onclick="BattleModule.setQuickBountyPct(115)">+15% Counter</button>
+                  <button class="btn btn-secondary" style="font-size:12px; flex:1;" onclick="BattleModule.setQuickBountyPct(130)">+30% Premium</button>
+                  <button class="btn btn-secondary" style="font-size:12px; flex:1;" onclick="BattleModule.setQuickBountyPct(145)">+45% High-Stakes</button>
+                </div>
+              </div>
+
+              <!-- Term 2: Salvage Rights (%) -->
+              <div class="panel" style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <strong style="font-size:15px; color:var(--text-bright);">2. Salvage Rights Allocation</strong>
+                    <div class="subtext">Higher salvage provides extra bonus credits + chances to recover intact enemy Titan weapon/part systems.</div>
+                  </div>
+                  <div class="mono" style="font-size:20px; font-weight:900; color:var(--accent-cyan);">
+                    ${this.proposedSalvage}%
+                  </div>
+                </div>
+
+                <input type="range" id="neg-inp-salvage" min="10" max="50" step="5" value="${this.proposedSalvage}" oninput="BattleModule.updateNegotiationInputs()" style="width:100%; cursor:pointer;">
+
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button class="btn btn-secondary" style="font-size:12px; flex:1;" onclick="BattleModule.setQuickSalvage(15)">15% (Basic)</button>
+                  <button class="btn btn-secondary" style="font-size:12px; flex:1;" onclick="BattleModule.setQuickSalvage(25)">25% (Standard)</button>
+                  <button class="btn btn-secondary" style="font-size:12px; flex:1;" onclick="BattleModule.setQuickSalvage(35)">35% (Priority)</button>
+                  <button class="btn btn-secondary" style="font-size:12px; flex:1;" onclick="BattleModule.setQuickSalvage(50)">50% (Full Strip)</button>
+                </div>
+              </div>
+
+              <!-- Term 3: Scheduled Future Match Date (Prep Weeks) -->
+              <div class="panel" style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+                <div>
+                  <strong style="font-size:15px; color:var(--text-bright);">3. Scheduled Match Date (Campaign Lead Time)</strong>
+                  <div class="subtext">Set when this drop will take place on the campaign calendar. Allows time to repair mechs, refit weapons, or train pilots in HQ.</div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+                  ${[1, 2, 3, 4].map(w => `
+                    <button class="btn ${this.proposedPrepWeeks === w ? 'btn-primary' : 'btn-secondary'}" style="padding:10px; text-align:center;" onclick="BattleModule.setPrepWeeks(${w})">
+                      <div style="font-weight:800; font-size:14px;">+${w} Week${w > 1 ? 's' : ''}</div>
+                      <div class="subtext" style="font-size:11px;">${w === 1 ? 'Rapid Drop' : w === 2 ? 'Standard' : w === 3 ? 'Extended' : 'Full Overhaul'}</div>
+                    </button>
+                  `).join('')}
+                </div>
+
+                <!-- Calendar Date Preview Banner -->
+                <div style="background:rgba(0,0,0,0.3); border:1px solid var(--accent-blue); padding:12px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+                  <div>
+                    <span class="subtext" style="font-size:11px; text-transform:uppercase;">Scheduled Drop Calendar Date:</span>
+                    <div class="mono" style="font-size:15px; font-weight:800; color:var(--accent-amber); margin-top:2px;">
+                      &#128197; ${targetDatePreview}
+                    </div>
+                  </div>
+                  <div class="subtext" style="text-align:right;">
+                    T-Minus ${this.proposedPrepWeeks} Week${this.proposedPrepWeeks > 1 ? 's' : ''} from Today
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Confirmation Buttons -->
+              <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:6px;">
+                <button class="btn btn-secondary" style="flex:1; padding:12px; font-weight:700;" onclick="BattleModule.testContractOffer()">
+                  Test Client Response
+                </button>
+                <button class="btn btn-primary" style="flex:1.4; padding:12px; font-weight:800; font-size:14px; background:var(--accent-green); color:#000;" onclick="BattleModule.signBattleContract()">
+                  &#9997; Sign &amp; Lock Match Date on Calendar
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    `;
+  },
+
+  renderCombatArena(jock, mech, metrics) {
     const mins = String(Math.floor(this.clockSec / 60)).padStart(2, '0');
     const secs = String(this.clockSec % 60).padStart(2, '0');
     const dist = Math.abs(this.playerPos.r - this.enemy.r) + Math.abs(this.playerPos.c - this.enemy.c);
@@ -482,7 +1190,7 @@ window.BattleModule = {
 
     const aimLocations = ['General', 'HD', 'CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL'];
 
-    container.innerHTML = `
+    return `
       <div class="grid-12">
         <!-- Left 6 Cols: Hex Arena Map, Action-Time Clock & Pilot Telemetry -->
         <div class="col-6" style="display:flex; flex-direction:column; gap:16px;">
@@ -493,7 +1201,9 @@ window.BattleModule = {
                 <div class="section-title">Tactical Hex Arena (Action-Time Clock)</div>
                 <div class="subtext">Click adjacent hexes (up to 2 hexes away) to move. Woods grant cover; Water cools heat.</div>
               </div>
-              <button class="btn btn-primary" onclick="BattleModule.initEncounter(); BattleModule.render();">New Contract</button>
+              <button class="btn btn-secondary" onclick="BattleModule.abortCombatToOperations()">
+                ${this.contractWon || this.contractLost ? '&larr; Return to Operations' : 'Tactical Retreat'}
+              </button>
             </div>
 
             <!-- Battle Status Banner -->
@@ -576,8 +1286,9 @@ window.BattleModule = {
               </div>
               ${this.contractWon ? `
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="badge green">CONTRACT WON (+35,000 Cr / +250 XP)</span>
-                  ${jock ? `<button class="btn btn-primary" onclick="App.switchTab('hq'); HQModule.openJockeyPage('${jock.id}', 'history');">View ${jock.callsign}'s History &amp; Awards &rarr;</button>` : ''}
+                  <button class="btn btn-primary" style="background:var(--accent-green); color:#000; font-weight:800;" onclick="BattleModule.returnFromVictoryOrDefeat()">
+                    Mission Complete &rarr; Operations
+                  </button>
                 </div>
               ` : ''}
             </div>
@@ -654,5 +1365,45 @@ window.BattleModule = {
         </div>
       </div>
     `;
+  },
+
+  render() {
+    const container = document.getElementById('view-battle');
+    if (!container) return;
+
+    const st = window.GameState.data;
+    const jock = this.getActiveCombatJock();
+    const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
+
+    if (!jock || !mech) {
+      container.innerHTML = `
+        <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:16px;">
+          <span class="badge amber">PRE-FLIGHT CHECKLIST INCOMPLETE</span>
+          <h2 style="font-size:22px; font-weight:800;">Squad Not Ready for Combat Deployment</h2>
+          <p class="subtext" style="max-width:520px; font-size:14px;">
+            Before deploying to the Hex Arena, you need at least <strong>1 Jock</strong> and <strong>1 Titan Mech</strong> built and assigned:
+          </p>
+          <div class="panel" style="display:flex; flex-direction:column; gap:10px; text-align:left; min-width:340px;">
+            <div>${jock ? '&#9989;' : '&#10060;'} <strong>Step 1:</strong> Create or Hire a Jock in HQ (${st.jocks.length} in Roster)</div>
+            <div>${mech ? '&#9989;' : '&#10060;'} <strong>Step 2:</strong> Commission &amp; Equip a Titan in the Garage (${st.mechs.length} in Hangar)</div>
+          </div>
+          <div style="display:flex; gap:12px; margin-top:6px;">
+            <button class="btn btn-primary" onclick="App.switchTab('hq')">Go to 1. HQ &amp; Jockey Roster</button>
+            <button class="btn btn-primary" onclick="App.switchTab('garage')">Go to 2. Garage &amp; Mech Factory</button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const metrics = window.GameState.computeMechMetrics(mech);
+
+    if (this.active) {
+      container.innerHTML = this.renderCombatArena(jock, mech, metrics);
+    } else if (this.arenaTab === 'negotiate' && this.negotiatingOffer) {
+      container.innerHTML = this.renderNegotiationScreen(jock, mech, metrics);
+    } else {
+      container.innerHTML = this.renderOperationsBoard(jock, mech, metrics);
+    }
   }
 };
