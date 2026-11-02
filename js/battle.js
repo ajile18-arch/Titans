@@ -1830,6 +1830,7 @@ window.BattleModule = {
   renderOperationsBoard(jock, mech, metrics) {
     const st = window.GameState.data;
     window.GameState.ensureBattleOffers();
+    const activeJock = jock || this.getActiveCombatJock();
     const curWeeks = st.calendar?.totalWeeks || 0;
     const curCalText = window.GameState.getCalendarText();
 
@@ -2282,6 +2283,25 @@ window.BattleModule = {
   },
 
   renderCombatArena(jock, mech, metrics) {
+    if (!this.playerPos) this.playerPos = { r: 6, c: 1, facing: 'NE', heat: 0 };
+    if (!this.enemy) {
+      this.enemy = {
+        name: 'Marauder Drone',
+        weight: 'Heavy (75t)',
+        pilot: 'Hostile Combat AI',
+        armor: { HD: 20, CT: 45, LT: 30, RT: 30, LA: 25, RA: 25, LL: 35, RL: 35 },
+        maxArmor: { HD: 20, CT: 45, LT: 30, RT: 30, LA: 25, RA: 25, LL: 35, RL: 35 },
+        dmg: 18,
+        recycleSec: 4.5,
+        r: 1,
+        c: 8
+      };
+    }
+    if (!Array.isArray(this.hexes) || !this.hexes.length) {
+      const terrainType = this.currentContract?.terrain?.id || 'woods';
+      this.hexes = this.generateHexGrid(terrainType, 8, 10);
+    }
+
     const mins = String(Math.floor(this.clockSec / 60)).padStart(2, '0');
     const secs = String(this.clockSec % 60).padStart(2, '0');
     const dist = this.getHexDistance(this.playerPos.r, this.playerPos.c, this.enemy.r, this.enemy.c);
@@ -2602,41 +2622,56 @@ window.BattleModule = {
     const container = document.getElementById('view-battle');
     if (!container) return;
 
-    const st = window.GameState.data;
-    const jock = this.getActiveCombatJock();
-    const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
+    try {
+      const st = window.GameState.data;
+      const jock = this.getActiveCombatJock();
+      const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
 
-    if (!jock || !mech) {
+      if (!jock || !mech) {
+        container.innerHTML = `
+          <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:16px;">
+            <span class="badge amber">PRE-FLIGHT CHECKLIST INCOMPLETE</span>
+            <h2 style="font-size:22px; font-weight:800;">Squad Not Ready for Combat Deployment</h2>
+            <p class="subtext" style="max-width:520px; font-size:14px;">
+              Before deploying to the Hex Arena, you need at least <strong>1 Jock</strong> and <strong>1 Titan Mech</strong> built and assigned:
+            </p>
+            <div class="panel" style="display:flex; flex-direction:column; gap:10px; text-align:left; min-width:340px;">
+              <div>${jock ? '&#9989;' : '&#10060;'} <strong>Step 1:</strong> Create or Hire a Jock in HQ (${st.jocks.length} in Roster)</div>
+              <div>${mech ? '&#9989;' : '&#10060;'} <strong>Step 2:</strong> Commission &amp; Equip a Titan in the Garage (${st.mechs.length} in Hangar)</div>
+            </div>
+            <div style="display:flex; gap:12px; margin-top:6px;">
+              <button class="btn btn-primary" onclick="App.switchTab('hq')">Go to 1. HQ &amp; Jockey Roster</button>
+              <button class="btn btn-primary" onclick="App.switchTab('garage')">Go to 2. Garage &amp; Mech Factory</button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const metrics = window.GameState.computeMechMetrics(mech);
+
+      if (this.active) {
+        container.innerHTML = this.renderCombatArena(jock, mech, metrics);
+      } else if (this.arenaTab === 'summary' && this.battleSummary) {
+        container.innerHTML = this.renderSummaryPage();
+      } else if (this.arenaTab === 'negotiate' && this.negotiatingOffer) {
+        container.innerHTML = this.renderNegotiationScreen(jock, mech, metrics);
+      } else {
+        container.innerHTML = this.renderOperationsBoard(jock, mech, metrics);
+      }
+    } catch (err) {
+      console.error('BattleModule.render error:', err);
       container.innerHTML = `
-        <div class="card" style="padding:36px 28px; text-align:center; align-items:center; gap:16px;">
-          <span class="badge amber">PRE-FLIGHT CHECKLIST INCOMPLETE</span>
-          <h2 style="font-size:22px; font-weight:800;">Squad Not Ready for Combat Deployment</h2>
-          <p class="subtext" style="max-width:520px; font-size:14px;">
-            Before deploying to the Hex Arena, you need at least <strong>1 Jock</strong> and <strong>1 Titan Mech</strong> built and assigned:
+        <div class="card" style="padding:28px; text-align:center;">
+          <h3 style="color:#ef4444; font-size:18px;">Tactical Battle Arena Auto-Recovery</h3>
+          <p class="subtext" style="margin:8px auto; max-width:500px;">
+            A rendering exception was safely intercepted (${err.message}). Click below to reset to the Operations Board.
           </p>
-          <div class="panel" style="display:flex; flex-direction:column; gap:10px; text-align:left; min-width:340px;">
-            <div>${jock ? '&#9989;' : '&#10060;'} <strong>Step 1:</strong> Create or Hire a Jock in HQ (${st.jocks.length} in Roster)</div>
-            <div>${mech ? '&#9989;' : '&#10060;'} <strong>Step 2:</strong> Commission &amp; Equip a Titan in the Garage (${st.mechs.length} in Hangar)</div>
-          </div>
-          <div style="display:flex; gap:12px; margin-top:6px;">
-            <button class="btn btn-primary" onclick="App.switchTab('hq')">Go to 1. HQ &amp; Jockey Roster</button>
-            <button class="btn btn-primary" onclick="App.switchTab('garage')">Go to 2. Garage &amp; Mech Factory</button>
-          </div>
+          <button class="btn btn-primary" style="margin-top:10px;" onclick="BattleModule.active = false; BattleModule.arenaTab = 'offers'; BattleModule.render();">
+            Reset to Battle Operations Board &rarr;
+          </button>
         </div>
       `;
-      return;
-    }
-
-    const metrics = window.GameState.computeMechMetrics(mech);
-
-    if (this.active) {
-      container.innerHTML = this.renderCombatArena(jock, mech, metrics);
-    } else if (this.arenaTab === 'summary' && this.battleSummary) {
-      container.innerHTML = this.renderSummaryPage();
-    } else if (this.arenaTab === 'negotiate' && this.negotiatingOffer) {
-      container.innerHTML = this.renderNegotiationScreen(jock, mech, metrics);
-    } else {
-      container.innerHTML = this.renderOperationsBoard(jock, mech, metrics);
     }
   }
 };
