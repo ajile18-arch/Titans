@@ -278,9 +278,10 @@ window.GameState = {
     const enemyTpl = eligibleEnemies[Math.floor(Math.random() * eligibleEnemies.length)] || allEnemies[0];
 
     const terrains = [
-      { id: 'woods', name: 'Dense Forest Basin', desc: 'Heavy foliage provides defensive cover (+10% Evasion)' },
-      { id: 'water', name: 'Flooded River Valley', desc: 'Cool water hexes accelerate heat venting by +2 C/sec' },
-      { id: 'hill', name: 'Granite High Ridge', desc: 'Elevated terrain provides line-of-sight advantages' },
+      { id: 'woods', name: 'Dense Forest Basin', desc: 'Heavy foliage provides defensive cover (+15% Evasion)' },
+      { id: 'water', name: 'Flooded River Valley', desc: 'Cool water hexes accelerate heat venting by +3 C/sec' },
+      { id: 'hill', name: 'Granite High Ridge', desc: 'Elevated terrain provides line-of-sight elevation advantage' },
+      { id: 'rubble', name: 'Industrial Ruins Zone', desc: 'Shattered factory complexes and blast craters (+8% Cover)' },
       { id: 'clear', name: 'Open Sand Flats', desc: 'Flat scorched terrain, ideal for direct long-range gunnery' }
     ];
     const terrain = terrains[Math.floor(Math.random() * terrains.length)];

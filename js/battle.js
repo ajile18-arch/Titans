@@ -34,46 +34,23 @@ window.BattleModule = {
     this.currentContract = contract;
     this.clockSec = 0;
     this.aimTarget = 'General';
-    this.playerPos = { r: 3, c: 1, facing: 'NE', heat: 0 };
+    this.playerPos = { r: 6, c: 1, facing: 'NE', heat: 0 };
     this.weaponCooldowns = {};
     this.contractWon = false;
     this.contractLost = false;
     this.battleStats = { shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 };
 
-    // Build 5x6 Hex Grid matching the contract's terrain profile
+    // Build 8x10 Tactical Hex Grid (80 Hexes) matching contract terrain profile
     const terrainType = contract?.terrain?.id || 'woods';
-    this.hexes = [];
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 6; c++) {
-        let t = 'clear';
-        if (terrainType === 'woods') {
-          if ((r === 1 && c === 2) || (r === 2 && c === 3) || (r === 3 && c === 2) || (r === 0 && c === 4)) t = 'woods';
-          else if ((r === 2 && c === 1) || (r === 1 && c === 4)) t = 'water';
-          else if (r === 0 && c === 3) t = 'hill';
-        } else if (terrainType === 'water') {
-          if (c === 2 || c === 3 || (r === 2 && c === 1) || (r === 1 && c === 4)) t = 'water';
-          else if ((r === 1 && c === 1) || (r === 3 && c === 4)) t = 'woods';
-          else if (r === 0 && c === 5) t = 'hill';
-        } else if (terrainType === 'hill') {
-          if (r === 0 || (r === 1 && c === 3) || (r === 2 && c === 2)) t = 'hill';
-          else if ((r === 3 && c === 1) || (r === 2 && c === 4)) t = 'woods';
-          else if (r === 4 && c === 2) t = 'water';
-        } else {
-          // clear
-          if ((r === 1 && c === 2) || (r === 3 && c === 3)) t = 'hill';
-          else if (r === 2 && c === 4) t = 'water';
-        }
-        this.hexes.push({ r, c, terrain: t });
-      }
-    }
+    this.hexes = this.generateHexGrid(terrainType, 8, 10);
 
-    // Spawn Enemy Titan from negotiated contract (or fallback)
+    // Spawn Enemy Titan at Northeast Forward Sector (r:1, c:8)
     if (contract && contract.enemy) {
       this.enemy = {
         name: contract.enemy.name,
         weight: contract.enemy.weight,
         r: 1,
-        c: 4,
+        c: 8,
         dmg: contract.enemy.dmg,
         hit: contract.enemy.hit,
         armor: { ...contract.enemy.armor },
@@ -91,7 +68,7 @@ window.BattleModule = {
         name: pick.name,
         weight: pick.weight,
         r: 1,
-        c: 4,
+        c: 8,
         dmg: pick.dmg,
         hit: pick.hit,
         armor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
@@ -102,9 +79,9 @@ window.BattleModule = {
     this.enemyCooldown = 6;
 
     this.logs = [
-      `[00:00s] Combat Deployment: ${contract ? contract.title : 'Combat Match'} (${contract?.client?.name || 'Sector Comms'}).`,
-      `[00:00s] Pilot: ${jock ? jock.callsign : 'Pilot'} deployed in ${mech ? mech.customName : 'Titan'}.`,
-      `[00:00s] Hostile contact locked: ${this.enemy.name} at Hex (4,1).`
+      `[00:00s] Combat Deployment: ${contract ? contract.title : 'Tactical Drop'} (${contract?.client?.name || 'Sector Operations'}).`,
+      `[00:00s] Pilot: ${jock ? jock.callsign : 'Pilot'} deployed in ${mech ? mech.customName : 'Titan'} at Hex (1,6).`,
+      `[00:00s] Hostile contact locked: ${this.enemy.name} at Northeast Hex (8,1) [80-Tile Theater].`
     ];
   },
 
@@ -133,7 +110,7 @@ window.BattleModule = {
     // Passive heat dissipation over time
     const coolPerSec = Math.max(1, Math.round(metrics.coolingCap / 12));
     const inWater = this.hexes.find(h => h.r === this.playerPos.r && h.c === this.playerPos.c)?.terrain === 'water';
-    const dissipated = Math.round((coolPerSec + (inWater ? 2 : 0)) * (seconds / 3));
+    const dissipated = Math.round((coolPerSec + (inWater ? 3 : 0)) * (seconds / 3));
     this.playerPos.heat = Math.max(0, this.playerPos.heat - dissipated);
 
     // Enemy AI action-time clock
@@ -149,26 +126,42 @@ window.BattleModule = {
   runEnemyAI(playerMech) {
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
-    const dist = Math.abs(this.playerPos.r - this.enemy.r) + Math.abs(this.playerPos.c - this.enemy.c);
+    const curDist = this.getHexDistance(this.playerPos.r, this.playerPos.c, this.enemy.r, this.enemy.c);
 
-    // Move closer if far
-    if (dist > 3) {
-      const dr = Math.sign(this.playerPos.r - this.enemy.r);
-      const dc = Math.sign(this.playerPos.c - this.enemy.c);
-      const nr = this.enemy.r + dr;
-      const nc = this.enemy.c + (dr === 0 ? dc : 0);
-      if (!(nr === this.playerPos.r && nc === this.playerPos.c)) {
-        this.enemy.r = nr;
-        this.enemy.c = nc;
-        this.log(`${this.enemy.name} advances to Hex (${this.enemy.c},${this.enemy.r}).`);
+    // Tactical AI Maneuvering: Advance towards player if far, seeking cover in woods/ridges
+    if (curDist > 3) {
+      const neighbors = this.getAdjacentHexes(this.enemy.r, this.enemy.c);
+      let bestHex = null;
+      let bestScore = -9999;
+
+      neighbors.forEach(nh => {
+        if (nh.r === this.playerPos.r && nh.c === this.playerPos.c) return;
+        const d = this.getHexDistance(this.playerPos.r, this.playerPos.c, nh.r, nh.c);
+        let score = (curDist - d) * 12;
+        if (nh.terrain === 'woods') score += 4;
+        if (nh.terrain === 'hill') score += 3;
+        if (nh.terrain === 'water') score += 1;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestHex = nh;
+        }
+      });
+
+      if (bestHex && (bestHex.r !== this.enemy.r || bestHex.c !== this.enemy.c)) {
+        this.enemy.r = bestHex.r;
+        this.enemy.c = bestHex.c;
+        this.log(`${this.enemy.name} advances to ${bestHex.terrain.toUpperCase()} Hex (${bestHex.c},${bestHex.r}).`);
       }
     }
 
     // Fire at player
     const playerHex = this.hexes.find(h => h.r === this.playerPos.r && h.c === this.playerPos.c);
-    const coverMod = playerHex?.terrain === 'woods' ? -15 : 0;
+    const enemyHex = this.hexes.find(h => h.r === this.enemy.r && h.c === this.enemy.c);
+    const coverMod = playerHex?.terrain === 'woods' ? -15 : (playerHex?.terrain === 'rubble' ? -8 : 0);
+    const elevMod = (enemyHex?.terrain === 'hill' && playerHex?.terrain !== 'hill') ? 10 : 0;
     const pilotEvade = jock ? Math.round((jock.stats.Piloting - 20) * 0.25) : 0;
-    const toHit = Math.max(20, Math.min(85, this.enemy.hit + coverMod - pilotEvade));
+    const toHit = Math.max(15, Math.min(85, this.enemy.hit + coverMod + elevMod - pilotEvade));
     const roll = Math.floor(Math.random() * 100) + 1;
 
     if (roll <= toHit && playerMech) {
@@ -230,19 +223,25 @@ window.BattleModule = {
   moveHex(r, c) {
     if (this.contractWon || this.contractLost) return;
     if (r === this.enemy.r && c === this.enemy.c) return;
-    const dist = Math.abs(this.playerPos.r - r) + Math.abs(this.playerPos.c - c);
-    if (dist === 0 || dist > 2) return;
 
-    const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
+    const st = window.GameState.data;
     const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
     const metrics = window.GameState.computeMechMetrics(mech);
+    const maxMove = Math.max(2, Math.min(3, metrics.tpl.baseSpeedHex || 2));
+
+    const dist = this.getHexDistance(this.playerPos.r, this.playerPos.c, r, c);
+    if (dist === 0 || dist > maxMove) return;
+
+    const targetHex = this.hexes.find(h => h.r === r && h.c === c);
+    const terrainName = targetHex?.terrain?.toUpperCase() || 'CLEAR';
 
     this.playerPos.r = r;
     this.playerPos.c = c;
-    this.playerPos.heat += 2 * dist;
-    const moveSec = Math.max(3, (8 - metrics.tpl.baseSpeedHex) * dist);
-    this.log(`Moved to Hex (${c},${r}) [${moveSec}s elapsed].`);
+    this.playerPos.heat += dist * (targetHex?.terrain === 'hill' ? 3 : 2);
+
+    const moveSec = Math.max(3, (7 - (metrics.tpl.baseSpeedHex || 2)) * dist);
+    this.log(`Maneuvered ${dist} hex${dist > 1 ? 'es' : ''} to ${terrainName} Hex (${c},${r}) [${moveSec}s elapsed].`);
     this.advanceTime(moveSec, mech, metrics);
     this.render();
   },
@@ -288,12 +287,20 @@ window.BattleModule = {
   calcWeaponHitChance(jock, metrics, weapon) {
     const skillVal = jock ? (jock.skills[weapon.cat] || 55) : 55;
     const refBonus = jock ? Math.round((jock.stats.Reflexes - 20) * 0.25) : 0;
-    const dist = Math.abs(this.playerPos.r - this.enemy.r) + Math.abs(this.playerPos.c - this.enemy.c);
+    const dist = this.getHexDistance(this.playerPos.r, this.playerPos.c, this.enemy.r, this.enemy.c);
     const rangePenalty = dist > weapon.range ? -35 : -(dist - 1) * 3;
     const heatPenalty = this.playerPos.heat > metrics.coolingCap ? -15 : 0;
     const aimMod = this.getAimModifier(this.aimTarget);
 
-    return Math.max(10, Math.min(95, skillVal + refBonus + metrics.hitBonus + rangePenalty + heatPenalty + aimMod));
+    const playerHex = this.hexes.find(h => h.r === this.playerPos.r && h.c === this.playerPos.c);
+    const enemyHex = this.hexes.find(h => h.r === this.enemy.r && h.c === this.enemy.c);
+
+    // Ridge Elevation Advantage
+    const elevationBonus = (playerHex?.terrain === 'hill' && enemyHex?.terrain !== 'hill') ? 10 : 0;
+    // Enemy Cover Penalty (Woods / Ruins)
+    const coverPenalty = enemyHex?.terrain === 'woods' ? -15 : (enemyHex?.terrain === 'rubble' ? -8 : 0);
+
+    return Math.max(10, Math.min(95, skillVal + refBonus + metrics.hitBonus + rangePenalty + heatPenalty + aimMod + elevationBonus + coverPenalty));
   },
 
   fireWeapon(instanceKey) {
@@ -496,6 +503,267 @@ window.BattleModule = {
         <rect x="${cx + 2}" y="${cy + 1}" width="6.5" height="12.5" rx="1" fill="${c('RL')}" stroke="${s('RL')}" stroke-width="1" />
         <!-- Callsign / Unit Tag -->
         <text x="${cx}" y="${cy + 23}" text-anchor="middle" fill="#f8fafc" font-size="8.5" font-weight="bold">${label}</text>
+      </g>
+    `;
+  },
+
+  getHexDistance(r1, c1, r2, c2) {
+    const x1 = c1;
+    const z1 = r1 - Math.floor((c1 - (c1 & 1)) / 2);
+    const y1 = -x1 - z1;
+
+    const x2 = c2;
+    const z2 = r2 - Math.floor((c2 - (c2 & 1)) / 2);
+    const y2 = -x2 - z2;
+
+    return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2), Math.abs(z1 - z2));
+  },
+
+  getAdjacentHexes(r, c) {
+    const isOdd = (c % 2 !== 0);
+    const deltas = isOdd ? [
+      [-1, 0], [1, 0],
+      [0, -1], [1, -1],
+      [0, 1], [1, 1]
+    ] : [
+      [-1, 0], [1, 0],
+      [-1, -1], [0, -1],
+      [-1, 1], [0, 1]
+    ];
+    const adj = [];
+    deltas.forEach(([dr, dc]) => {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 10) {
+        const found = this.hexes.find(h => h.r === nr && h.c === nc);
+        if (found) adj.push(found);
+      }
+    });
+    return adj;
+  },
+
+  generateHexGrid(terrainType = 'woods', rows = 8, cols = 10) {
+    const hexes = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        let t = 'clear';
+
+        if (terrainType === 'woods') {
+          // Dense forest basin with groves, stream, and hills
+          const isWoods = (
+            (r >= 2 && r <= 5 && c >= 1 && c <= 3) ||
+            (r >= 1 && r <= 4 && c >= 6 && c <= 8) ||
+            (r === 0 && (c === 2 || c === 3 || c === 7)) ||
+            (r === 7 && (c === 4 || c === 5))
+          );
+          const isWater = (
+            (c === 4 && r >= 1 && r <= 4) ||
+            (c === 5 && r >= 3 && r <= 6)
+          );
+          const isHill = (
+            (r === 0 && (c === 4 || c === 5)) ||
+            (r === 1 && c === 5) ||
+            (r === 6 && c === 8) ||
+            (r === 7 && c === 7)
+          );
+
+          if (isWater) t = 'water';
+          else if (isHill) t = 'hill';
+          else if (isWoods) t = 'woods';
+
+        } else if (terrainType === 'water') {
+          // Flooded River Valley: central river cutting across, flanked by marshwoods
+          const isWater = (
+            (c === 3 && r >= 0 && r <= 3) ||
+            (c === 4 && r >= 2 && r <= 5) ||
+            (c === 5 && r >= 4 && r <= 7) ||
+            (r === 3 && c === 2) ||
+            (r === 4 && c === 6)
+          );
+          const isWoods = (
+            (c === 2 && (r === 1 || r === 2 || r === 5)) ||
+            (c === 6 && (r === 2 || r === 3 || r === 6)) ||
+            (r === 0 && c === 7) ||
+            (r === 7 && c === 2)
+          );
+          const isHill = (
+            (r === 0 && (c === 0 || c === 1)) ||
+            (r === 7 && (c === 8 || c === 9)) ||
+            (r === 1 && c === 0)
+          );
+
+          if (isWater) t = 'water';
+          else if (isHill) t = 'hill';
+          else if (isWoods) t = 'woods';
+
+        } else if (terrainType === 'hill') {
+          // Granite High Ridge: diagonal mountain spine with valleys
+          const isHill = (
+            ((r === c - 1 || r === c || r === c + 1) && (c >= 2 && c <= 7)) ||
+            (r === 0 && c >= 3 && c <= 6) ||
+            (r === 7 && (c === 3 || c === 4))
+          );
+          const isWoods = (
+            (r >= 4 && c <= 2) ||
+            (r <= 3 && c >= 7) ||
+            (r === 6 && c === 6)
+          );
+          const isWater = (
+            (r === 2 && c === 1) ||
+            (r === 5 && c === 8) ||
+            (r === 1 && c === 2)
+          );
+
+          if (isHill) t = 'hill';
+          else if (isWater) t = 'water';
+          else if (isWoods) t = 'woods';
+
+        } else if (terrainType === 'rubble') {
+          // Industrial Ruins: blast craters, shattered blocks, cooling pools
+          const isRubble = (
+            (r >= 2 && r <= 5 && c >= 3 && c <= 6) ||
+            (r === 1 && (c === 2 || c === 7)) ||
+            (r === 6 && (c === 2 || c === 7))
+          );
+          const isWater = (
+            (r === 3 && c === 2) ||
+            (r === 4 && c === 7)
+          );
+          const isHill = (
+            (r === 0 && (c === 3 || c === 6)) ||
+            (r === 7 && (c === 3 || c === 6))
+          );
+
+          if (isWater) t = 'water';
+          else if (isHill) t = 'hill';
+          else if (isRubble) t = 'rubble';
+
+        } else {
+          // Clear / Open Sand Flats: mostly clear, scattered desert terrain features
+          const isHill = (
+            (r === 0 && (c === 1 || c === 8)) ||
+            (r === 7 && (c === 0 || c === 9)) ||
+            (r === 3 && c === 5)
+          );
+          const isWoods = (
+            (r === 2 && (c === 2 || c === 7)) ||
+            (r === 5 && (c === 3 || c === 6))
+          );
+          const isWater = (
+            (r === 4 && c === 2) ||
+            (r === 2 && c === 4)
+          );
+
+          if (isWater) t = 'water';
+          else if (isHill) t = 'hill';
+          else if (isWoods) t = 'woods';
+        }
+
+        // Guarantee spawn tiles are clear of water/hazards
+        if (r === 6 && c === 1) t = (t === 'water' ? 'clear' : t);
+        if (r === 1 && c === 8) t = (t === 'water' ? 'clear' : t);
+
+        hexes.push({ r, c, terrain: t });
+      }
+    }
+    return hexes;
+  },
+
+  renderHexTileArtwork(h, cx, cy, R, hasUnit) {
+    const opacity = hasUnit ? '0.35' : '1.0';
+
+    if (h.terrain === 'woods') {
+      return `
+        <g opacity="${opacity}">
+          <!-- Forest Canopy & Pines -->
+          <!-- Left Pine -->
+          <polygon points="${cx - 9},${cy - 2} ${cx - 15},${cy + 7} ${cx - 3},${cy + 7}" fill="#14532d" stroke="#22c55e" stroke-width="0.5" />
+          <polygon points="${cx - 9},${cy - 6} ${cx - 13},${cy + 1} ${cx - 5},${cy + 1}" fill="#166534" stroke="#4ade80" stroke-width="0.4" />
+          <!-- Right Pine -->
+          <polygon points="${cx + 9},${cy} ${cx + 3},${cy + 8} ${cx + 15},${cy + 8}" fill="#14532d" stroke="#22c55e" stroke-width="0.5" />
+          <polygon points="${cx + 9},${cy - 4} ${cx + 5},${cy + 2} ${cx + 13},${cy + 2}" fill="#166534" stroke="#4ade80" stroke-width="0.4" />
+          <!-- Center Pine -->
+          <rect x="${cx - 1}" y="${cy + 5.5}" width="2.2" height="4.5" fill="#78350f" rx="0.5" />
+          <polygon points="${cx},${cy - 3} ${cx - 10},${cy + 7} ${cx + 10},${cy + 7}" fill="#0f3d24" stroke="#15803d" stroke-width="0.6" />
+          <polygon points="${cx},${cy - 9} ${cx - 8},${cy} ${cx + 8},${cy}" fill="#166534" stroke="#22c55e" stroke-width="0.6" />
+          <polygon points="${cx},${cy - 14} ${cx - 5},${cy - 6} ${cx + 5},${cy - 6}" fill="#15803d" stroke="#4ade80" stroke-width="0.5" />
+          <!-- Leaf Highlights -->
+          <circle cx="${cx - 4}" cy="${cy + 5}" r="1" fill="#86efac" opacity="0.7"/>
+          <circle cx="${cx + 5}" cy="${cy + 5}" r="1" fill="#86efac" opacity="0.7"/>
+          <!-- Cover Badge / Label -->
+          ${!hasUnit ? `
+            <text x="${cx}" y="${cy - 15}" text-anchor="middle" fill="#4ade80" font-size="6.2" font-weight="700" opacity="0.85">+15% COV</text>
+            <text x="${cx}" y="${cy + 17}" text-anchor="middle" fill="#86efac" font-size="6.8" font-weight="800" letter-spacing="0.4">WOODS</text>
+          ` : ''}
+        </g>
+      `;
+    }
+
+    if (h.terrain === 'water') {
+      return `
+        <g opacity="${opacity}">
+          <!-- Flowing Water Currents & Ripples -->
+          <ellipse cx="${cx}" cy="${cy - 1}" rx="13" ry="4" fill="none" stroke="rgba(56, 189, 248, 0.3)" stroke-width="1" stroke-dasharray="4,2"/>
+          <path d="M ${cx - 12} ${cy - 5} Q ${cx - 6} ${cy - 8} ${cx} ${cy - 5} T ${cx + 12} ${cy - 5}" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+          <path d="M ${cx - 9} ${cy + 2} Q ${cx - 4.5} ${cy - 1} ${cx} ${cy + 2} T ${cx + 9} ${cy + 2}" fill="none" stroke="#0ea5e9" stroke-width="1.3" stroke-linecap="round" opacity="0.8"/>
+          <path d="M ${cx - 6} ${cy + 7} Q ${cx - 3} ${cy + 5} ${cx} ${cy + 7} T ${cx + 6} ${cy + 7}" fill="none" stroke="#7dd3fc" stroke-width="1.1" stroke-linecap="round" opacity="0.75"/>
+          <circle cx="${cx + 5}" cy="${cy - 6}" r="0.8" fill="#e0f2fe" opacity="0.9"/>
+          <!-- Cooling Badge / Label -->
+          ${!hasUnit ? `
+            <text x="${cx}" y="${cy - 15}" text-anchor="middle" fill="#38bdf8" font-size="6.2" font-weight="700" opacity="0.9">COOL +3C</text>
+            <text x="${cx}" y="${cy + 17}" text-anchor="middle" fill="#7dd3fc" font-size="6.8" font-weight="800" letter-spacing="0.4">WATER</text>
+          ` : ''}
+        </g>
+      `;
+    }
+
+    if (h.terrain === 'hill') {
+      return `
+        <g opacity="${opacity}">
+          <!-- Topographic Elevation Contour Line -->
+          <path d="M ${cx - 14} ${cy + 10} Q ${cx} ${cy + 14} ${cx + 14} ${cy + 10}" fill="none" stroke="#f59e0b" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.5"/>
+          <!-- Secondary Crag -->
+          <polygon points="${cx - 7},${cy - 2} ${cx - 13},${cy + 7} ${cx - 2},${cy + 8}" fill="#78350f" stroke="#92400e" stroke-width="0.5" opacity="0.85"/>
+          <!-- Primary Granite Peak: Lit Face -->
+          <polygon points="${cx},${cy - 13} ${cx - 11},${cy + 6} ${cx},${cy + 9}" fill="#b45309" stroke="#d97706" stroke-width="0.6"/>
+          <!-- Shaded Face -->
+          <polygon points="${cx},${cy - 13} ${cx},${cy + 9} ${cx + 11},${cy + 5}" fill="#542308" stroke="#78350f" stroke-width="0.6"/>
+          <!-- Crest Snow / Quartz Highlight -->
+          <polygon points="${cx},${cy - 13} ${cx - 3.5},${cy - 7} ${cx},${cy - 6} ${cx + 3.5},${cy - 8}" fill="#fef3c7" opacity="0.85"/>
+          <!-- LoS Badge / Label -->
+          ${!hasUnit ? `
+            <text x="${cx}" y="${cy - 15}" text-anchor="middle" fill="#f59e0b" font-size="6.2" font-weight="700" opacity="0.9">ELEV +1</text>
+            <text x="${cx}" y="${cy + 17}" text-anchor="middle" fill="#fcd34d" font-size="6.8" font-weight="800" letter-spacing="0.4">RIDGE</text>
+          ` : ''}
+        </g>
+      `;
+    }
+
+    if (h.terrain === 'rubble') {
+      return `
+        <g opacity="${opacity}">
+          <!-- Blast Crater & Shattered Concrete -->
+          <ellipse cx="${cx}" cy="${cy + 2}" rx="12" ry="5" fill="none" stroke="#ef4444" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.5"/>
+          <rect x="${cx - 9}" y="${cy - 6}" width="7.5" height="4" transform="rotate(-18 ${cx - 5} ${cy - 4})" fill="#52525b" stroke="#71717a" stroke-width="0.6"/>
+          <rect x="${cx + 1}" y="${cy - 3}" width="9" height="3" transform="rotate(22 ${cx + 5} ${cy - 1})" fill="#3f3f46" stroke="#71717a" stroke-width="0.6"/>
+          <polygon points="${cx - 2.5},${cy + 4} ${cx + 2.5},${cy + 5} ${cx},${cy + 8}" fill="#dc2626" opacity="0.75"/>
+          ${!hasUnit ? `
+            <text x="${cx}" y="${cy - 15}" text-anchor="middle" fill="#f87171" font-size="6.2" font-weight="700" opacity="0.9">+8% COV</text>
+            <text x="${cx}" y="${cy + 17}" text-anchor="middle" fill="#fca5a5" font-size="6.8" font-weight="800" letter-spacing="0.4">RUINS</text>
+          ` : ''}
+        </g>
+      `;
+    }
+
+    // Default 'clear' (Tactical Sand Flats / Battle Arena Plain)
+    return `
+      <g opacity="${opacity}">
+        <circle cx="${cx}" cy="${cy}" r="6.5" fill="none" stroke="#334155" stroke-width="0.6" stroke-dasharray="2,2"/>
+        <line x1="${cx - 4}" y1="${cy}" x2="${cx + 4}" y2="${cy}" stroke="#475569" stroke-width="0.7" opacity="0.7"/>
+        <line x1="${cx}" y1="${cy - 4}" x2="${cx}" y2="${cy + 4}" stroke="#475569" stroke-width="0.7" opacity="0.7"/>
+        ${!hasUnit ? `
+          <text x="${cx}" y="${cy + 16}" text-anchor="middle" fill="#64748b" font-size="6.8" font-family="monospace">${h.c},${h.r}</text>
+        ` : ''}
       </g>
     `;
   },
@@ -1149,40 +1417,47 @@ window.BattleModule = {
   renderCombatArena(jock, mech, metrics) {
     const mins = String(Math.floor(this.clockSec / 60)).padStart(2, '0');
     const secs = String(this.clockSec % 60).padStart(2, '0');
-    const dist = Math.abs(this.playerPos.r - this.enemy.r) + Math.abs(this.playerPos.c - this.enemy.c);
+    const dist = this.getHexDistance(this.playerPos.r, this.playerPos.c, this.enemy.r, this.enemy.c);
+    const maxMove = Math.max(2, Math.min(3, metrics?.tpl?.baseSpeedHex || 2));
 
-    // Build SVG Hex Grid with 8-Part Damage-Colored Mini-Mech Sprites
-    const R = 36;
-    const dx = R * 1.55;
-    const dy = R * 1.75;
+    // Build 8x10 SVG Hex Grid with Stylized Terrain Artwork & Mini-Mech Sprites
+    const R = 27;
+    const dx = 40.5;
+    const dy = 46.77;
     const svgGrid = this.hexes.map(h => {
-      const cx = 54 + h.c * dx;
-      const cy = 48 + h.r * dy + (h.c % 2 === 1 ? dy / 2 : 0);
+      const cx = 36 + h.c * dx;
+      const cy = 34 + h.r * dy + (h.c % 2 === 1 ? dy / 2 : 0);
       const isP = h.r === this.playerPos.r && h.c === this.playerPos.c;
       const isE = h.r === this.enemy.r && h.c === this.enemy.c;
-      const fill = isP ? 'rgba(59, 130, 246, 0.22)'
-                 : isE ? 'rgba(239, 68, 68, 0.22)'
-                 : h.terrain === 'woods' ? 'rgba(34, 197, 94, 0.14)'
-                 : h.terrain === 'water' ? 'rgba(59, 130, 246, 0.18)'
-                 : h.terrain === 'hill' ? 'rgba(245, 158, 11, 0.16)'
-                 : 'rgba(148, 163, 184, 0.08)';
-      const stroke = isP ? '#38bdf8' : isE ? '#f43f5e' : '#475569';
-      const terrainLabel = h.terrain === 'woods' ? 'WOODS'
-                         : h.terrain === 'water' ? 'WATER'
-                         : h.terrain === 'hill' ? 'HILL'
-                         : `${h.c},${h.r}`;
+      const moveDist = this.getHexDistance(this.playerPos.r, this.playerPos.c, h.r, h.c);
+      const isReachable = (moveDist > 0 && moveDist <= maxMove && !isE);
 
-      let innerContent = `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#94a3b8" font-size="10">${terrainLabel}</text>`;
+      const stroke = isP ? '#38bdf8'
+                   : isE ? '#f43f5e'
+                   : isReachable ? '#38bdf8'
+                   : h.terrain === 'woods' ? '#16a34a'
+                   : h.terrain === 'water' ? '#0284c7'
+                   : h.terrain === 'hill' ? '#d97706'
+                   : h.terrain === 'rubble' ? '#dc2626'
+                   : '#334155';
+
+      let innerContent = this.renderHexTileArtwork(h, cx, cy, R, isP || isE);
+
       if (isP) {
         const pLabel = jock ? jock.callsign.slice(0, 7).toUpperCase() : 'PLAYER';
-        innerContent = this.renderHexMechSprite(cx, cy - 2, mech.armor, mech.maxArmorCurrent, pLabel, '#38bdf8');
+        innerContent += this.renderHexMechSprite(cx, cy - 2, mech.armor, mech.maxArmorCurrent, pLabel, '#38bdf8');
       } else if (isE) {
-        innerContent = this.renderHexMechSprite(cx, cy - 2, this.enemy.armor, this.enemy.maxArmor, 'HOSTILE', '#f43f5e');
+        innerContent += this.renderHexMechSprite(cx, cy - 2, this.enemy.armor, this.enemy.maxArmor, 'HOSTILE', '#f43f5e');
+      } else if (isReachable) {
+        innerContent += `
+          <circle cx="${cx}" cy="${cy}" r="3.5" fill="#38bdf8" opacity="0.85" />
+          <circle cx="${cx}" cy="${cy}" r="7.5" fill="none" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2,2" opacity="0.65" />
+        `;
       }
 
       return `
-        <g onclick="BattleModule.moveHex(${h.r},${h.c})" style="cursor:pointer;">
-          <polygon points="${this.hexPoints(cx, cy, R)}" fill="${fill}" stroke="${stroke}" stroke-width="${isP || isE ? 2.4 : 1}" />
+        <g onclick="BattleModule.moveHex(${h.r},${h.c})" style="cursor:${isReachable ? 'pointer' : 'default'};">
+          <polygon points="${this.hexPoints(cx, cy, R)}" fill="url(#hex-grad-${h.terrain || 'clear'})" stroke="${stroke}" stroke-width="${isP || isE ? 2.5 : isReachable ? 1.8 : 1}" stroke-dasharray="${isReachable ? '4,2' : 'none'}" />
           ${innerContent}
         </g>
       `;
@@ -1198,8 +1473,8 @@ window.BattleModule = {
           <div class="card">
             <div class="section-header">
               <div>
-                <div class="section-title">Tactical Hex Arena (Action-Time Clock)</div>
-                <div class="subtext">Click adjacent hexes (up to 2 hexes away) to move. Woods grant cover; Water cools heat.</div>
+                <div class="section-title">Tactical Hex Arena // 80-Tile Operational Theater</div>
+                <div class="subtext">Click highlighted waypoints (up to ${maxMove} hexes) to move. Woods/Ruins grant cover; Water cools heat; Ridges elevate LoS.</div>
               </div>
               <button class="btn btn-secondary" onclick="BattleModule.abortCombatToOperations()">
                 ${this.contractWon || this.contractLost ? '&larr; Return to Operations' : 'Tactical Retreat'}
@@ -1228,16 +1503,55 @@ window.BattleModule = {
               </div>
             </div>
 
-            <!-- Interactive SVG Hex Map with 8-Part Damage-Colored Mech Sprites -->
+            <!-- Interactive SVG Hex Map with Stylized Terrain & 8-Part Mech Sprites -->
             <div class="panel" style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px;">
-              <svg viewBox="0 0 440 375" style="width:100%; max-width:540px; height:auto; user-select:none;">
+              <svg viewBox="0 0 448 426" style="width:100%; max-width:620px; height:auto; user-select:none; filter:drop-shadow(0 4px 16px rgba(0,0,0,0.5));">
+                <defs>
+                  <radialGradient id="hex-grad-woods" cx="50%" cy="45%" r="65%">
+                    <stop offset="0%" stop-color="#144626" />
+                    <stop offset="60%" stop-color="#0a2a16" />
+                    <stop offset="100%" stop-color="#04140b" />
+                  </radialGradient>
+                  <radialGradient id="hex-grad-water" cx="50%" cy="45%" r="65%">
+                    <stop offset="0%" stop-color="#0284c7" />
+                    <stop offset="60%" stop-color="#075985" />
+                    <stop offset="100%" stop-color="#082f49" />
+                  </radialGradient>
+                  <radialGradient id="hex-grad-hill" cx="50%" cy="40%" r="65%">
+                    <stop offset="0%" stop-color="#92400e" />
+                    <stop offset="60%" stop-color="#542308" />
+                    <stop offset="100%" stop-color="#240c02" />
+                  </radialGradient>
+                  <radialGradient id="hex-grad-rubble" cx="50%" cy="45%" r="65%">
+                    <stop offset="0%" stop-color="#450a0a" />
+                    <stop offset="60%" stop-color="#261010" />
+                    <stop offset="100%" stop-color="#140606" />
+                  </radialGradient>
+                  <radialGradient id="hex-grad-clear" cx="50%" cy="45%" r="65%">
+                    <stop offset="0%" stop-color="#1e293b" />
+                    <stop offset="65%" stop-color="#0f172a" />
+                    <stop offset="100%" stop-color="#070c14" />
+                  </radialGradient>
+                </defs>
                 ${svgGrid}
               </svg>
-              <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; font-size:12px;" class="mono subtext">
+
+              <!-- Armor Damage Legend -->
+              <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; font-size:11px;" class="mono subtext">
                 <span><strong style="color:#10b981;">&#9632;</strong> 70–100% Armor</span>
                 <span><strong style="color:#f59e0b;">&#9632;</strong> 35–69% Damaged</span>
                 <span><strong style="color:#ef4444;">&#9632;</strong> 1–34% Critical</span>
                 <span><strong style="color:#475569;">&#9632;</strong> 0% Breached</span>
+              </div>
+
+              <!-- Terrain Effect Legend -->
+              <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; font-size:11px; margin-top:2px;" class="mono subtext">
+                <span><strong style="color:#22c55e;">&#9670; WOODS</strong> (+15% Cover)</span>
+                <span><strong style="color:#38bdf8;">&#9670; WATER</strong> (Cool +3C)</span>
+                <span><strong style="color:#f59e0b;">&#9670; RIDGE</strong> (LoS +10% Hit)</span>
+                <span><strong style="color:#f87171;">&#9670; RUINS</strong> (+8% Cover)</span>
+                <span><strong style="color:#94a3b8;">&#9670; CLEAR</strong> (Plains)</span>
+                <span><strong style="color:#38bdf8;">&#9678; WAYPOINT</strong> (Move)</span>
               </div>
             </div>
 
