@@ -736,6 +736,67 @@ window.SoundFX = {
     lGain.connect(this.master);
     lock.start(now + 0.26);
     lock.stop(now + 0.42);
+  },
+
+  // ==========================================
+  // 8. COCKPIT CONCUSSION & EMERGENCY ALARMS
+  // ==========================================
+  playCockpitConcussion(t) {
+    this.ensureContext();
+    if (!this.ctx || (window.MusicModule && window.MusicModule.muted)) return;
+    const ctx = this.ctx;
+    const now = typeof t === 'number' && t > 0 ? t : ctx.currentTime;
+
+    // Concussive dull helmet impact thud
+    const thud = ctx.createOscillator();
+    const tGain = ctx.createGain();
+    thud.type = 'triangle';
+    thud.frequency.setValueAtTime(120, now);
+    thud.frequency.exponentialRampToValueAtTime(35, now + 0.25);
+    tGain.gain.setValueAtTime(0.55, now);
+    tGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    thud.connect(tGain);
+    tGain.connect(this.master);
+    thud.start(now);
+    thud.stop(now + 0.3);
+
+    // High tinnitus ringing tone
+    const ring = ctx.createOscillator();
+    const rGain = ctx.createGain();
+    ring.type = 'sine';
+    ring.frequency.setValueAtTime(3200, now + 0.05);
+    ring.frequency.exponentialRampToValueAtTime(2600, now + 0.45);
+    rGain.gain.setValueAtTime(0.001, now);
+    rGain.gain.linearRampToValueAtTime(0.2, now + 0.08);
+    rGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    ring.connect(rGain);
+    rGain.connect(this.master);
+    ring.start(now + 0.05);
+    ring.stop(now + 0.48);
+  },
+
+  playCockpitAlarm(t) {
+    this.ensureContext();
+    if (!this.ctx || (window.MusicModule && window.MusicModule.muted)) return;
+    const ctx = this.ctx;
+    const now = typeof t === 'number' && t > 0 ? t : ctx.currentTime;
+
+    // Urgent dual-tone ejection / critical klaxon (high-low warble)
+    [0, 0.12, 0.24, 0.36].forEach((offset, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      const freq = (idx % 2 === 0) ? 880 : 587;
+      osc.frequency.setValueAtTime(freq, now + offset);
+
+      gain.gain.setValueAtTime(0.3, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.1);
+
+      osc.connect(gain);
+      gain.connect(this.master);
+      osc.start(now + offset);
+      osc.stop(now + offset + 0.11);
+    });
   }
 };
 

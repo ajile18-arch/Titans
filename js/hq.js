@@ -1197,34 +1197,42 @@ window.HQModule = {
                         ${j.firstName} "${j.callsign}" ${j.lastName}
                       </a>
                       <span class="badge ${isMerc ? 'amber' : 'primary'}">${isMerc ? 'Mercenary' : rk.name}</span>
-                      <span class="badge green">HP ${j.health}%</span>
-                      <span class="badge amber mono">${window.GameState.getContractSummary(j)}</span>
+                      ${j.isDead ? `
+                        <span class="badge" style="background:#450a0a; color:#f87171; border:1px solid #ef4444; font-weight:900;">☠️ KIA</span>
+                      ` : `
+                        <span class="badge ${j.health < 40 ? 'red' : (j.health < 75 ? 'amber' : 'green')}">HP ${j.health}%</span>
+                      `}
+                      <span class="badge amber mono">${j.isDead ? `Fell in Battle (${j.kiaDate || 'KIA'})` : window.GameState.getContractSummary(j)}</span>
                     </div>
                     <div class="subtext" style="margin-top:4px;">${j.bio}</div>
                     <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:8px; font-size:12px;" class="mono subtext">
-                      <span>Assigned Titan: <strong style="color:#f8fafc;">${mech ? mech.customName : 'Unassigned'}</strong></span>
+                      <span>Assigned Titan: <strong style="color:#f8fafc;">${j.isDead ? 'None (KIA)' : (mech ? mech.customName : 'Unassigned')}</strong></span>
                       <span>Fights: <strong style="color:#f8fafc;">${j.missions || fights.length}</strong></span>
                       <span>Kills: <strong style="color:#f8fafc;">${j.kills}</strong></span>
                       <span>Commendations: <strong style="color:var(--accent-amber);">${awards.length}</strong></span>
                       <span>Ready XP: <strong style="color:var(--accent-green);">${j.xp} XP</strong></span>
-                      <span>Wage: <strong>${isMerc ? '0 Cr/mo (Flat Fee)' : salary.toLocaleString() + ' Cr/mo'}</strong></span>
+                      <span>Wage: <strong>${j.isDead ? '0 Cr (Deceased)' : (isMerc ? '0 Cr/mo (Flat Fee)' : salary.toLocaleString() + ' Cr/mo')}</strong></span>
                     </div>
                   </div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:6px; min-width:190px;">
                   <button class="btn btn-primary" onclick="HQModule.openJockeyPage('${j.id}', 'dossier')">
-                    Open Jockey Page &rarr;
+                    ${j.isDead ? 'View Memorial Record &rarr;' : 'Open Jockey Page &rarr;'}
                   </button>
                   <button class="btn" onclick="HQModule.openJockeyPage('${j.id}', 'history')">
                     Combat History &amp; Awards (${awards.length})
                   </button>
-                  <button
-                    class="btn ${j.contract?.expired ? 'btn-primary' : ''}"
-                    style="${j.contract?.expired ? 'background:var(--accent-amber); color:#0b0f17; font-weight:800;' : ''}"
-                    onclick="HQModule.openRenegotiationModal('${j.id}', false)"
-                  >
-                    &#128221; Renegotiate Contract
-                  </button>
+                  ${j.isDead ? `
+                    <div class="subtext" style="color:#f87171; font-size:11px; text-align:right; font-weight:700;">Memorialized in Unit Records</div>
+                  ` : `
+                    <button
+                      class="btn ${j.contract?.expired ? 'btn-primary' : ''}"
+                      style="${j.contract?.expired ? 'background:var(--accent-amber); color:#0b0f17; font-weight:800;' : ''}"
+                      onclick="HQModule.openRenegotiationModal('${j.id}', false)"
+                    >
+                      &#128221; Renegotiate Contract
+                    </button>
+                  `}
                 </div>
               </div>
             `;
@@ -1480,16 +1488,21 @@ window.HQModule = {
               <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
                 <h2 style="font-size:18px; font-weight:700;">${jock.firstName} "${jock.callsign}" ${jock.lastName}</h2>
                 <span class="badge primary">${rank.name}</span>
-                <span class="badge green">HP ${jock.health}%</span>
-                <span class="badge ${jock.contract?.expired ? 'red' : 'amber'} mono">${window.GameState.getContractSummary(jock)}</span>
-                <button class="btn" onclick="HQModule.openCreator(true)">Edit Callsign / Portrait / Bio</button>
-                <button
-                  class="btn"
-                  style="border-color:var(--accent-amber); color:var(--accent-amber); font-weight:700;"
-                  onclick="HQModule.openRenegotiationModal('${jock.id}', false)"
-                >
-                  &#128221; Renegotiate Contract
-                </button>
+                ${jock.isDead ? `
+                  <span class="badge" style="background:#450a0a; color:#f87171; border:1px solid #ef4444; font-weight:900;">☠️ KILLED IN ACTION</span>
+                  <span class="badge red mono">Fell in Battle (${jock.kiaDate || 'KIA'})</span>
+                ` : `
+                  <span class="badge ${jock.health < 40 ? 'red' : (jock.health < 75 ? 'amber' : 'green')}">HP ${jock.health}%</span>
+                  <span class="badge ${jock.contract?.expired ? 'red' : 'amber'} mono">${window.GameState.getContractSummary(jock)}</span>
+                  <button class="btn" onclick="HQModule.openCreator(true)">Edit Callsign / Portrait / Bio</button>
+                  <button
+                    class="btn"
+                    style="border-color:var(--accent-amber); color:var(--accent-amber); font-weight:700;"
+                    onclick="HQModule.openRenegotiationModal('${jock.id}', false)"
+                  >
+                    &#128221; Renegotiate Contract
+                  </button>
+                `}
               </div>
               <p class="subtext" style="margin-top:6px; max-width:620px; font-size:13px;">${jock.bio}</p>
               <div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:8px; font-size:12px;" class="mono subtext">
@@ -1503,28 +1516,35 @@ window.HQModule = {
           <div class="panel" style="text-align:right; min-width:165px;">
             <div class="subtext">Available Training XP</div>
             <div class="mono" style="font-size:20px; font-weight:700; color:var(--accent-green);">${jock.xp} XP</div>
-            <div class="subtext" style="margin-top:4px;">Contract Wage: <strong class="mono">${salary.toLocaleString()} Cr/mo</strong></div>
+            <div class="subtext" style="margin-top:4px;">Contract Wage: <strong class="mono">${jock.isDead ? '0 Cr (Deceased)' : salary.toLocaleString() + ' Cr/mo'}</strong></div>
           </div>
         </div>
 
         <!-- Assigned Titan Selector -->
         <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
-          <div style="display:flex; align-items:center; gap:10px; flex:1;">
-            <span style="font-weight:600; font-size:13px; white-space:nowrap;">Assigned Titan-AT:</span>
-            <select class="select" style="max-width:340px;" onchange="HQModule.assignMech('${jock.id}', this.value)">
-              <option value="">-- Unassigned (Pilot Lounge) --</option>
-              ${st.mechs.map(m => {
-                const metrics = window.GameState.computeMechMetrics(m);
-                return `<option value="${m.id}" ${jock.assignedMechId === m.id ? 'selected' : ''}>
-                  ${m.customName} (${metrics.totalTons}/${metrics.maxTons}t ${metrics.tpl.weightClass})
-                </option>`;
-              }).join('')}
-            </select>
-          </div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn" onclick="App.switchTab('garage')">Inspect Mech in Garage &rarr;</button>
-            <button class="btn btn-primary" onclick="App.switchTab('battle')">Deploy to Battle Arena &rarr;</button>
-          </div>
+          ${jock.isDead ? `
+            <div style="background:rgba(239,68,68,0.15); border:1px solid #ef4444; border-radius:6px; padding:8px 14px; color:#fca5a5; font-size:12px; width:100%;">
+              &#9760; <strong>MEMORIALIZED PILOT:</strong> This Jockey was Killed in Action and cannot be assigned or deployed to future battles.
+            </div>
+          ` : `
+            <div style="display:flex; align-items:center; gap:10px; flex:1;">
+              <span style="font-weight:600; font-size:13px; white-space:nowrap;">Assigned Titan-AT:</span>
+              <select class="select" style="max-width:340px;" onchange="HQModule.assignMech('${jock.id}', this.value)">
+                <option value="">-- Unassigned (Pilot Lounge) --</option>
+                ${st.mechs.map(m => {
+                  const metrics = window.GameState.computeMechMetrics(m);
+                  return `<option value="${m.id}" ${jock.assignedMechId === m.id ? 'selected' : ''}>
+                    ${m.customName} (${metrics.totalTons}/${metrics.maxTons}t ${metrics.tpl.weightClass})
+                  </option>`;
+                }).join('')}
+              </select>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn" onclick="App.switchTab('garage')">Inspect Mech in Garage &rarr;</button>
+              <button class="btn btn-primary" onclick="App.switchTab('battle')">Deploy to Battle Arena &rarr;</button>
+            </div>
+          `}
+        </div>
         </div>
       </div>
 
@@ -1663,12 +1683,16 @@ window.HQModule = {
 
   assignMech(jockId, mechId) {
     const st = window.GameState.data;
+    const jock = st.jocks.find(j => j.id === jockId);
+    if (jock && jock.isDead) {
+      alert("This Jockey is Killed in Action (KIA) and cannot be assigned to a Titan.");
+      return;
+    }
     if (mechId) {
       st.jocks.forEach(j => {
         if (j.assignedMechId === mechId) j.assignedMechId = '';
       });
     }
-    const jock = st.jocks.find(j => j.id === jockId);
     if (jock) jock.assignedMechId = mechId;
     window.GameState.save();
     App.updateHUD();
@@ -1678,7 +1702,7 @@ window.HQModule = {
   trainAttr(attrKey) {
     const st = window.GameState.data;
     const jock = st.jocks.find(j => j.id === st.selectedJockId);
-    if (!jock) return;
+    if (!jock || jock.isDead) return;
     const curVal = jock.stats[attrKey] || 20;
     const cost = window.GameState.getAttrUpgradeCost(curVal);
     if (jock.xp < cost || curVal >= 100) return;
@@ -1692,7 +1716,7 @@ window.HQModule = {
   trainSkill(skillKey) {
     const st = window.GameState.data;
     const jock = st.jocks.find(j => j.id === st.selectedJockId);
-    if (!jock) return;
+    if (!jock || jock.isDead) return;
     const curVal = jock.skills[skillKey] || 30;
     const cost = window.GameState.getSkillUpgradeCost(curVal);
     if (jock.xp < cost || curVal >= 100) return;
@@ -1775,8 +1799,10 @@ window.HQModule = {
 
   healAllJocks() {
     const st = window.GameState.data;
-    const anyWounded = st.jocks.some(j => j.health < 100);
-    st.jocks.forEach(j => { j.health = 100; });
+    const anyWounded = st.jocks.some(j => !j.isDead && j.health < 100);
+    st.jocks.forEach(j => {
+      if (!j.isDead) j.health = 100;
+    });
     if (anyWounded) {
       window.GameState.advanceTimeWeeks(2, 'Medical Bay Trauma Treatment');
     } else {

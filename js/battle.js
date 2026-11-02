@@ -94,9 +94,9 @@ window.BattleModule = {
 
   getActiveCombatJock() {
     const st = window.GameState.data;
-    const sel = st.jocks.find(j => j.id === st.selectedJockId && j.assignedMechId);
+    const sel = st.jocks.find(j => j.id === st.selectedJockId && j.assignedMechId && !j.isDead);
     if (sel) return sel;
-    return st.jocks.find(j => j.assignedMechId) || st.jocks[0];
+    return st.jocks.find(j => j.assignedMechId && !j.isDead) || st.jocks.find(j => !j.isDead) || st.jocks[0];
   },
 
   log(msg, type = 'system') {
@@ -227,6 +227,32 @@ window.BattleModule = {
         }
       }
 
+      // Head Damage Cockpit Concussion & Pilot Injury Check (while armor holds)
+      if (hitLoc === 'HD' && playerMech.armor.HD > 0 && jock) {
+        const maxHead = playerMech.maxArmorCurrent?.HD || 20;
+        const headDmgPct = (this.enemy.dmg / maxHead) * 100;
+
+        // Base concussion chance: 25% + damage percentage * 0.4
+        const baseConcussion = Math.min(75, Math.round(25 + headDmgPct * 0.4));
+        const conStat = jock.stats?.Constitution || 25;
+        const dmgCtrl = jock.skills?.['Damage Control'] || 45;
+        const pilotShockResist = Math.round((conStat - 15) * 0.45 + (dmgCtrl - 30) * 0.2);
+
+        const finalConcussion = Math.max(10, Math.min(75, baseConcussion - pilotShockResist));
+        const injuryRoll = Math.floor(Math.random() * 100) + 1;
+
+        if (injuryRoll <= finalConcussion) {
+          const hpLoss = Math.floor(Math.random() * 11) + 12; // 12-22 HP loss
+          jock.health = Math.max(15, (jock.health || 100) - hpLoss);
+          this.log(`COCKPIT TRAUMA: Canopy violently jarred! ${jock.callsign} suffers head concussion (-${hpLoss} HP, Health: ${jock.health}%)! (Concussion Roll ${injuryRoll} <= ${finalConcussion}%)`, 'hostile');
+          if (window.SoundFX && window.SoundFX.playCockpitConcussion) {
+            window.SoundFX.playCockpitConcussion();
+          }
+        } else {
+          this.log(`COCKPIT IMPACT RESISTED: ${jock.callsign}'s high Constitution absorbed the cockpit concussion! (Roll ${injuryRoll} > ${finalConcussion}%)`, 'player');
+        }
+      }
+
       // Damage installed weapons/components in the struck body location
       window.GameState.ensureMechPartConditions(playerMech);
       const locComps = playerMech.locations?.[hitLoc] || [];
@@ -242,10 +268,70 @@ window.BattleModule = {
         }
       }
 
-      if (playerMech.armor.CT <= 0 || playerMech.armor.HD <= 0) {
+      // Check Cockpit Decapitation (HD <= 0) vs Core Reactor Breach (CT <= 0)
+      if (playerMech.armor.HD <= 0) {
         this.contractLost = true;
-        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered.`, 'hostile');
-        this.buildBattleSummary('DEFEAT', 'Titan Core Breach — Emergency Ejection', 'EJECT', null);
+        if (window.SoundFX && window.SoundFX.playCockpitAlarm) {
+          window.SoundFX.playCockpitAlarm();
+        }
+
+        // Cockpit Decapitation Fatality Check
+        // Base Fatality: 65%, mitigated by Survival skill & Constitution
+        const survSkill = jock?.skills?.['Survival'] || 35;
+        const conStat = jock?.stats?.Constitution || 20;
+        const survivalReduct = Math.round(survSkill * 0.55 + (conStat - 15) * 0.35);
+        const finalFatalityChance = Math.max(10, Math.min(80, 65 - survivalReduct));
+        const fatalRoll = Math.floor(Math.random() * 100) + 1;
+
+        if (fatalRoll <= finalFatalityChance && jock) {
+          jock.isDead = true;
+          jock.health = 0;
+          jock.status = 'KIA';
+          jock.kiaDate = window.GameState.getCalendarText();
+          jock.assignedMechId = '';
+
+          this.log(`FATAL COCKPIT BREACH: Titan head decapitated! Cockpit canopy crushed before ejection pod could fire. Pilot ${jock.callsign} is KILLED IN ACTION (KIA)! (Fatality Roll ${fatalRoll} <= ${finalFatalityChance}%)`, 'hostile');
+          this.buildBattleSummary('DEFEAT', `Titan Decapitation — ${jock.callsign} Killed in Action (KIA)`, 'HEAD_KIA', null);
+        } else {
+          if (jock) {
+            jock.health = Math.max(10, Math.min(25, (jock.health || 100) - 50));
+            jock.status = 'Hospitalized';
+          }
+          this.log(`NARROW EJECTION: Head destroyed, but ${jock ? jock.callsign : 'Pilot'}'s Survival training triggered the ejection pod in the nick of time! Critical injuries sustained (${jock ? jock.health : 15}% HP). (Survival Roll ${fatalRoll} > ${finalFatalityChance}%)`, 'hostile');
+          this.buildBattleSummary('DEFEAT', `Cockpit Decapitated — Emergency Ejection Pod Cleared`, 'HEAD_EJECT', null);
+        }
+        return;
+      }
+
+      if (playerMech.armor.CT <= 0) {
+        this.contractLost = true;
+        if (window.SoundFX && window.SoundFX.playCockpitAlarm) {
+          window.SoundFX.playCockpitAlarm();
+        }
+
+        // Reactor Core Breach Fatality Check (Base Fatality: 25%)
+        const survSkill = jock?.skills?.['Survival'] || 35;
+        const survivalReduct = Math.round(survSkill * 0.3);
+        const finalFatalityChance = Math.max(5, Math.min(40, 25 - survivalReduct));
+        const fatalRoll = Math.floor(Math.random() * 100) + 1;
+
+        if (fatalRoll <= finalFatalityChance && jock) {
+          jock.isDead = true;
+          jock.health = 0;
+          jock.status = 'KIA';
+          jock.kiaDate = window.GameState.getCalendarText();
+          jock.assignedMechId = '';
+
+          this.log(`CATASTROPHIC CORE DETONATION: Center Torso reactor breached! Ejection thrusters caught in explosion. Pilot ${jock.callsign} is KILLED IN ACTION (KIA)! (Fatality Roll ${fatalRoll} <= ${finalFatalityChance}%)`, 'hostile');
+          this.buildBattleSummary('DEFEAT', `Reactor Core Breach — ${jock.callsign} Killed in Action (KIA)`, 'CT_KIA', null);
+        } else {
+          if (jock) {
+            jock.health = Math.max(25, (jock.health || 100) - 30);
+            jock.status = 'Active';
+          }
+          this.log(`EMERGENCY EJECTION: Center Torso reactor breached! ${jock ? jock.callsign : 'Pilot'} successfully ejected from exploding chassis.`, 'hostile');
+          this.buildBattleSummary('DEFEAT', 'Titan Core Breach — Emergency Ejection', 'EJECT', null);
+        }
         return;
       }
     } else {
@@ -1102,15 +1188,23 @@ window.BattleModule = {
         jock.kills = (jock.kills || 0) + 1;
         jock.missions = (jock.missions || 0) + 1;
       } else if (outcome === 'DEFEAT') {
-        jockXpEarned = 75; // Survival XP
-        jock.health = Math.max(25, jock.health - 30);
-        jock.missions = (jock.missions || 0) + 1;
+        if (jock.isDead) {
+          jockXpEarned = 0;
+          jock.health = 0;
+          jock.status = 'KIA';
+        } else {
+          jockXpEarned = 75; // Survival XP
+          jock.health = Math.max(10, jock.health - 25);
+          jock.missions = (jock.missions || 0) + 1;
+        }
       } else {
         jockXpEarned = 50; // Tactical retreat
       }
       jock.xp += jockXpEarned;
       window.GameState.ensureJockContract(jock);
-      jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
+      if (!jock.isDead) {
+        jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
+      }
 
       const beforeAwardsCount = (jock.awards || []).length;
       this.recordBattleHistory(jock, mech, outcome === 'VICTORY' ? 'VICTORY' : 'DEFEAT', killMethod, jockXpEarned, killCode);
@@ -1209,7 +1303,10 @@ window.BattleModule = {
         xpEarned: jockXpEarned,
         newTotalXp: jock ? jock.xp : 0,
         fightsRemaining: jock?.contract?.fightsRemaining ?? 0,
-        newlyAwarded
+        newlyAwarded,
+        isDead: jock?.isDead || false,
+        health: jock ? jock.health : 0,
+        status: jock ? (jock.status || (jock.isDead ? 'KIA' : 'Active')) : 'Unknown'
       },
       companyProgression: {
         name: st.company?.name || 'Mercenary Company',
@@ -1281,31 +1378,31 @@ window.BattleModule = {
         </div>
       </div>
     ` : isDefeat ? `
-      <div class="card" style="padding:22px 26px; border:2px solid var(--accent-red); background:linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(127, 29, 29, 0.35) 50%, rgba(69, 10, 10, 0.45) 100%); box-shadow:0 0 32px rgba(239,68,68,0.32);">
+      <div class="card" style="padding:22px 26px; border:2px solid ${s.jockProgression.isDead ? '#ef4444' : 'var(--accent-red)'}; background:${s.jockProgression.isDead ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(127, 29, 29, 0.5) 50%, rgba(40, 5, 5, 0.7) 100%)' : 'linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(127, 29, 29, 0.35) 50%, rgba(69, 10, 10, 0.45) 100%)'}; box-shadow:0 0 32px rgba(239,68,68,0.4);">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
           <div style="display:flex; align-items:center; gap:18px;">
-            <div style="font-size:46px; line-height:1; filter:drop-shadow(0 0 16px rgba(239,68,68,0.6));">
-              &#9888;
+            <div style="font-size:46px; line-height:1; filter:drop-shadow(0 0 16px rgba(239,68,68,0.7));">
+              ${s.jockProgression.isDead ? '&#9760;' : '&#9888;'}
             </div>
             <div>
               <div style="display:flex; align-items:center; gap:8px;">
-                <span class="badge red" style="font-weight:900; font-size:11px; letter-spacing:0.06em; padding:3px 10px;">TACTICAL CASUALTY</span>
+                <span class="badge red" style="font-weight:900; font-size:11px; letter-spacing:0.06em; padding:3px 10px;">${s.jockProgression.isDead ? 'FATAL CASUALTY // PILOT KIA' : 'TACTICAL CASUALTY'}</span>
                 <span class="badge primary">${s.client.badge || 'CONTRACT'}</span>
               </div>
               <h1 style="font-size:32px; font-weight:900; color:#ef4444; margin:4px 0 2px 0; text-transform:uppercase; letter-spacing:0.03em; text-shadow:0 0 20px rgba(239,68,68,0.5);">
-                DEFEAT &bull; YOU LOST THE BATTLE
+                ${s.jockProgression.isDead ? 'PILOT KILLED IN ACTION &bull; BATTLE LOST' : 'DEFEAT &bull; YOU LOST THE BATTLE'}
               </h1>
               <div style="font-size:15px; color:#fef2f2; font-weight:600;">
-                Operation: <strong>${s.title}</strong> &bull; Critical Core Breach sustained against <strong style="color:#fca5a5;">${s.enemy.name}</strong> (${s.enemy.weight})
+                Operation: <strong>${s.title}</strong> &bull; ${s.killMethod}
               </div>
-              <div class="subtext" style="font-size:12px; margin-top:3px;">
-                Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; Pilot ${s.jockProgression.callsign} ejected safely (+75 Survival XP)
+              <div class="subtext" style="font-size:12px; margin-top:3px; color:${s.jockProgression.isDead ? '#fca5a5' : 'inherit'};">
+                ${s.jockProgression.isDead ? `Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; ☠️ Pilot <strong>${s.jockProgression.callsign}</strong> lost in combat` : `Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; Pilot ${s.jockProgression.callsign} survived emergency ejection (${s.jockProgression.health}% HP)`}
               </div>
             </div>
           </div>
           <div style="text-align:right;">
             <button class="btn btn-secondary" style="color:var(--accent-red); border-color:var(--accent-red); font-weight:800; padding:12px 24px; font-size:15px;" onclick="BattleModule.closeSummary()">
-              Complete Debriefing &rarr;
+              ${s.jockProgression.isDead ? 'Return to Memorial &rarr;' : 'Complete Debriefing &rarr;'}
             </button>
           </div>
         </div>
@@ -1551,6 +1648,23 @@ window.BattleModule = {
                 </button>
               </div>
               <div class="panel" style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
+                ${s.jockProgression.isDead ? `
+                  <div style="background:rgba(239,68,68,0.22); border:1px solid #ef4444; border-radius:6px; padding:10px;">
+                    <div style="color:#ef4444; font-weight:900; font-size:14px; display:flex; align-items:center; gap:6px;">
+                      <span>&#9760;</span> KILLED IN ACTION (KIA)
+                    </div>
+                    <div class="subtext" style="color:#fca5a5; font-size:12px; margin-top:2px;">
+                      Cockpit was compromised during battle. Pilot lost their life in service and is honored in the memorial roster.
+                    </div>
+                  </div>
+                ` : `
+                  <div style="display:flex; justify-content:space-between;">
+                    <span class="subtext">Pilot Medical Status:</span>
+                    <strong style="color:${s.jockProgression.health < 40 ? '#ef4444' : (s.jockProgression.health < 75 ? '#f59e0b' : 'var(--accent-green)')};">
+                      ${s.jockProgression.health < 40 ? `CRITICAL TRAUMA (${s.jockProgression.health}% HP)` : (s.jockProgression.health < 75 ? `WOUNDED (${s.jockProgression.health}% HP)` : `COMBAT READY (${s.jockProgression.health}% HP)`)}
+                    </strong>
+                  </div>
+                `}
                 <div style="display:flex; justify-content:space-between;">
                   <span class="subtext">Combat XP Conferred:</span>
                   <strong style="color:var(--accent-cyan);">+${s.jockProgression.xpEarned} XP</strong>
@@ -1561,7 +1675,7 @@ window.BattleModule = {
                 </div>
                 <div style="display:flex; justify-content:space-between;">
                   <span class="subtext">Contract Status:</span>
-                  <span>${s.jockProgression.fightsRemaining} Fights Remaining</span>
+                  <span>${s.jockProgression.isDead ? 'TERMINATED (DECEASED)' : `${s.jockProgression.fightsRemaining} Fights Remaining`}</span>
                 </div>
               </div>
               ${awardsHtml}
