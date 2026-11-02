@@ -727,6 +727,17 @@ window.BattleModule = {
     this.render();
   },
 
+  walkAwayFromNegotiation(declineOffer = false) {
+    if (declineOffer && this.negotiatingOffer) {
+      const st = window.GameState.data;
+      const offId = this.negotiatingOffer.id;
+      st.battleOffers = (st.battleOffers || []).filter(o => o.id !== offId);
+      window.GameState.ensureBattleOffers();
+      window.GameState.save();
+    }
+    this.closeNegotiation();
+  },
+
   updateNegotiationInputs() {
     const bountyEl = document.getElementById('neg-inp-bounty');
     const salvageEl = document.getElementById('neg-inp-salvage');
@@ -1650,8 +1661,8 @@ window.BattleModule = {
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
               <div style="display:flex; align-items:center; gap:8px;">
-                <button class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="BattleModule.closeNegotiation()">
-                  &larr; Back to Operations Board
+                <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; color:var(--accent-red); border-color:rgba(239,68,68,0.4);" onclick="BattleModule.walkAwayFromNegotiation()">
+                  &#128682; Walk Away &larr;
                 </button>
                 <span class="badge primary">${offer.client?.badge || 'CONTRACT SPONSOR'}</span>
               </div>
@@ -1821,12 +1832,18 @@ window.BattleModule = {
               </div>
 
               <!-- Action Confirmation Buttons -->
-              <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:6px;">
-                <button class="btn btn-secondary" style="flex:1; padding:12px; font-weight:700;" onclick="BattleModule.testContractOffer()">
+              <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+                <button class="btn btn-secondary" style="flex:1; padding:12px; font-weight:700; color:var(--accent-red); border-color:rgba(239,68,68,0.5); background:rgba(239,68,68,0.06);" onclick="BattleModule.walkAwayFromNegotiation()">
+                  &#128682; Walk Away (Keep Offer)
+                </button>
+                <button class="btn btn-secondary" style="flex:1; padding:12px; font-weight:700; color:#cbd5e1;" onclick="BattleModule.walkAwayFromNegotiation(true)">
+                  &#10006; Decline &amp; Discard
+                </button>
+                <button class="btn btn-secondary" style="flex:1.1; padding:12px; font-weight:700;" onclick="BattleModule.testContractOffer()">
                   Test Client Response
                 </button>
                 <button class="btn btn-primary" style="flex:1.4; padding:12px; font-weight:800; font-size:14px; background:var(--accent-green); color:#000;" onclick="BattleModule.signBattleContract()">
-                  &#9997; Sign &amp; Lock Match Date on Calendar
+                  &#9997; Sign &amp; Lock Match Date
                 </button>
               </div>
 
