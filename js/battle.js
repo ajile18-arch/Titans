@@ -2,10 +2,10 @@
 
 window.BattleModule = {
   active: false,
-  arenaTab: 'offers', // 'offers' | 'negotiate' | 'combat'
+  arenaTab: 'offers', // 'offers' | 'negotiate' | 'combat' | 'summary'
   clockSec: 0,
   aimTarget: 'General',
-  playerPos: { r: 3, c: 1, facing: 'NE', heat: 0 },
+  playerPos: { r: 6, c: 1, facing: 'NE', heat: 0 },
   weaponCooldowns: {},
   enemy: null,
   enemyCooldown: 6,
@@ -23,6 +23,9 @@ window.BattleModule = {
   proposedPrepWeeks: 2,
   patience: 3,
   negotiationMessage: '',
+
+  // End of Battle Summary State
+  battleSummary: null,
 
   initEncounter(contract = null) {
     const st = window.GameState.data;
@@ -189,31 +192,9 @@ window.BattleModule = {
 
       if (playerMech.armor.CT <= 0 || playerMech.armor.HD <= 0) {
         this.contractLost = true;
-        if (!Array.isArray(st.completedBattles)) st.completedBattles = [];
-        st.completedBattles.unshift({
-          id: 'comp-' + Date.now(),
-          title: this.currentContract?.title || `Encounter vs. ${this.enemy.name}`,
-          client: this.currentContract?.client?.name || 'Sector Comms',
-          enemy: this.enemy.name,
-          outcome: 'DEFEAT / EJECTED',
-          payout: 0,
-          dateText: window.GameState.getCalendarText(),
-          jockCallsign: jock ? jock.callsign : 'Pilot'
-        });
-        if (this.currentContract) {
-          st.scheduledBattles = (st.scheduledBattles || []).filter(b => b.id !== this.currentContract.id);
-        }
-
-        if (jock) {
-          jock.health = Math.max(25, jock.health - 30);
-          jock.missions = (jock.missions || 0) + 1;
-          jock.xp = (jock.xp || 0) + 75;
-          window.GameState.ensureJockContract(jock);
-          jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
-          this.recordBattleHistory(jock, playerMech, 'EJECTED', 'Core Breach — Emergency Ejection', 75, 'EJECT');
-        }
-        window.GameState.advanceTimeWeeks(2, 'Combat Drop Recovery');
-        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered (+75 Survival XP • +2 Wks Elapsed).`, 'hostile');
+        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered.`, 'hostile');
+        this.buildBattleSummary('DEFEAT', 'Titan Core Breach — Emergency Ejection', 'EJECT', null);
+        return;
       }
     } else {
       this.log(`${this.enemy.name} fires salvos — evaded! (Roll ${roll} > ${toHit}%)`, 'hostile');
@@ -337,43 +318,6 @@ window.BattleModule = {
       const legsGone = this.enemy.armor.LL <= 0 && this.enemy.armor.RL <= 0;
       if (this.enemy.armor.HD <= 0 || this.enemy.armor.CT <= 0 || legsGone) {
         this.contractWon = true;
-        const bounty = this.currentContract?.negotiatedBounty || 35000;
-        const salvagePct = this.currentContract?.negotiatedSalvagePct || 20;
-        const salvageBonus = Math.round(bounty * (salvagePct / 100));
-        const totalPayout = bounty + salvageBonus;
-        st.credits += totalPayout;
-        st.missionsCompleted += 1;
-
-        if (!Array.isArray(st.completedBattles)) st.completedBattles = [];
-        st.completedBattles.unshift({
-          id: 'comp-' + Date.now(),
-          title: this.currentContract?.title || `Encounter vs. ${this.enemy.name}`,
-          client: this.currentContract?.client?.name || 'Sector Comms',
-          enemy: this.enemy.name,
-          outcome: 'VICTORY',
-          payout: totalPayout,
-          dateText: window.GameState.getCalendarText(),
-          jockCallsign: jock ? jock.callsign : 'Pilot'
-        });
-        if (this.currentContract) {
-          st.scheduledBattles = (st.scheduledBattles || []).filter(b => b.id !== this.currentContract.id);
-        }
-
-        // Possible salvage component recovery into storage
-        let salvagedCompName = '';
-        if (salvagePct >= 25 && Array.isArray(st.partStorage)) {
-          const comps = window.TOS_DATA.components || [];
-          const dropped = comps[Math.floor(Math.random() * comps.length)];
-          if (dropped) {
-            st.partStorage.push({
-              uid: 'part-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-              compId: dropped.id,
-              condition: 80
-            });
-            salvagedCompName = dropped.name;
-          }
-        }
-
         const killCode = this.enemy.armor.HD <= 0 ? 'HD' : (this.enemy.armor.CT <= 0 ? 'CT' : 'LEGS');
         const killMethod = killCode === 'HD'
           ? `Headshot Decapitation (HD) via ${weapon.name}`
@@ -381,16 +325,9 @@ window.BattleModule = {
             ? `Center Torso Reactor Breach (CT) via ${weapon.name}`
             : `Dual Leg Sweep (LL + RL) via ${weapon.name}`;
 
-        if (jock) {
-          jock.xp += 250;
-          jock.kills += 1;
-          jock.missions += 1;
-          window.GameState.ensureJockContract(jock);
-          jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
-          this.recordBattleHistory(jock, mech, 'VICTORY', killMethod, 250, killCode);
-        }
-        window.GameState.advanceTimeWeeks(1, `Combat Drop vs. ${this.enemy.name}`);
-        this.log(`VICTORY! ${this.enemy.name} neutralized! Earned ${totalPayout.toLocaleString()} Cr (${bounty.toLocaleString()} Cr bounty + ${salvageBonus.toLocaleString()} Cr salvage)${salvagedCompName ? ` and recovered a ${salvagedCompName}!` : ''} (+250 XP for ${jock ? jock.callsign : 'Pilot'})`, 'player');
+        this.log(`VICTORY! ${this.enemy.name} neutralized!`, 'player');
+        this.buildBattleSummary('VICTORY', killMethod, killCode, weapon);
+        return;
       }
     } else {
       this.log(`MISS! ${weapon.name} wide of Enemy ${this.aimTarget} (Roll ${roll}>${hitChance}%).`, 'player');
@@ -938,37 +875,524 @@ window.BattleModule = {
 
   abortCombatToOperations() {
     if (this.contractWon || this.contractLost) {
-      this.active = false;
-      this.arenaTab = 'offers';
-      this.render();
+      if (this.battleSummary) {
+        this.active = false;
+        this.arenaTab = 'summary';
+        this.render();
+      } else {
+        this.active = false;
+        this.arenaTab = 'offers';
+        this.render();
+      }
       return;
     }
     if (confirm("Tactical Retreat: Forfeit this combat drop and withdraw to the Sector Operations Board?")) {
-      const st = window.GameState.data;
-      if (this.currentContract) {
-        st.completedBattles.unshift({
-          title: this.currentContract.title,
-          client: this.currentContract.client?.name || 'Mercenary Guild',
-          enemyName: this.enemy.name,
-          payout: 0,
-          date: window.GameState.getCalendarText(),
-          outcome: 'RETREAT'
-        });
-        st.scheduledBattles = (st.scheduledBattles || []).filter(b => b.id !== this.currentContract.id);
-      }
-      this.active = false;
-      this.arenaTab = 'offers';
-      window.GameState.advanceTimeWeeks(1, `Lance retreat from ${this.enemy.name}`);
-      window.GameState.save();
-      window.App.updateHUD();
-      this.render();
+      this.buildBattleSummary('RETREAT', 'Tactical Field Withdrawal', 'RETREAT', null);
     }
   },
 
   returnFromVictoryOrDefeat() {
-    this.active = false;
+    if (this.battleSummary) {
+      this.active = false;
+      this.arenaTab = 'summary';
+      this.render();
+    } else {
+      this.active = false;
+      this.arenaTab = 'offers';
+      this.render();
+    }
+  },
+
+  closeSummary() {
+    this.battleSummary = null;
     this.arenaTab = 'offers';
     this.render();
+  },
+
+  buildBattleSummary(outcome, killMethod, killCode, weapon) {
+    const st = window.GameState.data;
+    const jock = this.getActiveCombatJock();
+    const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : (st.mechs[0] || null);
+
+    const bounty = this.currentContract?.negotiatedBounty || 35000;
+    const salvagePct = this.currentContract?.negotiatedSalvagePct || 20;
+    const salvageBonus = outcome === 'VICTORY' ? Math.round(bounty * (salvagePct / 100)) : 0;
+    const totalPayout = outcome === 'VICTORY' ? (bounty + salvageBonus) : 0;
+    const prevCredits = st.credits;
+    if (totalPayout > 0) st.credits += totalPayout;
+
+    if (outcome === 'VICTORY') {
+      st.missionsCompleted = (st.missionsCompleted || 0) + 1;
+    }
+
+    // Company XP Calculation
+    if (typeof st.company.xp !== 'number') st.company.xp = 0;
+    const companyXpEarned = outcome === 'VICTORY'
+      ? (350 + Math.round(bounty / 250))
+      : (outcome === 'DEFEAT' ? 75 : 50);
+    st.company.xp += companyXpEarned;
+
+    // Jockey XP Calculation & Contract deduction
+    let jockXpEarned = 0;
+    const prevJockXp = jock ? jock.xp : 0;
+    let newlyAwarded = [];
+    if (jock) {
+      if (outcome === 'VICTORY') {
+        jockXpEarned = 250 + (killCode === 'HD' ? 75 : 0);
+        jock.kills = (jock.kills || 0) + 1;
+        jock.missions = (jock.missions || 0) + 1;
+      } else if (outcome === 'DEFEAT') {
+        jockXpEarned = 75; // Survival XP
+        jock.health = Math.max(25, jock.health - 30);
+        jock.missions = (jock.missions || 0) + 1;
+      } else {
+        jockXpEarned = 50; // Tactical retreat
+      }
+      jock.xp += jockXpEarned;
+      window.GameState.ensureJockContract(jock);
+      jock.contract.fightsRemaining = Math.max(0, (jock.contract.fightsRemaining ?? jock.contract.totalFights) - 1);
+
+      const beforeAwardsCount = (jock.awards || []).length;
+      this.recordBattleHistory(jock, mech, outcome === 'VICTORY' ? 'VICTORY' : 'DEFEAT', killMethod, jockXpEarned, killCode);
+      newlyAwarded = (jock.awards || []).slice(beforeAwardsCount).map(a => a.title);
+    }
+
+    // Salvage Component Recovery
+    const recoveredParts = [];
+    if (outcome === 'VICTORY' && salvagePct >= 20 && Array.isArray(st.partStorage)) {
+      const comps = window.TOS_DATA.components || [];
+      const rolls = salvagePct >= 50 ? 3 : (salvagePct >= 35 ? 2 : 1);
+      for (let r = 0; r < rolls; r++) {
+        if (Math.random() <= 0.75) {
+          const dropped = comps[Math.floor(Math.random() * comps.length)];
+          if (dropped) {
+            const cond = Math.floor(Math.random() * 26) + 70; // 70-95% condition
+            const uid = 'part-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+            st.partStorage.push({ uid, compId: dropped.id, condition: cond });
+            recoveredParts.push({ ...dropped, condition: cond, uid });
+          }
+        }
+      }
+    }
+
+    // Archive into completed battles history
+    if (!Array.isArray(st.completedBattles)) st.completedBattles = [];
+    st.completedBattles.unshift({
+      id: 'comp-' + Date.now(),
+      title: this.currentContract?.title || `Encounter vs. ${this.enemy?.name || 'Hostile'}`,
+      client: this.currentContract?.client?.name || 'Sector Operations',
+      enemy: this.enemy?.name || 'Hostile Titan',
+      outcome: outcome,
+      payout: totalPayout,
+      dateText: window.GameState.getCalendarText(),
+      jockCallsign: jock ? jock.callsign : 'Pilot'
+    });
+
+    if (this.currentContract) {
+      st.scheduledBattles = (st.scheduledBattles || []).filter(b => b.id !== this.currentContract.id);
+    }
+
+    // Advance calendar weeks
+    const elapsedWeeks = outcome === 'DEFEAT' ? 2 : 1;
+    window.GameState.advanceTimeWeeks(elapsedWeeks, `${outcome}: vs. ${this.enemy?.name || 'Hostile'}`);
+
+    // Compute mech remaining armor percent
+    let curArmor = 0;
+    let maxArmor = 0;
+    if (mech && mech.armor && mech.maxArmorCurrent) {
+      Object.keys(mech.armor).forEach(loc => {
+        curArmor += (mech.armor[loc] || 0);
+        maxArmor += (mech.maxArmorCurrent[loc] || 1);
+      });
+    }
+    const armorPct = maxArmor > 0 ? Math.round((curArmor / maxArmor) * 100) : 100;
+
+    // Detect internal parts that sustained damage
+    const damagedComponents = [];
+    if (mech && mech.partConditions) {
+      Object.entries(mech.partConditions).forEach(([loc, conds]) => {
+        const locComps = mech.locations?.[loc] || [];
+        (conds || []).forEach((cVal, idx) => {
+          if (cVal < 90) {
+            const compObj = window.GameState.getComponent(locComps[idx]);
+            if (compObj) {
+              damagedComponents.push({ name: compObj.name, loc, condition: cVal });
+            }
+          }
+        });
+      });
+    }
+
+    this.battleSummary = {
+      outcome,
+      title: this.currentContract?.title || (outcome === 'VICTORY' ? 'Sector Victory' : 'Sector Engagement'),
+      client: this.currentContract?.client || { name: 'Sector Operations', badge: 'MERCENARY GUILD' },
+      enemy: {
+        name: this.enemy?.name || 'Hostile Unit',
+        weight: this.enemy?.weight || 'Heavy',
+        pilot: this.enemy?.pilot || 'Hostile Pilot'
+      },
+      killCode: killCode || 'NEUTRALIZED',
+      killMethod: killMethod || 'Target Neutralized',
+      financials: {
+        baseBounty: bounty,
+        salvagePct,
+        salvageBonus,
+        totalPayout,
+        prevCredits,
+        newCredits: st.credits
+      },
+      recoveredParts,
+      jockProgression: {
+        callsign: jock ? jock.callsign : 'Pilot',
+        prevXp: prevJockXp,
+        xpEarned: jockXpEarned,
+        newTotalXp: jock ? jock.xp : 0,
+        fightsRemaining: jock?.contract?.fightsRemaining ?? 0,
+        newlyAwarded
+      },
+      companyProgression: {
+        name: st.company?.name || 'Mercenary Company',
+        emblemId: st.company?.emblemId || 'emblem-wolf',
+        xpEarned: companyXpEarned,
+        totalXp: st.company?.xp || 0,
+        reputationLevel: window.GameState.getCompanyReputationLevel(),
+        missionsCompleted: st.missionsCompleted
+      },
+      stats: {
+        durationSec: this.clockSec,
+        shotsFired: this.battleStats.shotsFired,
+        shotsHit: this.battleStats.shotsHit,
+        accuracy: this.battleStats.shotsFired > 0 ? Math.round((this.battleStats.shotsHit / this.battleStats.shotsFired) * 100) : 0,
+        damageDealt: this.battleStats.damageDealt,
+        damageTaken: this.battleStats.damageTaken,
+        mechName: mech ? mech.customName : 'Titan',
+        remainingArmorPct: armorPct,
+        damagedComponents
+      },
+      date: window.GameState.getCalendarText()
+    };
+
+    window.GameState.save();
+    window.App.updateHUD();
+    this.active = false;
+    this.arenaTab = 'summary';
+    this.render();
+  },
+
+  renderSummaryPage() {
+    const s = this.battleSummary;
+    if (!s) {
+      this.closeSummary();
+      return '';
+    }
+
+    const isVictory = s.outcome === 'VICTORY';
+    const isDefeat = s.outcome === 'DEFEAT' || s.outcome.includes('DEFEAT');
+
+    const heroBadge = isVictory ? `
+      <span class="badge green" style="font-size:13px; padding:6px 14px; box-shadow:0 0 16px rgba(16,185,129,0.4);">
+        &#9876; TACTICAL VICTORY // MISSION ACCOMPLISHED
+      </span>
+    ` : isDefeat ? `
+      <span class="badge red" style="font-size:13px; padding:6px 14px; box-shadow:0 0 16px rgba(239,68,68,0.4);">
+        &#9888; CRITICAL CASUALTY // TITAN BREACH &amp; EJECTED
+      </span>
+    ` : `
+      <span class="badge amber" style="font-size:13px; padding:6px 14px;">
+        &#128737; TACTICAL RETREAT // COMBAT WITHDRAWAL
+      </span>
+    `;
+
+    const partsHtml = s.recoveredParts.length === 0 ? `
+      <div class="panel" style="padding:16px; background:rgba(0,0,0,0.25); text-align:center; color:var(--text-muted); font-size:13px;">
+        <div style="font-weight:700; color:var(--text-bright); margin-bottom:4px;">No Salvageable Components Recovered</div>
+        <div>No intact chassis components survived the wreckage. Contract salvage share was ${s.financials.salvagePct}%.</div>
+        <div class="subtext" style="margin-top:4px; font-size:11px;">Tip: Negotiate higher Salvage Rights % on incoming contracts to recover weapons, engines, and heat sink arrays.</div>
+      </div>
+    ` : `
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${s.recoveredParts.map(p => `
+          <div class="panel" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-left:4px solid var(--accent-green); padding:10px 14px; background:rgba(0,0,0,0.3);">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <strong style="color:var(--text-bright); font-size:14px;">${p.name}</strong>
+                <span class="badge primary" style="font-size:11px;">${p.cat || p.category || 'Component'}</span>
+                <span class="badge green" style="font-size:11px;">${p.condition}% Condition</span>
+              </div>
+              <div class="subtext" style="margin-top:2px; font-size:12px;">
+                Weight: ${p.tons}t • ${p.desc || 'Salvaged component'} • Est. Market Value: ~${(p.cost || 12000).toLocaleString()} Cr
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <span class="badge green" style="font-size:10px; padding:3px 8px;">&#10003; STORED IN DEPOT</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    const awardsHtml = (s.jockProgression.newlyAwarded && s.jockProgression.newlyAwarded.length > 0) ? `
+      <div style="margin-top:10px; background:rgba(245,158,11,0.1); border:1px solid var(--accent-amber); padding:10px; border-radius:6px;">
+        <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:800; color:var(--accent-amber);">
+          &#127878; Commendations Conferred This Battle
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;">
+          ${s.jockProgression.newlyAwarded.map(aw => `
+            <span class="badge amber" style="font-size:11px; padding:3px 8px;">&#9733; ${aw}</span>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const damagedCompsHtml = (s.stats.damagedComponents && s.stats.damagedComponents.length > 0) ? `
+      <div style="margin-top:10px; background:rgba(239,68,68,0.1); border:1px solid var(--accent-red); padding:10px; border-radius:6px;">
+        <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:800; color:var(--accent-red);">
+          &#9888; Internal Systems Sustaining Battle Damage
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:6px; font-size:12px;">
+          ${s.stats.damagedComponents.map(dc => `
+            <div style="display:flex; justify-content:space-between;">
+              <span>${dc.name} (${dc.loc})</span>
+              <strong style="color:var(--accent-amber);">${dc.condition}% Cond</strong>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : `
+      <div class="panel subtext" style="margin-top:10px; font-size:12px; padding:8px 12px;">
+        &#10003; All mounted internal weapons, heatsinks, and actuators nominal.
+      </div>
+    `;
+
+    return `
+      <div style="display:flex; flex-direction:column; gap:18px; max-width:1120px; margin:0 auto;">
+        
+        <!-- Hero After-Action Header Banner -->
+        <div class="card" style="padding:20px 24px; border-color:${isVictory ? 'var(--accent-green)' : (isDefeat ? 'var(--accent-red)' : 'var(--accent-amber)')}; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                ${heroBadge}
+                <span class="badge primary">${s.client.badge || 'CONTRACT'}</span>
+              </div>
+              <h1 style="font-size:26px; font-weight:900; margin-top:6px; text-transform:uppercase; letter-spacing:0.02em;">
+                ${s.title}
+              </h1>
+              <div class="subtext" style="font-size:13px; margin-top:2px;">
+                Client Sponsor: <strong>${s.client.name}</strong> • Hostile: <strong>${s.enemy.name}</strong> (${s.enemy.weight}) • Date: ${s.date}
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <button class="btn btn-primary" style="background:var(--accent-green); color:#000; font-weight:900; padding:10px 20px; font-size:14px;" onclick="BattleModule.closeSummary()">
+                &#10003; Complete Debriefing &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Primary Metric HUD Cards -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+          
+          <!-- Metric 1: Financial Settlement -->
+          <div class="card" style="padding:16px;">
+            <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:800; color:var(--text-muted);">
+              Total Financial Settlement
+            </div>
+            <div class="mono" style="font-size:24px; font-weight:900; color:${s.financials.totalPayout > 0 ? 'var(--accent-green)' : 'var(--accent-red)'}; margin:4px 0;">
+              ${s.financials.totalPayout > 0 ? '+' : ''}${s.financials.totalPayout.toLocaleString()} Cr
+            </div>
+            <div class="subtext" style="font-size:12px;">
+              Bounty: ${s.financials.baseBounty.toLocaleString()} Cr + Salvage: ${s.financials.salvageBonus.toLocaleString()} Cr (${s.financials.salvagePct}%)
+            </div>
+            <div style="margin-top:6px; font-size:11px; color:var(--accent-amber);" class="mono">
+              War Chest: ${s.financials.newCredits.toLocaleString()} Cr
+            </div>
+          </div>
+
+          <!-- Metric 2: Jockey Experience -->
+          <div class="card" style="padding:16px;">
+            <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:800; color:var(--text-muted);">
+              Jockey XP Earned
+            </div>
+            <div class="mono" style="font-size:24px; font-weight:900; color:var(--accent-cyan); margin:4px 0;">
+              +${s.jockProgression.xpEarned} XP
+            </div>
+            <div class="subtext" style="font-size:12px;">
+              Pilot: <strong>${s.jockProgression.callsign}</strong> • Available XP: <strong>${s.jockProgression.newTotalXp} XP</strong>
+            </div>
+            <div style="margin-top:6px; font-size:11px; color:var(--accent-cyan);" class="mono">
+              ${s.jockProgression.fightsRemaining} Fights Remaining on Contract
+            </div>
+          </div>
+
+          <!-- Metric 3: Company Mercenary XP -->
+          <div class="card" style="padding:16px;">
+            <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:800; color:var(--text-muted);">
+              Mercenary Company XP
+            </div>
+            <div class="mono" style="font-size:24px; font-weight:900; color:var(--accent-amber); margin:4px 0;">
+              +${s.companyProgression.xpEarned} XP
+            </div>
+            <div class="subtext" style="font-size:12px;">
+              Unit: <strong>${s.companyProgression.name}</strong> • Guild Rep: <strong>Level ${s.companyProgression.reputationLevel}</strong>
+            </div>
+            <div style="margin-top:6px; font-size:11px; color:var(--text-bright);" class="mono">
+              ${s.companyProgression.missionsCompleted} Total Operations Logged
+            </div>
+          </div>
+
+          <!-- Metric 4: Gunnery & Combat Accuracy -->
+          <div class="card" style="padding:16px;">
+            <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:800; color:var(--text-muted);">
+              Gunnery Efficiency
+            </div>
+            <div class="mono" style="font-size:24px; font-weight:900; color:#a855f7; margin:4px 0;">
+              ${s.stats.accuracy}% Accuracy
+            </div>
+            <div class="subtext" style="font-size:12px;">
+              ${s.stats.shotsHit} Hits on ${s.stats.shotsFired} Salvos (${s.stats.damageDealt} Dmg Dealt)
+            </div>
+            <div style="margin-top:6px; font-size:11px; color:var(--accent-green);" class="mono">
+              Titan Hull: ${s.stats.remainingArmorPct}% Armor Integrity
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 2-Column Detailed Breakdown -->
+        <div class="grid-12" style="gap:16px;">
+          
+          <!-- Left Column: Salvage Recovery & Hostile Demolition Intel -->
+          <div class="col-6" style="display:flex; flex-direction:column; gap:16px;">
+            
+            <!-- Salvage Recovery Card -->
+            <div class="card">
+              <div class="section-header">
+                <div>
+                  <div class="section-title">Battlefield Salvage Recovery</div>
+                  <div class="subtext">Recovered chassis components transported directly to Company Depot storage.</div>
+                </div>
+                <span class="badge ${s.recoveredParts.length > 0 ? 'green' : 'secondary'}">
+                  ${s.recoveredParts.length} Item${s.recoveredParts.length === 1 ? '' : 's'} Recovered
+                </span>
+              </div>
+              ${partsHtml}
+              <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+                <button class="btn btn-secondary" style="font-size:12px;" onclick="App.switchTab('garage')">
+                  Open Garage Factory Depot &rarr;
+                </button>
+              </div>
+            </div>
+
+            <!-- Hostile Demolition Assessment -->
+            <div class="card">
+              <div class="section-header">
+                <div class="section-title">Hostile Titan Demolition Assessment</div>
+                <span class="badge red">${s.killCode}</span>
+              </div>
+              <div class="panel" style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Hostile Chassis:</span>
+                  <strong>${s.enemy.name} (${s.enemy.weight})</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Designated Pilot:</span>
+                  <span>${s.enemy.pilot}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Neutralization Method:</span>
+                  <strong style="color:var(--accent-green);">${s.killMethod}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Action-Time Duration:</span>
+                  <span class="mono">${Math.floor(s.stats.durationSec / 60)}m ${String(s.stats.durationSec % 60).padStart(2, '0')}s</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right Column: Jockey Debriefing & Mech Diagnostics -->
+          <div class="col-6" style="display:flex; flex-direction:column; gap:16px;">
+            
+            <!-- Jockey Accolades & XP -->
+            <div class="card">
+              <div class="section-header">
+                <div>
+                  <div class="section-title">Jockey Mission Debriefing: Pilot ${s.jockProgression.callsign}</div>
+                  <div class="subtext">Assigned Titan: ${s.stats.mechName}</div>
+                </div>
+                <button class="btn btn-primary" style="font-size:12px;" onclick="App.switchTab('hq')">
+                  Train Skills in HQ &rarr;
+                </button>
+              </div>
+              <div class="panel" style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Combat XP Conferred:</span>
+                  <strong style="color:var(--accent-cyan);">+${s.jockProgression.xpEarned} XP</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Total Available Pilot XP:</span>
+                  <strong class="mono" style="color:var(--text-bright);">${s.jockProgression.newTotalXp} XP</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span class="subtext">Contract Status:</span>
+                  <span>${s.jockProgression.fightsRemaining} Fights Remaining</span>
+                </div>
+              </div>
+              ${awardsHtml}
+            </div>
+
+            <!-- Titan Hull & Armor Diagnostics -->
+            <div class="card">
+              <div class="section-header">
+                <div>
+                  <div class="section-title">Titan Diagnostics: ${s.stats.mechName}</div>
+                  <div class="subtext">Post-mission maintenance and battle damage evaluation.</div>
+                </div>
+                <button class="btn btn-secondary" style="font-size:12px;" onclick="App.switchTab('garage')">
+                  Repair in Garage &rarr;
+                </button>
+              </div>
+              <div class="panel" style="display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; justify-content:space-between; font-size:13px;">
+                  <span class="subtext">Remaining Armor Integrity:</span>
+                  <strong style="color:${s.stats.remainingArmorPct > 65 ? 'var(--accent-green)' : (s.stats.remainingArmorPct > 30 ? 'var(--accent-amber)' : 'var(--accent-red)')};">${s.stats.remainingArmorPct}%</strong>
+                </div>
+                <div class="bar-bg" style="height:10px;"><div class="bar-fill ${s.stats.remainingArmorPct > 65 ? 'green' : (s.stats.remainingArmorPct > 30 ? 'amber' : 'red')}" style="width:${s.stats.remainingArmorPct}%;"></div></div>
+                <div style="display:flex; justify-content:space-between; font-size:12px;" class="subtext">
+                  <span>Armor Damage Taken: ${s.stats.damageTaken} pts</span>
+                  <span>Damage Dealt: ${s.stats.damageDealt} pts</span>
+                </div>
+              </div>
+              ${damagedCompsHtml}
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Bottom Action Bar -->
+        <div class="card" style="padding:16px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div class="subtext" style="font-size:13px;">
+            AAR logged to company records. Calendar time advanced by 1 week.
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="App.switchTab('garage')">
+              2. Go to Garage &amp; Factory
+            </button>
+            <button class="btn btn-secondary" onclick="App.switchTab('hq')">
+              1. Go to Jockey HQ
+            </button>
+            <button class="btn btn-primary" style="background:var(--accent-green); color:#000; font-weight:800; padding:10px 20px;" onclick="BattleModule.closeSummary()">
+              Return to Operations Board &rarr;
+            </button>
+          </div>
+        </div>
+
+      </div>
+    `;
   },
 
   renderOperationsBoard(jock, mech, metrics) {
@@ -1602,7 +2026,7 @@ window.BattleModule = {
               ${this.contractWon ? `
                 <div style="display:flex; align-items:center; gap:8px;">
                   <button class="btn btn-primary" style="background:var(--accent-green); color:#000; font-weight:800;" onclick="BattleModule.returnFromVictoryOrDefeat()">
-                    Mission Complete &rarr; Operations
+                    View Combat Debriefing Summary &rarr;
                   </button>
                 </div>
               ` : ''}
@@ -1734,6 +2158,8 @@ window.BattleModule = {
 
     if (this.active) {
       container.innerHTML = this.renderCombatArena(jock, mech, metrics);
+    } else if (this.arenaTab === 'summary' && this.battleSummary) {
+      container.innerHTML = this.renderSummaryPage();
     } else if (this.arenaTab === 'negotiate' && this.negotiatingOffer) {
       container.innerHTML = this.renderNegotiationScreen(jock, mech, metrics);
     } else {

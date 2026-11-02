@@ -18,7 +18,8 @@ function createDefaultState() {
       motto: 'Steel Before Surrender',
       goalId: 'wealth',
       customGoals: 'Build a premier MechJock mercenary company from the ground up.',
-      reputationLevel: 1
+      reputationLevel: 1,
+      xp: 0
     },
 
     // Campaign Time Counter (1 Month = 4 Weeks, 1 Year = 12 Months = 48 Weeks)
@@ -505,7 +506,8 @@ window.GameState = {
     const st = this.data;
     const baseRep = st?.company?.reputationLevel || 1;
     const bonusFromMissions = Math.floor((st?.missionsCompleted || 0) / 2);
-    return Math.max(1, baseRep + bonusFromMissions);
+    const bonusFromXp = Math.floor((st?.company?.xp || 0) / 800);
+    return Math.max(1, baseRep + bonusFromMissions + bonusFromXp);
   },
 
   getOwnedPartCount(compId) {
