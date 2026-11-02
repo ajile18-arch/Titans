@@ -190,7 +190,7 @@ window.TOS_DATA = {
         if (!jock) return { label: 'Field Dressings Only (+0% bonus)', value: 1.0, bonusPct: 0 };
         const skill = jock.skills?.['Medical (First Aid)'] || 30;
         const intBonus = Math.max(0, ((jock.stats?.Intelligence || 20) - 20) * 0.5);
-        const bonusPct = Math.round(skill * 1.0 + intBonus);
+        const bonusPct = Math.round((skill * 1.0 + intBonus) * 0.5);
         const mult = 1.0 + (bonusPct / 100);
         return {
           label: `+${bonusPct}% Medical Recovery Speed (${mult.toFixed(2)}x)`,
@@ -210,9 +210,9 @@ window.TOS_DATA = {
       desc: 'Supervises depot technician crews, armor replacement welds, and structural repairs.',
       effectDesc: 'Reduces Titan armor and internal chassis/component repair bills in the Garage.',
       calcModifier(jock) {
-        if (!jock) return { label: 'Standard Guild Rates (10% discount)', value: 0.10, discountPct: 10 };
+        if (!jock) return { label: 'Standard Guild Rates (5% discount)', value: 0.05, discountPct: 5 };
         const skill = jock.skills?.['Mechanic (Repair)'] || 30;
-        const discountPct = Math.min(50, Math.round(15 + (skill * 0.40)));
+        const discountPct = Math.min(25, Math.max(5, Math.round((15 + (skill * 0.40)) * 0.5)));
         return {
           label: `${discountPct}% Repair Cost Discount`,
           value: discountPct / 100,
@@ -234,8 +234,8 @@ window.TOS_DATA = {
         if (!jock) return { label: 'Standard Retail (0% discount)', value: 0, discountPct: 0, payrollDiscount: 0 };
         const intStat = jock.stats?.Intelligence || 20;
         const dmgCtrl = jock.skills?.['Damage Control'] || 30;
-        const discountPct = Math.min(25, Math.max(5, Math.round((intStat - 15) * 0.5 + (dmgCtrl * 0.18))));
-        const payrollDiscount = Math.min(15, Math.round(discountPct * 0.6));
+        const discountPct = Math.min(12, Math.max(2, Math.round(((intStat - 15) * 0.5 + (dmgCtrl * 0.18)) * 0.5)));
+        const payrollDiscount = Math.min(8, Math.max(1, Math.round(discountPct * 0.6)));
         return {
           label: `${discountPct}% Component Catalog Discount & ${payrollDiscount}% Payroll Savings`,
           value: discountPct / 100,
@@ -258,7 +258,7 @@ window.TOS_DATA = {
         if (!jock) return { label: 'Standard Doctrine (+0% to hit)', value: 0, hitBonus: 0 };
         const ldr = jock.skills?.['Leadership'] || 30;
         const ins = jock.stats?.Instinct || 20;
-        const hitBonus = Math.min(10, Math.max(2, Math.round((ldr * 0.08) + ((ins - 15) * 0.15))));
+        const hitBonus = Math.min(5, Math.max(1, Math.round(((ldr * 0.08) + ((ins - 15) * 0.15)) * 0.5)));
         return {
           label: `+${hitBonus}% Firing Solution Accuracy`,
           value: hitBonus,
@@ -279,7 +279,7 @@ window.TOS_DATA = {
       calcModifier(jock) {
         if (!jock) return { label: 'Standard Recon (+0% bounty)', value: 0, bountyBonusPct: 0, patienceBonus: 0 };
         const recon = jock.skills?.['Recon / Scanner'] || 30;
-        const bountyBonusPct = Math.min(20, Math.max(5, Math.round(recon * 0.20)));
+        const bountyBonusPct = Math.min(10, Math.max(2, Math.round(recon * 0.10)));
         return {
           label: `+1 Negotiation Patience & +${bountyBonusPct}% Contract Bounty Bonus`,
           value: bountyBonusPct / 100,
@@ -301,7 +301,7 @@ window.TOS_DATA = {
       calcModifier(jock) {
         if (!jock) return { label: 'Standard Safety Protocols (0% bonus)', value: 0, concussionResist: 0 };
         const dmgCtrl = jock.skills?.['Damage Control'] || 30;
-        const concussionResist = Math.min(25, Math.max(5, Math.round(dmgCtrl * 0.25)));
+        const concussionResist = Math.min(13, Math.max(2, Math.round((dmgCtrl * 0.25) * 0.5)));
         return {
           label: `-${concussionResist}% Cockpit Concussion Risk & +1 Heat Dissipation`,
           value: concussionResist,

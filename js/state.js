@@ -459,16 +459,16 @@ window.GameState = {
     }, null);
   },
 
-  // Active repair discount in Garage (0.10 to 0.50) based on Lead Mechanic
+  // Active repair discount in Garage (0.05 to 0.25) based on Lead Mechanic
   getRepairDiscount() {
     const leadMech = this.getLeadMechanic();
-    if (!leadMech) return 0.10;
+    if (!leadMech) return 0.05;
     const jobDef = (window.TOS_DATA?.companyJobs || []).find(j => j.id === 'leadMechanic');
     if (jobDef && typeof jobDef.calcModifier === 'function') {
       return jobDef.calcModifier(leadMech).value;
     }
     const skill = leadMech.skills?.['Mechanic (Repair)'] || 30;
-    return Math.min(0.50, Math.max(0.10, skill / 180));
+    return Math.min(0.25, Math.max(0.05, skill / 360));
   },
 
   // Calculate HP regained per week for a jockey based on Survival skill and modified by company CMO
@@ -488,7 +488,7 @@ window.GameState = {
         cmoMod = jobDef.calcModifier(cmo).value;
       } else {
         const cmoSkill = cmo.skills?.['Medical (First Aid)'] || 30;
-        cmoMod = 1.0 + (cmoSkill / 100);
+        cmoMod = 1.0 + (cmoSkill / 200);
       }
     }
 
