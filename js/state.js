@@ -193,8 +193,8 @@ window.GameState = {
       if (typeof j.contract.fightsRemaining !== 'number') j.contract.fightsRemaining = j.contract.totalFights;
     } else {
       j.contract.type = 'standard';
-      j.contract.totalYears = j.contract.totalYears || 2;
-      j.contract.totalMonths = j.contract.totalYears * 12;
+      j.contract.totalMonths = j.contract.totalMonths || ((j.contract.totalYears || 2) * 12);
+      j.contract.totalYears = j.contract.totalYears || Math.round((j.contract.totalMonths / 12) * 10) / 10;
       if (typeof j.contract.monthsRemaining !== 'number') j.contract.monthsRemaining = j.contract.totalMonths;
       j.contract.totalFights = j.contract.totalFights || 10;
       if (typeof j.contract.fightsRemaining !== 'number') j.contract.fightsRemaining = j.contract.totalFights;

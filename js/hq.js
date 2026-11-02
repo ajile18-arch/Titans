@@ -2001,18 +2001,20 @@ window.HQModule = {
     this.renegotiateJockId = jock.id;
     this.renegotiateIsExpiredPrompt = !!isExpiredPrompt;
     this.renegotiateReason = reason || (jock.contract.expired ? 'Contract term reached' : '');
-    this.renegYears = jock.contract.totalYears || 2;
-    this.renegFights = jock.contract.totalFights || 10;
+    this.renegYears = 2;
+    this.renegFights = 10;
 
+    const curRemF = Math.max(0, jock.contract?.fightsRemaining ?? (jock.contract?.totalFights || 10));
+    const curRemM = Math.max(0, jock.contract?.monthsRemaining ?? (jock.contract?.totalMonths || 24));
     const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
     this.renegPatience = Math.max(2, 3 + (terms.pMod?.patienceDelta || 0));
     this.renegBonus = terms.askingBonus;
     this.renegWage = terms.askingWage;
 
     if (isExpiredPrompt || jock.contract.expired) {
-      this.renegMessage = `"Commander, my contract has concluded (${this.renegotiateReason || 'term completed'}). Would you like to renegotiate a new Fights & Max-Time contract to keep me on the roster, or part ways?"`;
+      this.renegMessage = `"Commander, my contract has concluded (${this.renegotiateReason || 'term completed'}). Would you like to negotiate an extension (+${this.renegFights} Fights, +${this.renegYears} Yr${this.renegYears > 1 ? 's' : ''}) to keep me on the roster, or part ways?"`;
     } else {
-      this.renegMessage = `"Ready to talk contract extension, Commander. Here are my terms for a fresh ${this.renegFights}-Fight / ${this.renegYears}-Year Max contract (whichever comes first)."`;
+      this.renegMessage = `"Ready to talk contract extension, Commander! Adding +${this.renegFights} Fights and +${this.renegYears} Year${this.renegYears > 1 ? 's' : ''} onto my remaining ${curRemF} fights and ${curRemM} months. Here are my terms."`;
     }
 
     this.updateRenegotiationModalMount();
@@ -2031,6 +2033,13 @@ window.HQModule = {
 
   onRenegotiationDurationChange() {
     this.updateRenegotiationInputs();
+    const st = window.GameState.data;
+    const jock = st.jocks.find(j => j.id === this.renegotiateJockId);
+    if (jock) {
+      const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
+      this.renegBonus = terms.askingBonus;
+      this.renegWage = terms.askingWage;
+    }
     this.updateRenegotiationModalMount();
   },
 
@@ -2043,7 +2052,11 @@ window.HQModule = {
     const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
     const bonusDiff = Math.round((this.renegBonus - terms.askingBonus) * 0.05);
     const effectiveWage = this.renegWage + bonusDiff;
-    const label = `${this.renegFights} Fights or ${this.renegYears} Yr${this.renegYears > 1 ? 's' : ''} Max (Whichever First)`;
+    const curRemF = Math.max(0, jock.contract?.fightsRemaining ?? (jock.contract?.totalFights || 10));
+    const curRemM = Math.max(0, jock.contract?.monthsRemaining ?? (jock.contract?.totalMonths || 24));
+    const newRemF = curRemF + this.renegFights;
+    const newRemM = curRemM + (this.renegYears * 12);
+    const label = `+${this.renegFights} Fights & +${this.renegYears} Yr${this.renegYears > 1 ? 's' : ''} extension (${newRemF} fights / ${newRemM} mos combined)`;
 
     if (effectiveWage >= terms.askingWage) {
       let prefNote = '';
@@ -2051,7 +2064,7 @@ window.HQModule = {
         const sat = terms.pMod.effects.find(e => e.type === 'preference_satisfied');
         prefNote = ` (${sat.desc})`;
       }
-      this.renegMessage = `"${this.renegBonus.toLocaleString()} Cr renewal bonus and ${this.renegWage.toLocaleString()} Cr/mo for ${label}? Deal!${prefNote} Click 'Sign Renegotiated Contract' and I'm locked in."`;
+      this.renegMessage = `"${this.renegBonus.toLocaleString()} Cr renewal bonus and ${this.renegWage.toLocaleString()} Cr/mo to add ${this.renegFights} fights and ${this.renegYears} yr${this.renegYears > 1 ? 's' : ''}? Deal!${prefNote} Click 'Sign Contract Extension' and I'm locked in."`;
     } else if (effectiveWage >= terms.minWage) {
       this.renegPatience -= 1;
       let penNote = '';
@@ -2063,7 +2076,7 @@ window.HQModule = {
         this.renegMessage = `"We're too far apart on numbers, Commander. Take a breather and reopen contract talks when you're ready to meet my minimum rate."${penNote}`;
       } else {
         const counter = Math.round(((this.renegWage + terms.askingWage) / 2) / 50) * 50;
-        this.renegMessage = `"For ${label}, ${this.renegWage.toLocaleString()} Cr/mo is a little light given my combat record.${penNote} Come up to ${counter.toLocaleString()} Cr/mo (or boost the renewal bonus) and I'll sign."`;
+        this.renegMessage = `"For adding ${this.renegFights} fights & ${this.renegYears} yr${this.renegYears > 1 ? 's' : ''}, ${this.renegWage.toLocaleString()} Cr/mo is a little light given my combat record.${penNote} Come up to ${counter.toLocaleString()} Cr/mo (or boost the renewal bonus) and I'll sign."`;
       }
     } else {
       this.renegPatience -= 1;
@@ -2072,7 +2085,7 @@ window.HQModule = {
         const unmet = terms.pMod.effects.find(e => e.type === 'preference_unmet');
         penNote = ` (${unmet.desc})`;
       }
-      this.renegMessage = `"Commander, ${this.renegWage.toLocaleString()} Cr/mo for ${label} is well below market rate for a ${window.GameState.getJockRank(jock).name} Jockey.${penNote} You'll need to come closer to ${terms.askingWage.toLocaleString()} Cr/mo."`;
+      this.renegMessage = `"Commander, ${this.renegWage.toLocaleString()} Cr/mo to add ${this.renegFights} fights & ${this.renegYears} yr${this.renegYears > 1 ? 's' : ''} is well below market rate for a ${window.GameState.getJockRank(jock).name} Jockey.${penNote} You'll need to come closer to ${terms.askingWage.toLocaleString()} Cr/mo."`;
     }
 
     this.updateRenegotiationModalMount();
@@ -2101,13 +2114,30 @@ window.HQModule = {
     st.credits -= this.renegBonus;
     const rk = window.GameState.getJockRank(jock);
     jock.baseSalary = Math.max(300, Math.round(this.renegWage / rk.salaryMult));
+
+    window.GameState.ensureJockContract(jock);
+    const prevContract = jock.contract || {};
+    const curRemFights = Math.max(0, prevContract.fightsRemaining ?? (prevContract.totalFights || 10));
+    const curTotalFights = prevContract.totalFights || 10;
+    const curRemMonths = Math.max(0, prevContract.monthsRemaining ?? (prevContract.totalMonths || 24));
+    const curTotalMonths = prevContract.totalMonths || ((prevContract.totalYears || 2) * 12);
+
+    const addFights = this.renegFights;
+    const addMonths = this.renegYears * 12;
+
+    const newRemFights = curRemFights + addFights;
+    const newTotalFights = curTotalFights + addFights;
+    const newRemMonths = curRemMonths + addMonths;
+    const newTotalMonths = curTotalMonths + addMonths;
+    const newTotalYears = Math.round((newTotalMonths / 12) * 10) / 10;
+
     jock.contract = {
       type: 'standard',
-      totalYears: this.renegYears,
-      totalMonths: this.renegYears * 12,
-      monthsRemaining: this.renegYears * 12,
-      totalFights: this.renegFights,
-      fightsRemaining: this.renegFights,
+      totalYears: newTotalYears,
+      totalMonths: newTotalMonths,
+      monthsRemaining: newRemMonths,
+      totalFights: newTotalFights,
+      fightsRemaining: newRemFights,
       whicheverComesFirst: true,
       expired: false
     };
@@ -2115,7 +2145,7 @@ window.HQModule = {
     this.renegotiateOpen = false;
     this.renegotiateJockId = '';
     this.updateRenegotiationModalMount();
-    window.GameState.advanceTimeWeeks(1, `Renegotiated Contract with ${jock.callsign}`);
+    window.GameState.advanceTimeWeeks(1, `Renegotiated Contract with ${jock.callsign} (+${addFights} Fights, +${this.renegYears} Yrs)`);
     this.render();
   },
 
@@ -2160,6 +2190,11 @@ window.HQModule = {
     const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
     const isExpired = this.renegotiateIsExpiredPrompt || jock.contract?.expired;
 
+    const curRemFights = Math.max(0, jock.contract?.fightsRemaining ?? (jock.contract?.totalFights || 10));
+    const curRemMonths = Math.max(0, jock.contract?.monthsRemaining ?? (jock.contract?.totalMonths || 24));
+    const newRemFights = curRemFights + this.renegFights;
+    const newRemMonths = curRemMonths + (this.renegYears * 12);
+
     return `
       <div class="modal-backdrop" style="z-index:200;">
         <div class="modal-card" style="max-width:680px; border-color:${isExpired ? 'var(--accent-amber)' : 'var(--primary)'};">
@@ -2167,7 +2202,7 @@ window.HQModule = {
             <div>
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <span class="badge ${isExpired ? 'amber' : 'primary'}">
-                  ${isExpired ? '&#9888; CONTRACT COMPLETED — RENEGOTIATE CONTRACT?' : '&#128221; JOCKEY CONTRACT RENEGOTIATION'}
+                  ${isExpired ? '&#9888; CONTRACT COMPLETED — EXTEND CONTRACT?' : '&#128221; JOCKEY CONTRACT EXTENSION'}
                 </span>
                 <span class="badge green mono">Treasury: ${st.credits.toLocaleString()} Cr</span>
               </div>
@@ -2176,11 +2211,11 @@ window.HQModule = {
               </h3>
               ${isExpired ? `
                 <div class="subtext" style="color:var(--accent-amber); font-weight:600; margin-top:2px;">
-                  Contract Finished (${this.renegotiateReason || 'Fights or Max Time limit reached'}). Would you like to renegotiate a new contract with ${jock.callsign}?
+                  Contract Finished (${this.renegotiateReason || 'Fights or Max Time limit reached'}). Negotiate an extension to add more fights and time onto their service.
                 </div>
               ` : `
                 <div class="subtext" style="margin-top:2px;">
-                  Current Contract: <span class="mono">${window.GameState.getContractSummary(jock)}</span>
+                  Current Status: <span class="mono">${window.GameState.getContractSummary(jock)}</span>
                 </div>
               `}
             </div>
@@ -2203,34 +2238,49 @@ window.HQModule = {
             </div>
           </div>
 
-          <!-- Dual-Condition Contract Terms (Both Fights & Max Time — Whichever Comes First) -->
+          <!-- Dual-Condition Contract Extension Terms (Added to What is Left on the Contract) -->
           <div class="panel" style="display:flex; flex-direction:column; gap:12px; border-color:var(--primary);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <strong style="font-size:13px;">New Contract Structure (Fights &amp; Max Time — Whichever Comes First)</strong>
+              <strong style="font-size:13px;">Contract Extension Terms (Added to Current Remaining Contract)</strong>
               <span class="badge ${this.renegPatience <= 0 ? 'red' : 'green'} mono">Patience: ${this.renegPatience}/3</span>
             </div>
 
             <div class="grid-12">
               <div class="col-6">
-                <label class="subtext" style="font-weight:600;">Contract Fights Limit:</label>
+                <label class="subtext" style="font-weight:600;">Additional Fights to Add:</label>
                 <select id="reneg-inp-fights" class="select mono" style="margin-top:4px;" onchange="HQModule.onRenegotiationDurationChange()">
                   ${[3, 5, 10, 15, 25].map(f => `
-                    <option value="${f}" ${this.renegFights === f ? 'selected' : ''}>${f} Combat Fights</option>
+                    <option value="${f}" ${this.renegFights === f ? 'selected' : ''}>+${f} Combat Fights</option>
                   `).join('')}
                 </select>
               </div>
               <div class="col-6">
-                <label class="subtext" style="font-weight:600;">Max Length of Time:</label>
+                <label class="subtext" style="font-weight:600;">Additional Length of Time to Add:</label>
                 <select id="reneg-inp-years" class="select mono" style="margin-top:4px;" onchange="HQModule.onRenegotiationDurationChange()">
                   ${[1, 2, 3, 4, 5].map(yr => `
-                    <option value="${yr}" ${this.renegYears === yr ? 'selected' : ''}>${yr} Year${yr > 1 ? 's' : ''} (${yr * 12} Months Max)</option>
+                    <option value="${yr}" ${this.renegYears === yr ? 'selected' : ''}>+${yr} Year${yr > 1 ? 's' : ''} (+${yr * 12} Months)</option>
                   `).join('')}
                 </select>
               </div>
             </div>
 
-            <div class="subtext" style="font-size:12px;">
-              Contract ends after <strong>${this.renegFights} Fights</strong> OR <strong>${this.renegYears * 12} Months (${this.renegYears} Yr${this.renegYears > 1 ? 's' : ''})</strong>, whichever comes first.
+            <!-- Live Calculation Breakdown -->
+            <div class="panel" style="display:flex; flex-direction:column; gap:6px; background:rgba(15,23,42,0.6); border:1px solid var(--border); padding:10px 14px; font-size:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="subtext">Currently Left on Contract:</span>
+                <span class="mono">${curRemFights} Fights left • ${curRemMonths} Months left</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="subtext">Additional Terms Added:</span>
+                <span class="mono" style="color:var(--accent-amber);">+${this.renegFights} Fights • +${this.renegYears * 12} Months (+${this.renegYears} Yr${this.renegYears > 1 ? 's' : ''})</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.08); padding-top:6px; margin-top:2px;">
+                <strong style="color:var(--primary);">New Combined Contract Terms:</strong>
+                <strong class="mono" style="color:#f8fafc;">${newRemFights} Fights Remaining • ${newRemMonths} Months Remaining</strong>
+              </div>
+              <div class="subtext" style="font-size:11px; margin-top:2px; font-style:italic;">
+                Contract concludes when either ${newRemFights} Fights are completed OR ${newRemMonths} Months elapse, whichever comes first.
+              </div>
             </div>
 
             <div style="display:flex; justify-content:space-between; font-size:12px; border-top:1px solid var(--border); padding-top:8px;">
@@ -2274,7 +2324,7 @@ window.HQModule = {
                 Test Counter-Offer
               </button>
               <button class="btn btn-primary" style="flex:1.4;" ${this.renegPatience <= 0 ? 'disabled' : ''} onclick="HQModule.confirmRenegotiation()">
-                &#128221; Sign Renegotiated Contract (+1 Wk)
+                &#128221; Sign Contract Extension (+1 Wk)
               </button>
               ${isExpired ? `
                 <button class="btn btn-danger" onclick="HQModule.releaseExpiredJock('${jock.id}')">
