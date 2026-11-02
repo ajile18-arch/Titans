@@ -81,12 +81,7 @@ window.CompanyModule = {
 };
 
 window.CommanderModule = {
-  backgrounds: [
-    { id: 'military', name: 'Ex-Military Officer', desc: 'Disciplined and tactical. Raised on formation drills and chain of command.' },
-    { id: 'arena', name: 'Retired Arena Champion', desc: 'Once packed stadiums. Knows what a Jockey needs to win a crowd and a fight.' },
-    { id: 'corporate', name: 'Corporate Fixer', desc: 'Contracts, contacts and margins. Never pays full price for anything.' },
-    { id: 'salvager', name: 'Wasteland Salvager', desc: 'Built a company out of scrap. Knows what every bolt in a Titan is worth.' }
-  ],
+  get backgrounds() { return window.TOS_DATA.commanderBackgrounds; },
 
   getTitle(repLvl) {
     return ['Rookie Commander', 'Contract Captain', 'Company Major', 'Battle Colonel', 'Warlord'][Math.min(4, Math.max(0, repLvl - 1))] ||
@@ -111,7 +106,10 @@ window.CommanderModule = {
     container.innerHTML = `
       <div class="card" style="margin-bottom:16px;">
         <div style="display:flex; flex-wrap:wrap; align-items:center; gap:16px;">
-          <div class="panel" style="padding:10px; width:84px; height:84px; display:flex; align-items:center; justify-content:center; font-size:40px;">&#127894;</div>
+          ${(() => {
+            const pt = window.TOS_DATA.commanderPortraits.find(p => p.id === comp.commanderPortraitId) || window.TOS_DATA.commanderPortraits[0];
+            return `<img src="${pt.img}" alt="${pt.label}" onerror="this.onerror=null;this.src=window.CMDR_FALLBACK" style="width:96px; height:96px; object-fit:cover; border-radius:12px; border:2px solid var(--border-bright); background:#0f172a;" />`;
+          })()}
           <div style="flex:1; min-width:240px;">
             <span class="badge primary">COMMANDER</span>
             <h2 style="font-size:24px; font-weight:800; margin-top:4px;">${comp.commander || 'Commander'}</h2>
@@ -123,12 +121,9 @@ window.CommanderModule = {
 
       <div class="grid-12">
         <div class="col-6 card">
-          <div class="section-header"><div class="section-title">Background</div></div>
+          <div class="section-header"><div class="section-title">Background</div><span class="badge amber">Chosen at Company Creation</span></div>
           <div style="display:flex; flex-direction:column; gap:10px; font-size:13px;">
-            <select class="select" onchange="CommanderModule.setBackground(this.value)">
-              ${this.backgrounds.map(b => `<option value="${b.id}" ${b.id === bg.id ? 'selected' : ''}>${b.name}</option>`).join('')}
-            </select>
-            <div class="panel">${bg.desc}</div>
+            <div class="panel"><strong>${bg.name}</strong><div class="subtext" style="margin-top:2px;">${bg.desc}</div></div>
             <div class="subtext" style="font-weight:700; text-transform:uppercase;">Personal Bio</div>
             <textarea class="input" rows="5" placeholder="Write your Commander's story..." onchange="CommanderModule.setBio(this.value)">${comp.commanderBio}</textarea>
           </div>
@@ -146,12 +141,6 @@ window.CommanderModule = {
         </div>
       </div>
     `;
-  },
-
-  setBackground(id) {
-    window.GameState.data.company.commanderBackground = id;
-    window.GameState.save();
-    this.render();
   },
 
   setBio(text) {

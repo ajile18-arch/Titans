@@ -9,7 +9,9 @@ window.App = {
     emblemId: 'emblem-wolf',
     motto: 'Steel Before Surrender',
     goalId: 'wealth',
-    customGoals: 'Build a self-sustaining 8-Mech hangar and accumulate 2,000,000 Cr in combat contracts.'
+    customGoals: 'Build a self-sustaining 8-Mech hangar and accumulate 2,000,000 Cr in combat contracts.',
+    commanderBackground: 'military',
+    commanderPortraitId: 'cmdr_m1'
   },
 
   init() {
@@ -30,7 +32,9 @@ window.App = {
       goalId: (!isNewGame && cur.registered) ? cur.goalId : 'wealth',
       customGoals: (!isNewGame && cur.registered)
         ? cur.customGoals
-        : 'Accumulate a 2,000,000 Cr mercenary war chest and build a profitable 8-Mech hangar.'
+        : 'Accumulate a 2,000,000 Cr mercenary war chest and build a profitable 8-Mech hangar.',
+      commanderBackground: (!isNewGame && cur.registered && cur.commanderBackground) ? cur.commanderBackground : 'military',
+      commanderPortraitId: (!isNewGame && cur.registered && cur.commanderPortraitId) ? cur.commanderPortraitId : 'cmdr_m1'
     };
 
     const intro = document.getElementById('intro-screen');
@@ -64,6 +68,18 @@ window.App = {
   pickCompanyEmblem(emblemId) {
     this.syncDraftInputs();
     this.companyDraft.emblemId = emblemId;
+    this.renderCompanyCreator();
+  },
+
+  pickCommanderPortrait(id) {
+    this.syncDraftInputs();
+    this.companyDraft.commanderPortraitId = id;
+    this.renderCompanyCreator();
+  },
+
+  pickCommanderBackground(id) {
+    this.syncDraftInputs();
+    this.companyDraft.commanderBackground = id;
     this.renderCompanyCreator();
   },
 
@@ -103,8 +119,12 @@ window.App = {
     }
 
     const st = window.GameState.data;
+    const prevCompany = st.company || {};
     st.company = {
       registered: true,
+      commanderBio: (!this.companyDraft.isNewGame && prevCompany.commanderBio) ? prevCompany.commanderBio : '',
+      commanderBackground: this.companyDraft.commanderBackground,
+      commanderPortraitId: this.companyDraft.commanderPortraitId,
       name: (this.companyDraft.name || 'Iron Wolf Mercenaries').trim(),
       commander: (this.companyDraft.commander || 'Commander').trim(),
       emblemId: this.companyDraft.emblemId,
@@ -160,6 +180,33 @@ window.App = {
               </div>
             </div>
 
+            <!-- Commander Portrait Selector -->
+            <div>
+              <label class="subtext" style="font-weight:600;">Choose Your Commander Portrait</label>
+              <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-top:6px;">
+                ${window.TOS_DATA.commanderPortraits.map(p => `
+                  <div class="list-item ${d.commanderPortraitId === p.id ? 'selected' : ''}" onclick="App.pickCommanderPortrait('${p.id}')" title="${p.label} — ${p.desc}" style="padding:6px; text-align:center;">
+                    <img src="${p.img}" alt="${p.label}" onerror="this.onerror=null;this.src=window.CMDR_FALLBACK" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; display:block; background:#0f172a;" />
+                    <div style="font-size:11px; font-weight:700; margin-top:4px; line-height:1.2;">${p.label}</div>
+                    <div class="subtext" style="font-size:10px;">${p.desc}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Commander Background Selector -->
+            <div>
+              <label class="subtext" style="font-weight:600;">Commander Background</label>
+              <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-top:6px;">
+                ${window.TOS_DATA.commanderBackgrounds.map(b => `
+                  <div class="list-item ${d.commanderBackground === b.id ? 'selected' : ''}" onclick="App.pickCommanderBackground('${b.id}')">
+                    <div style="font-weight:700; font-size:13px;">${b.name}</div>
+                    <div class="subtext" style="margin-top:2px;">${b.desc}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
             <!-- Emblem Selector -->
             <div>
               <label class="subtext" style="font-weight:600;">Select Company Emblem / Insignia</label>
@@ -212,6 +259,7 @@ window.App = {
               </div>
 
               <div style="display:flex; align-items:center; gap:14px;">
+                <img src="${(window.TOS_DATA.commanderPortraits.find(p => p.id === d.commanderPortraitId) || window.TOS_DATA.commanderPortraits[0]).img}" alt="Commander" onerror="this.onerror=null;this.src=window.CMDR_FALLBACK" style="width:64px; height:64px; object-fit:cover; border-radius:10px; border:2px solid var(--border-bright); background:#0f172a;" />
                 <div class="card" style="padding:10px; background:var(--bg-main);">
                   ${window.GameState.getCompanyEmblemSvg(d.emblemId)}
                 </div>

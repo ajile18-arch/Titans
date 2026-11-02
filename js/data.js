@@ -127,6 +127,31 @@ window.TOS_DATA = {
     }
   ],
 
+  commanderPortraits: [
+    { id: 'cmdr_m1', gender: 'M', label: 'Young Hotshot', desc: 'Mid-20s • Lean', img: 'assets/commanders/cmdr_m1.jpg' },
+    { id: 'cmdr_m2', gender: 'M', label: 'Scarred Captain', desc: 'Early 30s • Athletic', img: 'assets/commanders/cmdr_m2.jpg' },
+    { id: 'cmdr_m3', gender: 'M', label: 'Bearded Bruiser', desc: 'Late 30s • Stocky', img: 'assets/commanders/cmdr_m3.jpg' },
+    { id: 'cmdr_m4', gender: 'M', label: 'Silver Fox', desc: 'Mid-40s • Tall & Lean', img: 'assets/commanders/cmdr_m4.jpg' },
+    { id: 'cmdr_m5', gender: 'M', label: 'Old Warhorse', desc: 'Early 50s • Heavyset', img: 'assets/commanders/cmdr_m5.jpg' },
+    { id: 'cmdr_m6', gender: 'M', label: 'One-Eyed Veteran', desc: 'Late 50s • Weathered', img: 'assets/commanders/cmdr_m6.jpg' },
+    { id: 'cmdr_m7', gender: 'M', label: 'Grizzled Elder', desc: '60s • Muscular', img: 'assets/commanders/cmdr_m7.jpg' },
+    { id: 'cmdr_m8', gender: 'M', label: 'Wired Rookie', desc: 'Late 20s • Wiry', img: 'assets/commanders/cmdr_m8.jpg' },
+    { id: 'cmdr_m9', gender: 'M', label: 'Towering Brawler', desc: 'Mid-30s • Large', img: 'assets/commanders/cmdr_m9.jpg' },
+    { id: 'cmdr_m10', gender: 'M', label: 'Corporate Strategist', desc: 'Early 40s • Slim', img: 'assets/commanders/cmdr_m10.jpg' },
+    { id: 'cmdr_f1', gender: 'F', label: 'Ace Pilot', desc: 'Late 20s • Athletic', img: 'assets/commanders/cmdr_f1.jpg' },
+    { id: 'cmdr_f2', gender: 'F', label: 'Battle-Scarred Major', desc: 'Mid-30s • Tall & Strong', img: 'assets/commanders/cmdr_f2.jpg' },
+    { id: 'cmdr_f3', gender: 'F', label: 'Veteran Colonel', desc: 'Early 40s • Sturdy', img: 'assets/commanders/cmdr_f3.jpg' },
+    { id: 'cmdr_f4', gender: 'F', label: 'Iron Matriarch', desc: 'Mid-50s • Slim', img: 'assets/commanders/cmdr_f4.jpg' },
+    { id: 'cmdr_f5', gender: 'F', label: 'Cyber Tech', desc: 'Early 30s • Petite', img: 'assets/commanders/cmdr_f5.jpg' }
+  ],
+
+  commanderBackgrounds: [
+    { id: 'military', name: 'Ex-Military Officer', desc: 'Disciplined and tactical. Raised on formation drills and chain of command.' },
+    { id: 'arena', name: 'Retired Arena Champion', desc: 'Once packed stadiums. Knows what a Jockey needs to win a crowd and a fight.' },
+    { id: 'corporate', name: 'Corporate Fixer', desc: 'Contracts, contacts and margins. Never pays full price for anything.' },
+    { id: 'salvager', name: 'Wasteland Salvager', desc: 'Built a company out of scrap. Knows what every bolt in a Titan is worth.' }
+  ],
+
   companyGoals: [
     {
       id: 'wealth',
@@ -482,3 +507,6 @@ window.TOS_DATA = {
     { code: 'RL', name: 'Right Leg (RL)' }
   ]
 };
+
+// Shown in place of any commander portrait image that has not been generated/added yet
+window.CMDR_FALLBACK = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#0f172a"/><circle cx="32" cy="24" r="11" fill="#334155"/><path d="M10 60C10 44 20 38 32 38S54 44 54 60Z" fill="#334155"/></svg>');
