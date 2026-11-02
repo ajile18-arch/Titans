@@ -200,6 +200,150 @@ window.GameState = {
       if (typeof j.contract.fightsRemaining !== 'number') j.contract.fightsRemaining = j.contract.totalFights;
     }
     j.contract.expired = (j.contract.fightsRemaining <= 0 || j.contract.monthsRemaining <= 0);
+    this.ensureJockPersonalityTraits(j);
+  },
+
+  // Ensure a Jockey has 5 personality trait slots (revealed after battles 1, 4, 10, 15, 25)
+  ensureJockPersonalityTraits(j) {
+    if (!j) return;
+    const milestones = window.TOS_DATA?.personalityMilestones || [1, 4, 10, 15, 25];
+    const catalog = window.TOS_DATA?.personalityTraits || [];
+    if (!catalog.length) return;
+
+    if (!Array.isArray(j.personalityTraits) || j.personalityTraits.length < milestones.length) {
+      // Deterministically seed from jockey ID and name
+      let seed = 0;
+      const str = String(j.id || '') + String(j.callsign || '') + String(j.firstName || '');
+      for (let i = 0; i < str.length; i++) seed = ((seed << 5) - seed + str.charCodeAt(i)) & 0xffffffff;
+
+      const available = [...catalog];
+      const assigned = [];
+      milestones.forEach((threshold, idx) => {
+        const existing = (j.personalityTraits && j.personalityTraits[idx]) ? j.personalityTraits[idx] : null;
+        if (existing && existing.id) {
+          assigned.push({ id: existing.id, threshold });
+          const avIdx = available.findIndex(t => t.id === existing.id);
+          if (avIdx >= 0) available.splice(avIdx, 1);
+        } else {
+          const pickIdx = Math.abs(seed + idx * 7) % available.length;
+          const chosen = available.splice(pickIdx, 1)[0] || catalog[idx % catalog.length];
+          assigned.push({ id: chosen.id, threshold });
+        }
+      });
+      j.personalityTraits = assigned;
+    }
+  },
+
+  // Get personality trait objects with revealed status based on completed fights
+  getJockPersonalityTraitObjects(j) {
+    if (!j) return [];
+    this.ensureJockPersonalityTraits(j);
+    const catalog = window.TOS_DATA?.personalityTraits || [];
+    const fights = j.missions || (j.fightHistory ? j.fightHistory.length : 0);
+
+    return (j.personalityTraits || []).map(slot => {
+      const traitDef = catalog.find(t => t.id === slot.id) || {
+        id: slot.id,
+        name: 'Latent Trait',
+        icon: '🔒',
+        desc: 'Undiscovered personality trait.',
+        contractDesc: 'Normal contract expectations.'
+      };
+      const isRevealed = fights >= slot.threshold;
+      return {
+        ...traitDef,
+        threshold: slot.threshold,
+        isRevealed
+      };
+    });
+  },
+
+  // Calculate contract modifiers from all personality traits (active even if hidden; revealed traits are shown to player)
+  calcJockContractPersonalityModifiers(j, fights = 10, years = 2) {
+    if (!j) return { wageMult: 1.0, bonusMult: 1.0, patienceDelta: 0, effects: [], revealedEffects: [], traits: [] };
+    this.ensureJockPersonalityTraits(j);
+    const traits = this.getJockPersonalityTraitObjects(j);
+
+    let wageMult = 1.0;
+    let bonusMult = 1.0;
+    let patienceDelta = 0;
+    const effects = [];
+    const revealedEffects = [];
+
+    traits.forEach(t => {
+      // General wage and bonus multipliers
+      if (typeof t.wageMult === 'number' && t.wageMult !== 1.0) {
+        wageMult *= t.wageMult;
+        const diff = Math.round((t.wageMult - 1.0) * 100);
+        const desc = `${t.name}: Demands ${diff > 0 ? `+${diff}% higher` : `${diff}% lower`} monthly wage`;
+        effects.push({ trait: t.name, icon: t.icon, type: 'wage', desc, isRevealed: t.isRevealed });
+        if (t.isRevealed) revealedEffects.push({ trait: t.name, icon: t.icon, desc });
+      }
+
+      if (typeof t.bonusMult === 'number' && t.bonusMult !== 1.0) {
+        bonusMult *= t.bonusMult;
+        const diff = Math.round((t.bonusMult - 1.0) * 100);
+        const desc = `${t.name}: Demands ${diff > 0 ? `+${diff}% higher` : `${diff}% lower`} signing bonus`;
+        effects.push({ trait: t.name, icon: t.icon, type: 'bonus', desc, isRevealed: t.isRevealed });
+        if (t.isRevealed) revealedEffects.push({ trait: t.name, icon: t.icon, desc });
+      }
+
+      if (typeof t.patienceDelta === 'number' && t.patienceDelta !== 0) {
+        patienceDelta += t.patienceDelta;
+        const desc = `${t.name}: ${t.patienceDelta > 0 ? `+${t.patienceDelta} patience` : `${t.patienceDelta} patience`}`;
+        effects.push({ trait: t.name, icon: t.icon, type: 'patience', desc, isRevealed: t.isRevealed });
+        if (t.isRevealed) revealedEffects.push({ trait: t.name, icon: t.icon, desc });
+      }
+
+      // Contract duration preferences
+      if (t.prefersLong) {
+        const isLong = (fights >= 10 || years >= 2);
+        if (isLong) {
+          const disc = t.longDiscount || 0.85;
+          wageMult *= disc;
+          const pct = Math.round((1.0 - disc) * 100);
+          const desc = `${t.name}: Satisfied with long contract (-${pct}% wage discount)`;
+          effects.push({ trait: t.name, icon: t.icon, type: 'preference_satisfied', desc, isRevealed: t.isRevealed });
+          if (t.isRevealed) revealedEffects.push({ trait: t.name, icon: t.icon, desc });
+        } else {
+          const pen = t.shortPenalty || 1.25;
+          wageMult *= pen;
+          const pct = Math.round((pen - 1.0) * 100);
+          const desc = `${t.name}: Dislikes short contracts (+${pct}% wage surcharge)`;
+          effects.push({ trait: t.name, icon: t.icon, type: 'preference_unmet', desc, isRevealed: t.isRevealed });
+          if (t.isRevealed) revealedEffects.push({ trait: t.name, icon: t.icon, desc });
+        }
+      } else if (t.prefersShort) {
+        const isShort = (fights <= 5 && years <= 1);
+        if (isShort) {
+          const disc = t.shortDiscount || 0.90;
+          wageMult *= disc;
+          const pct = Math.round((1.0 - disc) * 100);
+          const desc = `${t.name}: Satisfied with short contract (-${pct}% wage discount)`;
+          effects.push({ trait: t.name, icon: t.icon, type: 'preference_satisfied', desc, isRevealed: t.isRevealed });
+          if (t.isRevealed) revealedEffects.push({ trait: t.name, icon: t.icon, desc });
+        } else {
+          const pen = t.longPenalty || 1.30;
+          wageMult *= pen;
+          const pct = Math.round((pen - 1.0) * 100);
+          const desc = `${t.name}: Resents long commitment (+${pct}% confinement surcharge)`;
+          effects.push({ trait: t.name, icon: t.icon, type: 'preference_unmet', desc, isRevealed: t.isRevealed });
+          if (t.isRevealed) revealedEffects.push({ trait: t.name, icon: t.icon, desc });
+        }
+      }
+    });
+
+    wageMult = Math.max(0.55, Math.min(2.5, wageMult));
+    bonusMult = Math.max(0.55, Math.min(2.5, bonusMult));
+
+    return {
+      wageMult,
+      bonusMult,
+      patienceDelta,
+      effects,
+      revealedEffects,
+      traits
+    };
   },
 
   ensureCalendar() {

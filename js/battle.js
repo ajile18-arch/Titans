@@ -1243,6 +1243,15 @@ window.BattleModule = {
       this.recordBattleHistory(jock, mech, outcome === 'VICTORY' ? 'VICTORY' : 'DEFEAT', killMethod, jockXpEarned, killCode);
       newlyAwarded = (jock.awards || []).slice(beforeAwardsCount).map(a => a.title);
 
+      // Check for newly revealed personality trait after battles 1, 4, 10, 15, 25
+      let newlyRevealedTrait = null;
+      const milestones = window.TOS_DATA?.personalityMilestones || [1, 4, 10, 15, 25];
+      if (milestones.includes(jock.missions)) {
+        window.GameState.ensureJockPersonalityTraits(jock);
+        const traits = window.GameState.getJockPersonalityTraitObjects(jock);
+        newlyRevealedTrait = traits.find(t => t.threshold === jock.missions) || null;
+      }
+
       // Check Medical Disability Threshold (< 25% Health)
       if (jock && !jock.isDead) {
         if (jock.health < 25) {
@@ -1355,7 +1364,8 @@ window.BattleModule = {
         health: jock ? jock.health : 0,
         status: jock ? (jock.status || (jock.isDead ? 'KIA' : 'Active')) : 'Unknown',
         weeklyHealRate: jock ? window.GameState.calcJockWeeklyHealRate(jock) : 0,
-        cmoCallsign: window.GameState.getChiefMedicalOfficer()?.callsign || 'Staff Medic'
+        cmoCallsign: window.GameState.getChiefMedicalOfficer()?.callsign || 'Staff Medic',
+        newlyRevealedTrait
       },
       companyProgression: {
         name: st.company?.name || 'Mercenary Company',
@@ -1738,6 +1748,30 @@ window.BattleModule = {
                   <span class="subtext">Contract Status:</span>
                   <span>${s.jockProgression.isDead ? 'TERMINATED (DECEASED)' : `${s.jockProgression.fightsRemaining} Fights Remaining`}</span>
                 </div>
+
+                ${s.jockProgression.newlyRevealedTrait ? `
+                  <div style="background:linear-gradient(135deg, rgba(168,85,247,0.22), rgba(59,130,246,0.22)); border:2px solid #a855f7; border-radius:8px; padding:12px; margin-top:6px;">
+                    <div style="display:flex; align-items:flex-start; gap:10px;">
+                      <span style="font-size:28px; line-height:1;">${s.jockProgression.newlyRevealedTrait.icon}</span>
+                      <div style="flex:1;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
+                          <span class="badge purple mono" style="font-size:10px; font-weight:900;">
+                            &#9733; PERSONALITY TRAIT REVEALED (BATTLE ${s.jockProgression.newlyRevealedTrait.threshold})
+                          </span>
+                        </div>
+                        <div style="font-size:15px; font-weight:800; color:#f8fafc; margin-top:4px;">
+                          ${s.jockProgression.newlyRevealedTrait.name}
+                        </div>
+                        <div style="font-size:12px; color:#cbd5e1; margin-top:2px;">
+                          ${s.jockProgression.newlyRevealedTrait.desc}
+                        </div>
+                        <div class="subtext" style="color:#fde68a; font-size:11px; margin-top:4px;">
+                          <strong>&#128221; Contract Tendency:</strong> ${s.jockProgression.newlyRevealedTrait.contractDesc}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ` : ''}
               </div>
               ${awardsHtml}
             </div>

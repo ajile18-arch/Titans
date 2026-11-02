@@ -450,7 +450,7 @@ window.HQModule = {
     const askingWage = Math.max(500, Math.round(baseAskingWage / 50) * 50);
     const minWage = Math.max(400, Math.round((askingWage * 0.78) / 50) * 50);
 
-    return {
+    const cand = {
       firstName: pick(firstNames),
       lastName: pick(lastNames),
       callsign: pick(callsigns),
@@ -466,8 +466,18 @@ window.HQModule = {
       fairBonus,
       askingWage,
       minWage,
-      patience: 3
+      patience: 3,
+      personalityTraits: []
     };
+
+    window.GameState.ensureJockPersonalityTraits(cand);
+    const pMod = window.GameState.calcJockContractPersonalityModifiers(cand, 10, 2);
+    cand.askingWage = Math.max(500, Math.round((cand.askingWage * pMod.wageMult) / 50) * 50);
+    cand.minWage = Math.max(400, Math.round((cand.askingWage * 0.78) / 50) * 50);
+    cand.fairBonus = Math.max(1500, Math.round((cand.fairBonus * pMod.bonusMult) / 500) * 500);
+    cand.patience = Math.max(2, 3 + (pMod.patienceDelta || 0));
+
+    return cand;
   },
 
   postJobListing() {
@@ -643,15 +653,25 @@ window.HQModule = {
     const c = this.candidate;
     const termLabel = this.getContractTermLabel();
     const lengthMod = this.getContractLengthModifier();
-    const targetAsking = Math.max(450, c.askingWage + lengthMod);
-    const targetMin = Math.max(350, c.minWage + Math.round(lengthMod * 0.7));
+    const pMod = window.GameState.calcJockContractPersonalityModifiers(c, this.proposedFights, this.proposedYears);
+    const targetAsking = Math.max(450, Math.round(((c.askingWage + lengthMod) * pMod.wageMult) / 50) * 50);
+    const targetMin = Math.max(350, Math.round((targetAsking * 0.78) / 50) * 50);
+
+    let prefNote = '';
+    if (pMod.effects.some(e => e.type === 'preference_unmet')) {
+      const unmet = pMod.effects.find(e => e.type === 'preference_unmet');
+      prefNote = ` (${unmet.desc})`;
+    } else if (pMod.effects.some(e => e.type === 'preference_satisfied')) {
+      const sat = pMod.effects.find(e => e.type === 'preference_satisfied');
+      prefNote = ` (${sat.desc})`;
+    }
 
     // Effective monthly value combines wage + amortized bonus difference
     const bonusAdjustment = Math.round((this.proposedBonus - this.offeredBonusInput) * 0.05);
     const effectiveWageOffer = this.proposedWage + bonusAdjustment;
 
     if (effectiveWageOffer >= targetAsking) {
-      this.negotiationMessage = `"${this.proposedBonus.toLocaleString()} Cr signing bonus and ${this.proposedWage.toLocaleString()} Cr/mo on a ${termLabel}? That's a square deal, Commander. Put the contract in front of me and I'll sign right now!"`;
+      this.negotiationMessage = `"${this.proposedBonus.toLocaleString()} Cr signing bonus and ${this.proposedWage.toLocaleString()} Cr/mo on a ${termLabel}? That's a square deal, Commander.${prefNote} Put the contract in front of me and I'll sign right now!"`;
     } else if (effectiveWageOffer >= targetMin) {
       c.patience -= 1;
       if (c.patience <= 0) {
@@ -660,7 +680,7 @@ window.HQModule = {
       } else {
         const counter = Math.round(((this.proposedWage + targetAsking) / 2) / 50) * 50;
         c.askingWage = Math.max(450, counter - lengthMod);
-        this.negotiationMessage = `"Hmm... locking into a ${termLabel} at ${this.proposedWage.toLocaleString()} Cr/mo is a bit tight for my skill set. Meet me at ${counter.toLocaleString()} Cr/mo (or sweeten the signing bonus / adjust the term length) and you have a deal."`;
+        this.negotiationMessage = `"Hmm... locking into a ${termLabel} at ${this.proposedWage.toLocaleString()} Cr/mo is a bit tight for my skill set.${prefNote} Meet me at ${counter.toLocaleString()} Cr/mo (or sweeten the signing bonus / adjust the term length) and you have a deal."`;
       }
     } else {
       c.patience -= 2;
@@ -668,7 +688,7 @@ window.HQModule = {
         this.candidateWalkedOut = true;
         this.negotiationMessage = `"${this.proposedWage.toLocaleString()} Cr a month for a ${termLabel}?! That's an insult to a MechJock. Find yourself a desperate academy washout—interview's over!"`;
       } else {
-        this.negotiationMessage = `"Commander, ${this.proposedWage.toLocaleString()} Cr/mo for a ${termLabel} won't even cover my life-support insurance! You'll need to come much closer to ${targetAsking.toLocaleString()} Cr/mo before I walk out."`;
+        this.negotiationMessage = `"Commander, ${this.proposedWage.toLocaleString()} Cr/mo for a ${termLabel} won't even cover my life-support insurance!${prefNote} You'll need to come much closer to ${targetAsking.toLocaleString()} Cr/mo before I walk out."`;
       }
     }
     this.render();
@@ -732,6 +752,7 @@ window.HQModule = {
       fightHistory: [],
       awards: [],
       assignedMechId: freeMech ? freeMech.id : '',
+      personalityTraits: c.personalityTraits || [],
       stats: { ...c.stats },
       skills: { ...c.skills }
     });
@@ -794,7 +815,8 @@ window.HQModule = {
     const limitReached = askedCount >= maxAllowed;
 
     const lengthMod = this.getContractLengthModifier();
-    const targetAsking = Math.max(450, c.askingWage + lengthMod);
+    const pMod = window.GameState.calcJockContractPersonalityModifiers(c, this.proposedFights, this.proposedYears);
+    const targetAsking = Math.max(450, Math.round(((c.askingWage + lengthMod) * pMod.wageMult) / 50) * 50);
     const p = window.TOS_DATA.portraits.find(x => x.id === c.portraitId) || window.TOS_DATA.portraits[0];
     const portraitHtml = p && p.img
       ? `<img src="${p.img}" alt="${c.callsign}" />`
@@ -1131,26 +1153,52 @@ window.HQModule = {
           </div>
         </div>
 
-        <!-- Jockey Personality -->
+        <!-- Jockey Personality & Contract Modifiers -->
         <div class="col-6 card">
           <div class="section-header">
             <div>
-              <div class="section-title">Jockey Personality</div>
-              <div class="subtext">How ${jock.callsign} carries themselves on and off the field</div>
+              <div class="section-title">Personality &amp; Contract Modifiers</div>
+              <div class="subtext">Revealed after Battles 1, 4, 10, 15, and 25</div>
             </div>
-            <span class="badge primary">${p.archetype}</span>
+            <span class="badge purple mono">${(() => {
+              const traits = gs.getJockPersonalityTraitObjects(jock);
+              const rev = traits.filter(t => t.isRevealed).length;
+              return `${rev}/5 Traits Revealed`;
+            })()}</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:10px; font-size:13px;">
-            <div style="font-style:italic; color:#e2e8f0; border-left:3px solid var(--primary); padding-left:10px;">${p.motto}</div>
-            <div style="display:flex; justify-content:space-between; gap:10px;"><span class="subtext">Temperament</span><strong style="text-align:right;">${p.temperament}</strong></div>
-            ${p.traits.map(t => `
-              <div class="panel" style="padding:8px 10px;">
-                <strong>${t[0]}</strong>
-                <div class="subtext" style="font-size:12px;">${t[1]}</div>
-              </div>
-            `).join('')}
-            <div style="display:flex; justify-content:space-between; gap:10px;"><span class="subtext">Likes</span><strong style="color:var(--accent-green); text-align:right;">${p.likes}</strong></div>
-            <div style="display:flex; justify-content:space-between; gap:10px;"><span class="subtext">Dislikes</span><strong style="color:var(--accent-red); text-align:right;">${p.dislikes}</strong></div>
+          <div style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
+            ${(() => {
+              const fights = jock.missions || (jock.fightHistory ? jock.fightHistory.length : 0);
+              const traits = gs.getJockPersonalityTraitObjects(jock);
+              return traits.map(t => {
+                if (t.isRevealed) {
+                  return `
+                    <div class="panel" style="padding:8px 10px; border-left:3px solid #a855f7; background:rgba(168,85,247,0.08);">
+                      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                        <strong style="color:#f8fafc;">${t.icon} ${t.name}</strong>
+                        <span class="badge purple mono" style="font-size:10px;">REVEALED (BATTLE ${t.threshold})</span>
+                      </div>
+                      <div class="subtext" style="font-size:12px; margin-top:2px;">${t.desc}</div>
+                      <div style="font-size:11px; color:#fde68a; margin-top:3px; font-weight:600;">
+                        &#128221; <strong>Contract Effect:</strong> ${t.contractDesc}
+                      </div>
+                    </div>
+                  `;
+                } else {
+                  return `
+                    <div class="panel" style="padding:8px 10px; border-left:3px solid var(--border-dark); background:rgba(255,255,255,0.02); opacity:0.8;">
+                      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                        <strong style="color:var(--text-muted); font-size:12px;">🔒 Latent Personality Trait</strong>
+                        <span class="badge secondary mono" style="font-size:10px;">LOCKED (BATTLE ${t.threshold})</span>
+                      </div>
+                      <div class="subtext" style="font-size:11px; margin-top:2px;">
+                        Reveals after <strong>Battle ${t.threshold}</strong> (${fights}/${t.threshold} drops completed). Secretly influences contract expectations.
+                      </div>
+                    </div>
+                  `;
+                }
+              }).join('');
+            })()}
           </div>
         </div>
       </div>
@@ -1928,12 +1976,19 @@ window.HQModule = {
     const yearsMod = Math.round((years - 2) * 55);
     const lengthMod = fightsMod + yearsMod;
 
+    // Apply personality trait modifiers (wage, bonus, and contract duration preferences)
+    const pMod = window.GameState.calcJockContractPersonalityModifiers(jock, fights, years);
+
     // Veteran/skilled pilots ask for a modest raise or renewal bonus based on rank and kills
     const careerPrestige = Math.round((jock.kills || 0) * 35 + (jock.xpSpent || 0) * 0.15);
-    const askingWage = Math.max(550, Math.round((currentWage + careerPrestige + lengthMod) / 50) * 50);
-    const minWage = Math.max(450, Math.round(askingWage * 0.85 / 50) * 50);
-    const askingBonus = Math.max(1500, Math.round((askingWage * 2.2 * rk.salaryMult) / 500) * 500);
-    return { askingWage, minWage, askingBonus };
+    const rawAskingWage = (currentWage + careerPrestige + lengthMod) * pMod.wageMult;
+    const askingWage = Math.max(500, Math.round(rawAskingWage / 50) * 50);
+    const minWage = Math.max(400, Math.round((askingWage * 0.85) / 50) * 50);
+
+    const rawAskingBonus = (askingWage * 2.2 * rk.salaryMult) * pMod.bonusMult;
+    const askingBonus = Math.max(1500, Math.round(rawAskingBonus / 500) * 500);
+
+    return { askingWage, minWage, askingBonus, pMod };
   },
 
   openRenegotiationModal(jockId, isExpiredPrompt = false, reason = '') {
@@ -1948,9 +2003,9 @@ window.HQModule = {
     this.renegotiateReason = reason || (jock.contract.expired ? 'Contract term reached' : '');
     this.renegYears = jock.contract.totalYears || 2;
     this.renegFights = jock.contract.totalFights || 10;
-    this.renegPatience = 3;
 
     const terms = this.getRenegotiationAskingTerms(jock, this.renegFights, this.renegYears);
+    this.renegPatience = Math.max(2, 3 + (terms.pMod?.patienceDelta || 0));
     this.renegBonus = terms.askingBonus;
     this.renegWage = terms.askingWage;
 
@@ -1991,18 +2046,33 @@ window.HQModule = {
     const label = `${this.renegFights} Fights or ${this.renegYears} Yr${this.renegYears > 1 ? 's' : ''} Max (Whichever First)`;
 
     if (effectiveWage >= terms.askingWage) {
-      this.renegMessage = `"${this.renegBonus.toLocaleString()} Cr renewal bonus and ${this.renegWage.toLocaleString()} Cr/mo for ${label}? Deal! Click 'Sign Renegotiated Contract' and I'm locked in."`;
+      let prefNote = '';
+      if (terms.pMod?.effects?.some(e => e.type === 'preference_satisfied')) {
+        const sat = terms.pMod.effects.find(e => e.type === 'preference_satisfied');
+        prefNote = ` (${sat.desc})`;
+      }
+      this.renegMessage = `"${this.renegBonus.toLocaleString()} Cr renewal bonus and ${this.renegWage.toLocaleString()} Cr/mo for ${label}? Deal!${prefNote} Click 'Sign Renegotiated Contract' and I'm locked in."`;
     } else if (effectiveWage >= terms.minWage) {
       this.renegPatience -= 1;
+      let penNote = '';
+      if (terms.pMod?.effects?.some(e => e.type === 'preference_unmet')) {
+        const unmet = terms.pMod.effects.find(e => e.type === 'preference_unmet');
+        penNote = ` Notice: ${unmet.desc}.`;
+      }
       if (this.renegPatience <= 0) {
-        this.renegMessage = `"We're too far apart on numbers, Commander. Take a breather and reopen contract talks when you're ready to meet my minimum rate."`;
+        this.renegMessage = `"We're too far apart on numbers, Commander. Take a breather and reopen contract talks when you're ready to meet my minimum rate."${penNote}`;
       } else {
         const counter = Math.round(((this.renegWage + terms.askingWage) / 2) / 50) * 50;
-        this.renegMessage = `"For ${label}, ${this.renegWage.toLocaleString()} Cr/mo is a little light given my combat record. Come up to ${counter.toLocaleString()} Cr/mo (or boost the renewal bonus) and I'll sign."`;
+        this.renegMessage = `"For ${label}, ${this.renegWage.toLocaleString()} Cr/mo is a little light given my combat record.${penNote} Come up to ${counter.toLocaleString()} Cr/mo (or boost the renewal bonus) and I'll sign."`;
       }
     } else {
       this.renegPatience -= 1;
-      this.renegMessage = `"Commander, ${this.renegWage.toLocaleString()} Cr/mo for ${label} is well below market rate for a ${window.GameState.getJockRank(jock).name} Jockey. You'll need to come closer to ${terms.askingWage.toLocaleString()} Cr/mo."`;
+      let penNote = '';
+      if (terms.pMod?.effects?.some(e => e.type === 'preference_unmet')) {
+        const unmet = terms.pMod.effects.find(e => e.type === 'preference_unmet');
+        penNote = ` (${unmet.desc})`;
+      }
+      this.renegMessage = `"Commander, ${this.renegWage.toLocaleString()} Cr/mo for ${label} is well below market rate for a ${window.GameState.getJockRank(jock).name} Jockey.${penNote} You'll need to come closer to ${terms.askingWage.toLocaleString()} Cr/mo."`;
     }
 
     this.updateRenegotiationModalMount();
@@ -2168,6 +2238,24 @@ window.HQModule = {
               <strong class="mono" style="color:var(--accent-amber);">
                 ${terms.askingBonus.toLocaleString()} Cr Bonus + ${terms.askingWage.toLocaleString()} Cr/mo
               </strong>
+            </div>
+
+            <!-- Personality Modifiers Breakdown -->
+            <div class="panel" style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.3); padding:8px 12px; font-size:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="color:#c084fc;">🧠 Personality Contract Modifiers:</strong>
+                <span class="subtext mono" style="font-size:11px;">Wage: <strong>${(terms.pMod.wageMult * 100).toFixed(0)}%</strong> • Bonus: <strong>${(terms.pMod.bonusMult * 100).toFixed(0)}%</strong></span>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:3px; margin-top:5px;">
+                ${terms.pMod.effects.map(e => `
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span>${e.icon || '•'}</span>
+                    <span style="color:${e.type === 'preference_unmet' ? '#f87171' : (e.type === 'preference_satisfied' ? '#4ade80' : 'var(--text-bright)')};">
+                      ${e.isRevealed ? e.desc : `[Hidden Trait]: Influencing contract demands (${e.desc.split(':')[1] || ''})`}
+                    </span>
+                  </div>
+                `).join('')}
+              </div>
             </div>
 
             <div class="grid-12">

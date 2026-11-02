@@ -311,6 +311,137 @@ window.TOS_DATA = {
     }
   ],
 
+  personalityMilestones: [1, 4, 10, 15, 25],
+
+  personalityTraits: [
+    {
+      id: 'long_haul_loyalist',
+      name: 'Long-Haul Loyalist',
+      icon: '🏛️',
+      desc: 'Values company stability, unit loyalty, and long-term security over quick payouts.',
+      contractDesc: 'Prefers Long Contracts (10+ fights or 2+ yrs): grants -15% wage discount. Charges +25% wage surcharge on short contracts (<8 fights).',
+      prefersLong: true,
+      longDiscount: 0.85,
+      shortPenalty: 1.25,
+      wageMult: 1.0,
+      bonusMult: 1.0
+    },
+    {
+      id: 'restless_drifter',
+      name: 'Restless Drifter',
+      icon: '🦅',
+      desc: 'A wandering nomad who feels claustrophobic under long multi-year contracts.',
+      contractDesc: 'Prefers Short Contracts (<=5 fights or 1 yr): normal rate. Charges +30% wage surcharge if locked into a long contract (>6 fights).',
+      prefersShort: true,
+      shortDiscount: 0.90,
+      longPenalty: 1.30,
+      wageMult: 1.0,
+      bonusMult: 1.0
+    },
+    {
+      id: 'mercenary_purist',
+      name: 'Mercenary Purist',
+      icon: '💰',
+      desc: 'Views mech warfare strictly through the bottom line. Unsentimental and business-driven.',
+      contractDesc: 'Demands +25% higher monthly wage across all contract types. Rejects lowball salary offers.',
+      wageMult: 1.25,
+      bonusMult: 1.0
+    },
+    {
+      id: 'upfront_bounty_hunter',
+      name: 'Upfront Bounty Hunter',
+      icon: '💵',
+      desc: 'Demands significant upfront cash in hand before climbing into any combat cockpit.',
+      contractDesc: 'Demands +40% higher Signing Bonus, but accepts a 10% discount on monthly salary.',
+      bonusMult: 1.40,
+      wageMult: 0.90
+    },
+    {
+      id: 'spartan_minimalist',
+      name: 'Spartan Minimalist',
+      icon: '⚔️',
+      desc: 'Austere and disciplined; cares about combat readiness, not corporate luxury.',
+      contractDesc: 'Accepts 15% lower monthly wage and modest signing bonuses (-20%). Easy to negotiate with (+1 Patience).',
+      wageMult: 0.85,
+      bonusMult: 0.80,
+      patienceDelta: 1
+    },
+    {
+      id: 'high_roller_diva',
+      name: 'High-Roller Diva',
+      icon: '💎',
+      desc: 'Accustomed to top-shelf accommodations, celebrity per diems, and executive treatment.',
+      contractDesc: 'Demands +30% higher salary AND +30% signing bonus. Has short negotiation patience (-1 Patience).',
+      wageMult: 1.30,
+      bonusMult: 1.30,
+      patienceDelta: -1
+    },
+    {
+      id: 'career_veteran',
+      name: 'Career Veteran',
+      icon: '🎖️',
+      desc: 'A seasoned company hand who values a trusted commander and reliable lance mates.',
+      contractDesc: 'Prefers Long Contracts (10+ fights): gives 20% wage discount. Charges +25% surcharge on short gigs (<8 fights).',
+      prefersLong: true,
+      longDiscount: 0.80,
+      shortPenalty: 1.25,
+      wageMult: 1.0,
+      bonusMult: 1.0
+    },
+    {
+      id: 'free_agent',
+      name: 'Free Agent',
+      icon: '🐺',
+      desc: 'Guards personal autonomy fiercely; dislikes long institutional commitments.',
+      contractDesc: 'Prefers Short Contracts (<=6 fights): gives 10% wage discount. Demands +25% wage surcharge on long contracts (>6 fights).',
+      prefersShort: true,
+      shortDiscount: 0.90,
+      longPenalty: 1.25,
+      wageMult: 1.0,
+      bonusMult: 1.0
+    },
+    {
+      id: 'glory_hound',
+      name: 'Glory Hound',
+      icon: '🏆',
+      desc: 'Craves the arena spotlight and prestigious, high-visibility combat deployments.',
+      contractDesc: 'Demands +20% higher signing bonus, but grants 10% wage discount on contracts with 8+ fights.',
+      bonusMult: 1.20,
+      prefersLong: true,
+      longDiscount: 0.90,
+      shortPenalty: 1.10,
+      wageMult: 1.0
+    },
+    {
+      id: 'cautious_operator',
+      name: 'Cautious Operator',
+      icon: '🛡️',
+      desc: 'Risk-conscious pilot who demands hazard coverage and life-support assurances.',
+      contractDesc: 'Demands +15% higher monthly wage and +15% signing bonus for emergency hazard reserves.',
+      wageMult: 1.15,
+      bonusMult: 1.15
+    },
+    {
+      id: 'impulsive_gambler',
+      name: 'Impulsive Gambler',
+      icon: '🎲',
+      desc: 'Loves high risk and sudden windfalls; chases big upfront cash.',
+      contractDesc: 'Demands +50% higher signing bonus, but accepts a 15% discount on monthly wage.',
+      bonusMult: 1.50,
+      wageMult: 0.85
+    },
+    {
+      id: 'pragmatic_professional',
+      name: 'Pragmatic Professional',
+      icon: '🤝',
+      desc: 'Fair, measured, and dependable; honors balanced contracts without drama.',
+      contractDesc: 'Balanced contract expectations; grants +1 patience during contract negotiations.',
+      wageMult: 1.0,
+      bonusMult: 1.0,
+      patienceDelta: 1
+    }
+  ],
+
   ranks: [
     { name: 'Rookie', minXpSpent: 0, salaryMult: 1.0 },
     { name: 'Green', minXpSpent: 400, salaryMult: 1.3 },
