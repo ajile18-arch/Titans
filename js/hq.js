@@ -1017,6 +1017,135 @@ window.HQModule = {
     `;
   },
 
+  // Personality is generated once from the Jockey's stats (seeded by id) and then stored on the Jockey
+  getJockPersonality(jock) {
+    if (jock.personality && jock.personality.archetype) return jock.personality;
+
+    const archetypes = {
+      Constitution: { name: 'The Rock', temperament: 'Stoic and unshakeable', motto: '"I\'ve walked away from worse."' },
+      Intelligence: { name: 'The Tactician', temperament: 'Calm, calculating, always three moves ahead', motto: '"Every fight is just math with louder noises."' },
+      Instinct: { name: 'The Gambler', temperament: 'Impulsive and quick on the draw', motto: '"Gut feeling beats a plan every time."' },
+      Reflexes: { name: 'The Hotshot', temperament: 'Cocky, fast, and eager to prove it', motto: '"Blink and you\'ll miss me."' },
+      Piloting: { name: 'The Artist', temperament: 'Smooth, focused, in love with the machine', motto: '"A good Titan dances. It doesn\'t stomp."' },
+      Bravery: { name: 'The Daredevil', temperament: 'Fearless to the point of reckless', motto: '"Close range is the only range."' }
+    };
+    const traitPool = [
+      ['Loyal', 'Sticks with a company that treats them fairly'],
+      ['Mercenary Heart', 'Follows the biggest paycheck'],
+      ['Hot-Headed', 'Rises to every insult and provocation'],
+      ['Superstitious', 'Never launches without a lucky charm'],
+      ['Team Player', 'Looks out for the rest of the lance'],
+      ['Lone Wolf', 'Prefers to fight on their own terms'],
+      ['Perfectionist', 'Obsesses over every misstep'],
+      ['Easygoing', 'Jokes through the worst drops'],
+      ['Grudge Holder', 'Never forgets a rival'],
+      ['Gearhead', 'Happiest with a wrench in hand'],
+      ['Showboat', 'Plays to the crowd in the arena'],
+      ['Disciplined', 'Follows orders to the letter']
+    ];
+    const likesPool = ['Well-maintained Titans', 'Prompt pay', 'Heavy weapons', 'Quiet hangars', 'Arena crowds', 'Long contracts', 'Clean victories', 'Strong coffee'];
+    const dislikesPool = ['Overheating cockpits', 'Late wages', 'Pointless retreats', 'Cheap armor', 'Being micromanaged', 'Short contracts', 'Rival companies', 'Boring patrols'];
+
+    // Deterministic seeded picks so a Jockey's personality never changes between reloads
+    let seed = 0;
+    const key = (jock.id || '') + (jock.callsign || '') + (jock.lastName || '');
+    for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const pickIdx = (len, used = []) => { let n; do { n = Math.floor(rnd() * len); } while (used.includes(n)); return n; };
+
+    let topAttr = 'Constitution';
+    let topVal = -1;
+    Object.entries(jock.stats || {}).forEach(([k, v]) => { if (v > topVal && archetypes[k]) { topVal = v; topAttr = k; } });
+    const arch = archetypes[topAttr];
+
+    const t1 = pickIdx(traitPool.length);
+    const t2 = pickIdx(traitPool.length, [t1]);
+    const l1 = pickIdx(likesPool.length);
+    const d1 = pickIdx(dislikesPool.length);
+
+    jock.personality = {
+      archetype: arch.name,
+      temperament: arch.temperament,
+      motto: arch.motto,
+      traits: [traitPool[t1], traitPool[t2]],
+      likes: likesPool[l1],
+      dislikes: dislikesPool[d1]
+    };
+    return jock.personality;
+  },
+
+  renderContractAndPersonality(jock) {
+    const gs = window.GameState;
+    gs.ensureJockContract(jock);
+    const c = jock.contract;
+    const isMerc = c.type === 'mercenary';
+    const p = this.getJockPersonality(jock);
+    const salary = gs.getJockSalary(jock);
+    const fightsUsed = Math.max(0, (c.totalFights || 0) - (c.fightsRemaining || 0));
+    const monthsUsed = Math.max(0, (c.totalMonths || 0) - (c.monthsRemaining || 0));
+    const fightPct = c.totalFights ? Math.round((c.fightsRemaining / c.totalFights) * 100) : 0;
+    const monthPct = c.totalMonths ? Math.round((c.monthsRemaining / c.totalMonths) * 100) : 0;
+
+    // Estimated end date (if no more fights are fought, the time limit applies)
+    gs.ensureCalendar();
+    const endWeeks = gs.data.calendar.totalWeeks + Math.max(0, c.monthsRemaining) * 4;
+    const endYear = Math.floor(endWeeks / 48) + 1;
+    const endMonth = (Math.floor(endWeeks / 4) % 12) + 1;
+    const termLabel = isMerc ? 'Short-Term Mercenary (Flat Fee)' : `Standard Contract (${c.totalYears || 2} Yr Max)`;
+
+    return `
+      <div class="grid-12">
+        <!-- Contract Details -->
+        <div class="col-6 card">
+          <div class="section-header">
+            <div>
+              <div class="section-title">Contract Details</div>
+              <div class="subtext">Ends at the Fight limit or the Time limit, whichever comes first</div>
+            </div>
+            <span class="badge ${c.expired ? 'red' : 'green'} mono">${c.expired ? 'EXPIRED' : 'ACTIVE'}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:13px;">
+            <div style="display:flex; justify-content:space-between;"><span class="subtext">Contract Type</span><strong>${termLabel}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span class="subtext">Monthly Wage</span><strong class="mono">${isMerc ? '0 Cr/mo (Flat Fee Paid)' : salary.toLocaleString() + ' Cr/mo'}</strong></div>
+            <div>
+              <div style="display:flex; justify-content:space-between;"><span class="subtext">Fights</span><strong class="mono">${c.fightsRemaining} left of ${c.totalFights} (${fightsUsed} fought)</strong></div>
+              <div class="bar-bg" style="margin-top:4px;"><div class="bar-fill" style="width:${fightPct}%"></div></div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;"><span class="subtext">Time</span><strong class="mono">${c.monthsRemaining} Mos left of ${c.totalMonths} (${monthsUsed} served)</strong></div>
+              <div class="bar-bg" style="margin-top:4px;"><div class="bar-fill" style="width:${monthPct}%"></div></div>
+            </div>
+            <div style="display:flex; justify-content:space-between;"><span class="subtext">Latest End Date</span><strong class="mono">${c.expired ? 'Contract finished' : `Year ${endYear} • Month ${endMonth}`}</strong></div>
+            <button class="btn ${c.expired ? 'btn-primary' : ''}" onclick="HQModule.openRenegotiationModal('${jock.id}', false)">&#128221; Renegotiate Contract</button>
+          </div>
+        </div>
+
+        <!-- Jockey Personality -->
+        <div class="col-6 card">
+          <div class="section-header">
+            <div>
+              <div class="section-title">Jockey Personality</div>
+              <div class="subtext">How ${jock.callsign} carries themselves on and off the field</div>
+            </div>
+            <span class="badge primary">${p.archetype}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:13px;">
+            <div style="font-style:italic; color:#e2e8f0; border-left:3px solid var(--primary); padding-left:10px;">${p.motto}</div>
+            <div style="display:flex; justify-content:space-between; gap:10px;"><span class="subtext">Temperament</span><strong style="text-align:right;">${p.temperament}</strong></div>
+            ${p.traits.map(t => `
+              <div class="panel" style="padding:8px 10px;">
+                <strong>${t[0]}</strong>
+                <div class="subtext" style="font-size:12px;">${t[1]}</div>
+              </div>
+            `).join('')}
+            <div style="display:flex; justify-content:space-between; gap:10px;"><span class="subtext">Likes</span><strong style="color:var(--accent-green); text-align:right;">${p.likes}</strong></div>
+            <div style="display:flex; justify-content:space-between; gap:10px;"><span class="subtext">Dislikes</span><strong style="color:var(--accent-red); text-align:right;">${p.dislikes}</strong></div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
   openJockeyPage(id, subTab = 'dossier') {
     window.GameState.data.selectedJockId = id;
     this.jockeyPageOpen = true;
@@ -1398,6 +1527,8 @@ window.HQModule = {
           </div>
         </div>
       </div>
+
+      ${this.renderContractAndPersonality(jock)}
 
       <!-- Classic 6 Attributes & 0-100% Granular Skills Grid -->
       <div class="grid-12">
