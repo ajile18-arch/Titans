@@ -1,24 +1,31 @@
-// MechJocks Ambient Music — procedurally generated with the Web Audio API (no audio files needed)
-// A slow, moody sci-fi pad loop with a sparse echoing melody. Starts on first click/keypress (browser autoplay rule).
+// MechJocks Ambient Music v2 — procedurally generated with the Web Audio API (no audio files needed)
+// Warm, slow pad in D minor with a soft sub-bass and gentle plucked notes.
+// Built to avoid crackle: few voices, smooth envelopes that always fade fully to silence, a damped echo,
+// a master compressor/limiter, and chord scheduling on the audio clock (not setInterval).
 
 window.MusicModule = {
   ctx: null,
   master: null,
+  padBus: null,
   started: false,
   muted: false,
   volume: 0.5,
-  timer: null,
+  schedulerTimer: null,
+  nextChordTime: 0,
   step: 0,
   STORAGE_KEY: 'mechjocks_music',
 
-  // A minor progression: Am - F - C - G (each chord lasts 8 seconds)
+  CHORD_SECONDS: 12,
+
+  // D minor loop: Dm - Bb - F - C   (root for bass, then 3 pad notes)
   chords: [
-    [110.00, 164.81, 220.00, 261.63], // Am
-    [87.31, 130.81, 174.61, 220.00],  // F
-    [130.81, 196.00, 261.63, 329.63], // C
-    [98.00, 146.83, 196.00, 246.94]   // G
+    { bass: 73.42,  pad: [146.83, 174.61, 220.00] }, // Dm
+    { bass: 58.27,  pad: [116.54, 146.83, 174.61] }, // Bb
+    { bass: 87.31,  pad: [174.61, 220.00, 261.63] }, // F
+    { bass: 65.41,  pad: [130.81, 196.00, 261.63] }  // C
   ],
-  melodyScale: [440.00, 523.25, 587.33, 659.25, 783.99, 880.00], // A minor pentatonic-ish
+  // D natural minor, calm mid register for the plucks
+  melodyNotes: [293.66, 349.23, 392.00, 440.00, 523.25, 587.33],
 
   init() {
     try {
@@ -62,9 +69,9 @@ window.MusicModule = {
 
   applyVolume() {
     if (!this.master) return;
-    const target = this.muted ? 0 : this.volume * 0.25;
-    this.master.gain.cancelScheduledValues(this.ctx.currentTime);
-    this.master.gain.linearRampToValueAtTime(target, this.ctx.currentTime + 0.4);
+    const target = this.muted ? 0 : this.volume * 0.5;
+    // setTargetAtTime gives a click-free, smooth volume change
+    this.master.gain.setTargetAtTime(target, this.ctx.currentTime, 0.15);
   },
 
   toggleMute() {
@@ -90,84 +97,139 @@ window.MusicModule = {
     this.started = true;
     this.ctx = new AC();
     if (this.ctx.state === 'suspended') this.ctx.resume();
+    const ctx = this.ctx;
 
-    // Master -> gentle echo -> output
-    this.master = this.ctx.createGain();
+    // Final stage: master volume -> compressor/limiter -> speakers (prevents any clipping crackle)
+    this.master = ctx.createGain();
     this.master.gain.value = 0;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -18;
+    limiter.knee.value = 24;
+    limiter.ratio.value = 6;
+    limiter.attack.value = 0.01;
+    limiter.release.value = 0.4;
+    this.master.connect(limiter);
+    limiter.connect(ctx.destination);
 
-    const delay = this.ctx.createDelay(2.0);
-    delay.delayTime.value = 0.55;
-    const feedback = this.ctx.createGain();
-    feedback.gain.value = 0.38;
-    const wet = this.ctx.createGain();
-    wet.gain.value = 0.45;
-    delay.connect(feedback);
-    feedback.connect(delay);
-    delay.connect(wet);
+    // Pad bus: shared soft low-pass that slowly opens and closes for gentle movement
+    this.padBus = ctx.createGain();
+    this.padBus.gain.value = 0.5;
+    const padFilter = ctx.createBiquadFilter();
+    padFilter.type = 'lowpass';
+    padFilter.frequency.value = 700;
+    padFilter.Q.value = 0.4;
+    this.padBus.connect(padFilter);
+    padFilter.connect(this.master);
 
-    this.bus = this.ctx.createGain();
-    this.bus.connect(this.master);
-    this.bus.connect(delay);
-    wet.connect(this.master);
-    this.master.connect(this.ctx.destination);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.05;
+    const lfoDepth = ctx.createGain();
+    lfoDepth.gain.value = 220;
+    lfo.connect(lfoDepth);
+    lfoDepth.connect(padFilter.frequency);
+    lfo.start();
+
+    // Pluck bus with a damped echo (low-pass in the feedback loop so repeats get softer and darker)
+    this.pluckBus = ctx.createGain();
+    this.pluckBus.gain.value = 0.7;
+    const echo = ctx.createDelay(2.0);
+    echo.delayTime.value = 0.6;
+    const feedback = ctx.createGain();
+    feedback.gain.value = 0.3;
+    const damp = ctx.createBiquadFilter();
+    damp.type = 'lowpass';
+    damp.frequency.value = 1500;
+    const echoOut = ctx.createGain();
+    echoOut.gain.value = 0.5;
+    this.pluckBus.connect(this.master);
+    this.pluckBus.connect(echo);
+    echo.connect(damp);
+    damp.connect(feedback);
+    feedback.connect(echo);
+    damp.connect(echoOut);
+    echoOut.connect(this.master);
 
     this.applyVolume();
-    this.playChord();
-    this.timer = setInterval(() => this.playChord(), 8000);
+
+    // Audio-clock scheduler: looks ahead and schedules chords precisely, immune to timer jitter
+    this.nextChordTime = ctx.currentTime + 0.2;
+    this.schedule();
+    this.schedulerTimer = setInterval(() => this.schedule(), 1000);
   },
 
-  playChord() {
+  schedule() {
     if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const chord = this.chords[this.step % this.chords.length];
-    this.step++;
-    const dur = 9.5; // slight overlap for smooth transitions
-
-    chord.forEach((freq, i) => {
-      [-4, 4].forEach(detune => {
-        const osc = this.ctx.createOscillator();
-        osc.type = i === 0 ? 'triangle' : 'sine';
-        osc.frequency.value = freq;
-        osc.detune.value = detune;
-
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 900;
-
-        const g = this.ctx.createGain();
-        g.gain.setValueAtTime(0, now);
-        g.gain.linearRampToValueAtTime(i === 0 ? 0.22 : 0.12, now + 2.5);
-        g.gain.linearRampToValueAtTime(0, now + dur);
-
-        osc.connect(filter);
-        filter.connect(g);
-        g.connect(this.bus);
-        osc.start(now);
-        osc.stop(now + dur + 0.1);
-      });
-    });
-
-    // Sparse melody notes (3 to 4 per chord, random spacing)
-    const notes = 3 + Math.floor(Math.random() * 2);
-    for (let n = 0; n < notes; n++) {
-      const t = now + 1 + n * 2 + Math.random() * 1.2;
-      const f = this.melodyScale[Math.floor(Math.random() * this.melodyScale.length)];
-      this.playBell(f, t);
+    while (this.nextChordTime < this.ctx.currentTime + 6) {
+      this.playChord(this.nextChordTime);
+      this.nextChordTime += this.CHORD_SECONDS;
     }
   },
 
-  playBell(freq, when) {
-    const osc = this.ctx.createOscillator();
-    osc.type = 'sine';
+  // Smooth envelope that always starts at 0 and decays fully to 0 before the oscillator stops
+  envelope(gainNode, when, peak, attack, hold, release) {
+    const g = gainNode.gain;
+    g.setValueAtTime(0, when);
+    g.linearRampToValueAtTime(peak, when + attack);
+    g.setValueAtTime(peak, when + attack + hold);
+    g.setTargetAtTime(0, when + attack + hold, release / 4);
+    return when + attack + hold + release * 2; // safe stop time (well past the fade tail)
+  },
+
+  playChord(when) {
+    const ctx = this.ctx;
+    const chord = this.chords[this.step % this.chords.length];
+    this.step++;
+    const len = this.CHORD_SECONDS;
+
+    // Warm pad: 3 notes, each as 2 slightly detuned triangle/sine voices (6 voices total)
+    chord.pad.forEach((freq) => {
+      [-5, 5].forEach((detune, idx) => {
+        const osc = ctx.createOscillator();
+        osc.type = idx === 0 ? 'sine' : 'triangle';
+        osc.frequency.value = freq;
+        osc.detune.value = detune;
+        const g = ctx.createGain();
+        const stopAt = this.envelope(g, when, 0.11, 3.5, len - 6, 5);
+        osc.connect(g);
+        g.connect(this.padBus);
+        osc.start(when);
+        osc.stop(stopAt + 0.5);
+      });
+    });
+
+    // Soft sub-bass root note
+    const bass = ctx.createOscillator();
+    bass.type = 'sine';
+    bass.frequency.value = chord.bass;
+    const bg = ctx.createGain();
+    const bStop = this.envelope(bg, when, 0.16, 3, len - 5, 4);
+    bass.connect(bg);
+    bg.connect(this.padBus);
+    bass.start(when);
+    bass.stop(bStop + 0.5);
+
+    // 3 gentle plucked notes per chord at relaxed intervals
+    const pluckTimes = [2.5, 6.0, 9.0];
+    pluckTimes.forEach((offset) => {
+      const f = this.melodyNotes[Math.floor(Math.random() * this.melodyNotes.length)];
+      this.playPluck(f, when + offset + Math.random() * 0.8);
+    });
+  },
+
+  playPluck(freq, when) {
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
     osc.frequency.value = freq;
-    const g = this.ctx.createGain();
+    const g = ctx.createGain();
+    // 40 ms attack avoids a click; decay uses a time constant so it tails off to true silence
     g.gain.setValueAtTime(0, when);
-    g.gain.linearRampToValueAtTime(0.16, when + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.0008, when + 2.4);
+    g.gain.linearRampToValueAtTime(0.09, when + 0.04);
+    g.gain.setTargetAtTime(0, when + 0.05, 0.7);
     osc.connect(g);
-    g.connect(this.bus);
+    g.connect(this.pluckBus);
     osc.start(when);
-    osc.stop(when + 2.5);
+    osc.stop(when + 6);
   }
 };
 
