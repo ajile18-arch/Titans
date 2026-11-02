@@ -79,9 +79,9 @@ window.BattleModule = {
     this.enemyCooldown = 6;
 
     this.logs = [
-      `[00:00s] Combat Deployment: ${contract ? contract.title : 'Tactical Drop'} (${contract?.client?.name || 'Sector Operations'}).`,
-      `[00:00s] Pilot: ${jock ? jock.callsign : 'Pilot'} deployed in ${mech ? mech.customName : 'Titan'} at Hex (1,6).`,
-      `[00:00s] Hostile contact locked: ${this.enemy.name} at Northeast Hex (8,1) [80-Tile Theater].`
+      { time: '[00:00s]', text: `Combat Deployment: ${contract ? contract.title : 'Tactical Drop'} (${contract?.client?.name || 'Sector Operations'}).`, type: 'system' },
+      { time: '[00:00s]', text: `Pilot: ${jock ? jock.callsign : 'Pilot'} deployed in ${mech ? mech.customName : 'Titan'} at Hex (1,6).`, type: 'player' },
+      { time: '[00:00s]', text: `Hostile contact locked: ${this.enemy.name} at Northeast Hex (8,1) [80-Tile Theater].`, type: 'hostile' }
     ];
   },
 
@@ -92,11 +92,12 @@ window.BattleModule = {
     return st.jocks.find(j => j.assignedMechId) || st.jocks[0];
   },
 
-  log(msg) {
+  log(msg, type = 'system') {
     const mins = String(Math.floor(this.clockSec / 60)).padStart(2, '0');
     const secs = String(this.clockSec % 60).padStart(2, '0');
-    this.logs.unshift(`[${mins}:${secs}s] ${msg}`);
-    if (this.logs.length > 12) this.logs.pop();
+    const time = `[${mins}:${secs}s]`;
+    this.logs.unshift({ time, text: msg, type });
+    if (this.logs.length > 20) this.logs.pop();
   },
 
   advanceTime(seconds, mech, metrics) {
@@ -151,7 +152,7 @@ window.BattleModule = {
       if (bestHex && (bestHex.r !== this.enemy.r || bestHex.c !== this.enemy.c)) {
         this.enemy.r = bestHex.r;
         this.enemy.c = bestHex.c;
-        this.log(`${this.enemy.name} advances to ${bestHex.terrain.toUpperCase()} Hex (${bestHex.c},${bestHex.r}).`);
+        this.log(`${this.enemy.name} advances to ${bestHex.terrain.toUpperCase()} Hex (${bestHex.c},${bestHex.r}).`, 'hostile');
       }
     }
 
@@ -169,7 +170,7 @@ window.BattleModule = {
       const hitLoc = locs[Math.floor(Math.random() * 7)];
       playerMech.armor[hitLoc] = Math.max(0, playerMech.armor[hitLoc] - this.enemy.dmg);
       this.battleStats.damageTaken += this.enemy.dmg;
-      this.log(`ALERT: ${this.enemy.name} hits your ${hitLoc} for ${this.enemy.dmg} dmg!`);
+      this.log(`ALERT: ${this.enemy.name} hits your ${hitLoc} for ${this.enemy.dmg} dmg!`, 'hostile');
 
       // Damage installed weapons/components in the struck body location
       window.GameState.ensureMechPartConditions(playerMech);
@@ -182,7 +183,7 @@ window.BattleModule = {
         playerMech.partConditions[hitLoc][cIdx] = nextCond;
         const compObj = window.GameState.getComponent(locComps[cIdx]);
         if (compObj) {
-          this.log(`COMPONENT HIT: ${compObj.name} in ${hitLoc} damaged (${nextCond}% condition)!`);
+          this.log(`COMPONENT HIT: ${compObj.name} in ${hitLoc} damaged (${nextCond}% condition)!`, 'hostile');
         }
       }
 
@@ -212,10 +213,10 @@ window.BattleModule = {
           this.recordBattleHistory(jock, playerMech, 'EJECTED', 'Core Breach — Emergency Ejection', 75, 'EJECT');
         }
         window.GameState.advanceTimeWeeks(2, 'Combat Drop Recovery');
-        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered (+75 Survival XP • +2 Wks Elapsed).`);
+        this.log(`CRITICAL: Your Titan suffered core failure! Emergency ejection triggered (+75 Survival XP • +2 Wks Elapsed).`, 'hostile');
       }
     } else {
-      this.log(`${this.enemy.name} fires salvos — evaded! (Roll ${roll} > ${toHit}%)`);
+      this.log(`${this.enemy.name} fires salvos — evaded! (Roll ${roll} > ${toHit}%)`, 'hostile');
     }
     window.GameState.save();
   },
@@ -241,7 +242,7 @@ window.BattleModule = {
     this.playerPos.heat += dist * (targetHex?.terrain === 'hill' ? 3 : 2);
 
     const moveSec = Math.max(3, (7 - (metrics.tpl.baseSpeedHex || 2)) * dist);
-    this.log(`Maneuvered ${dist} hex${dist > 1 ? 'es' : ''} to ${terrainName} Hex (${c},${r}) [${moveSec}s elapsed].`);
+    this.log(`Maneuvered ${dist} hex${dist > 1 ? 'es' : ''} to ${terrainName} Hex (${c},${r}) [${moveSec}s elapsed].`, 'player');
     this.advanceTime(moveSec, mech, metrics);
     this.render();
   },
@@ -254,7 +255,7 @@ window.BattleModule = {
     const jock = this.getActiveCombatJock();
     const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
     const metrics = window.GameState.computeMechMetrics(mech);
-    this.log(`Torso twisted to firing arc ${this.playerPos.facing} [2s].`);
+    this.log(`Torso twisted to firing arc ${this.playerPos.facing} [2s].`, 'player');
     this.advanceTime(2, mech, metrics);
     this.render();
   },
@@ -266,7 +267,7 @@ window.BattleModule = {
     const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
     const metrics = window.GameState.computeMechMetrics(mech);
     this.playerPos.heat = Math.max(0, this.playerPos.heat - 10);
-    this.log(`Flushed reactor coolant (-10C Heat) [5s].`);
+    this.log(`Flushed reactor coolant (-10C Heat) [5s].`, 'player');
     this.advanceTime(5, mech, metrics);
     this.render();
   },
@@ -330,7 +331,7 @@ window.BattleModule = {
       this.enemy.armor[hitLoc] = Math.max(0, this.enemy.armor[hitLoc] - weapon.dmg);
       this.battleStats.shotsHit += 1;
       this.battleStats.damageDealt += weapon.dmg;
-      this.log(`HIT! ${weapon.name} strikes Enemy ${hitLoc} for ${weapon.dmg} dmg (Roll ${roll}<=${hitChance}%).`);
+      this.log(`HIT! ${weapon.name} strikes Enemy ${hitLoc} for ${weapon.dmg} dmg (Roll ${roll}<=${hitChance}%).`, 'player');
 
       // Check Victory (Head, CT, or both Legs destroyed)
       const legsGone = this.enemy.armor.LL <= 0 && this.enemy.armor.RL <= 0;
@@ -389,10 +390,10 @@ window.BattleModule = {
           this.recordBattleHistory(jock, mech, 'VICTORY', killMethod, 250, killCode);
         }
         window.GameState.advanceTimeWeeks(1, `Combat Drop vs. ${this.enemy.name}`);
-        this.log(`VICTORY! ${this.enemy.name} neutralized! Earned ${totalPayout.toLocaleString()} Cr (${bounty.toLocaleString()} Cr bounty + ${salvageBonus.toLocaleString()} Cr salvage)${salvagedCompName ? ` and recovered a ${salvagedCompName}!` : ''} (+250 XP for ${jock ? jock.callsign : 'Pilot'})`);
+        this.log(`VICTORY! ${this.enemy.name} neutralized! Earned ${totalPayout.toLocaleString()} Cr (${bounty.toLocaleString()} Cr bounty + ${salvageBonus.toLocaleString()} Cr salvage)${salvagedCompName ? ` and recovered a ${salvagedCompName}!` : ''} (+250 XP for ${jock ? jock.callsign : 'Pilot'})`, 'player');
       }
     } else {
-      this.log(`MISS! ${weapon.name} wide of Enemy ${this.aimTarget} (Roll ${roll}>${hitChance}%).`);
+      this.log(`MISS! ${weapon.name} wide of Enemy ${this.aimTarget} (Roll ${roll}>${hitChance}%).`, 'player');
     }
 
     this.advanceTime(3, mech, metrics);
@@ -417,7 +418,7 @@ window.BattleModule = {
         fightNum: fightNumber
       });
       newAwards.push(def.title);
-      this.log(`COMMENDATION AWARDED: ${jock.callsign} received the [${def.title}]!`);
+      this.log(`COMMENDATION AWARDED: ${jock.callsign} received the [${def.title}]!`, 'player');
     };
 
     if (outcome === 'VICTORY') {
@@ -1670,9 +1671,28 @@ window.BattleModule = {
           <div class="card">
             <div class="section-header">
               <div class="section-title">Combat Telemetry Log</div>
+              <div style="display:flex; gap:10px; font-size:11px;" class="mono subtext">
+                <span><strong style="color:var(--accent-green, #10b981);">&#9632;</strong> My Actions</span>
+                <span><strong style="color:var(--accent-red, #ef4444);">&#9632;</strong> Hostile Actions</span>
+              </div>
             </div>
-            <div class="panel mono" style="font-size:12px; display:flex; flex-direction:column; gap:5px; max-height:170px; overflow-y:auto;">
-              ${this.logs.map(l => `<div>${l}</div>`).join('')}
+            <div class="panel mono" style="font-size:12px; display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; background:#070d18;">
+              ${this.logs.map(l => {
+                const time = typeof l === 'object' ? l.time : '';
+                const text = typeof l === 'object' ? l.text : l;
+                const type = typeof l === 'object' ? l.type : 'system';
+                const color = type === 'player' ? 'var(--accent-green, #10b981)'
+                            : type === 'hostile' ? 'var(--accent-red, #ef4444)'
+                            : '#94a3b8';
+                const tag = type === 'player' ? '<span style="color:#10b981; font-weight:800;">[PLAYER]</span>'
+                          : type === 'hostile' ? '<span style="color:#ef4444; font-weight:800;">[HOSTILE]</span>'
+                          : '<span style="color:#38bdf8; font-weight:700;">[TAC-NET]</span>';
+                return `
+                  <div style="color:${color}; line-height:1.45;">
+                    <span style="color:#64748b; font-size:11px;">${time}</span> ${tag} ${text}
+                  </div>
+                `;
+              }).join('')}
             </div>
           </div>
 
