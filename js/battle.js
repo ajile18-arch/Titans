@@ -248,7 +248,11 @@ window.BattleModule = {
         const dmgCtrl = jock.skills?.['Damage Control'] || 45;
         const pilotShockResist = Math.round((conStat - 15) * 0.45 + (dmgCtrl - 30) * 0.2);
 
-        const finalConcussion = Math.max(10, Math.min(75, baseConcussion - pilotShockResist));
+        // Safety & Damage Control Officer trauma dampening
+        const safetyOff = window.GameState.getAssignedJobJock('safetyOfficer');
+        const safetyResist = safetyOff ? ((window.TOS_DATA?.companyJobs || []).find(j => j.id === 'safetyOfficer')?.calcModifier(safetyOff)?.concussionResist || 0) : 0;
+
+        const finalConcussion = Math.max(5, Math.min(75, baseConcussion - pilotShockResist - safetyResist));
         const injuryRoll = Math.floor(Math.random() * 100) + 1;
 
         if (injuryRoll <= finalConcussion) {
@@ -259,7 +263,8 @@ window.BattleModule = {
             window.SoundFX.playCockpitConcussion();
           }
         } else {
-          this.log(`COCKPIT IMPACT RESISTED: ${jock.callsign}'s high Constitution absorbed the cockpit concussion! (Roll ${injuryRoll} > ${finalConcussion}%)`, 'player');
+          const safetyNote = (safetyOff && safetyResist > 0) ? ` (Safety Officer ${safetyOff.callsign}: -${safetyResist}% trauma dampening)` : '';
+          this.log(`COCKPIT IMPACT RESISTED: ${jock.callsign}'s shock resistance absorbed the cockpit concussion!${safetyNote} (Roll ${injuryRoll} > ${finalConcussion}%)`, 'player');
         }
       }
 
@@ -494,7 +499,11 @@ window.BattleModule = {
     const playerPronePenalty = this.playerFallen ? -20 : 0;
     const enemyProneBonus = this.enemyFallen ? 15 : 0;
 
-    return Math.max(10, Math.min(95, skillVal + refBonus + metrics.hitBonus + rangePenalty + heatPenalty + aimMod + elevationBonus + coverPenalty + playerPronePenalty + enemyProneBonus));
+    // Tactical Operations Officer Firing Solution accuracy bonus
+    const tacOff = window.GameState.getAssignedJobJock('tacticalOfficer');
+    const tacBonus = tacOff ? ((window.TOS_DATA?.companyJobs || []).find(j => j.id === 'tacticalOfficer')?.calcModifier(tacOff)?.hitBonus || 0) : 0;
+
+    return Math.max(10, Math.min(95, skillVal + refBonus + metrics.hitBonus + rangePenalty + heatPenalty + aimMod + elevationBonus + coverPenalty + playerPronePenalty + enemyProneBonus + tacBonus));
   },
 
   fireWeapon(instanceKey) {
@@ -511,7 +520,10 @@ window.BattleModule = {
     const hitChance = this.calcWeaponHitChance(jock, metrics, weapon);
     const roll = Math.floor(Math.random() * 100) + 1;
 
-    this.playerPos.heat += weapon.heat;
+    // Safety & Damage Control Officer emergency heat dissipation bonus
+    const safetyOff = window.GameState.getAssignedJobJock('safetyOfficer');
+    const safetyHeatBonus = (safetyOff && this.playerPos.heat > 10) ? 1 : 0;
+    this.playerPos.heat = Math.max(0, this.playerPos.heat + weapon.heat - safetyHeatBonus);
     this.weaponCooldowns[instanceKey] = weapon.sec;
     this.battleStats.shotsFired += 1;
 
@@ -960,8 +972,13 @@ window.BattleModule = {
     this.proposedBounty = offer.baseBounty;
     this.proposedSalvage = offer.baseSalvagePct || 20;
     this.proposedPrepWeeks = offer.suggestedPrepWeeks || 2;
-    this.patience = offer.patience || 3;
-    this.negotiationMessage = `Liaison: "${offer.client.introQuote || 'We need an experienced mercenary lance for this assignment.'}"`;
+
+    // Recon & Intelligence Officer negotiation patience buffer
+    const reconOff = window.GameState.getAssignedJobJock('reconOfficer');
+    this.patience = (offer.patience || 3) + (reconOff ? 1 : 0);
+    this.negotiationMessage = reconOff
+      ? `Recon Officer ${reconOff.callsign} intercepted corporate negotiation margins (+1 strike patience buffer). Starting patience: ${this.patience}/4!`
+      : `Liaison: "${offer.client.introQuote || 'We need an experienced mercenary lance for this assignment.'}"`;
     this.arenaTab = 'negotiate';
     this.render();
   },
@@ -1173,7 +1190,13 @@ window.BattleModule = {
     const bounty = this.currentContract?.negotiatedBounty || 35000;
     const salvagePct = this.currentContract?.negotiatedSalvagePct || 20;
     const salvageBonus = outcome === 'VICTORY' ? Math.round(bounty * (salvagePct / 100)) : 0;
-    const totalPayout = outcome === 'VICTORY' ? (bounty + salvageBonus) : 0;
+
+    // Recon & Intelligence Officer bounty bonus on victorious execution
+    const reconOff = window.GameState.getAssignedJobJock('reconOfficer');
+    const intelMod = reconOff ? ((window.TOS_DATA?.companyJobs || []).find(j => j.id === 'reconOfficer')?.calcModifier(reconOff)) : null;
+    const intelBonus = (outcome === 'VICTORY' && intelMod) ? Math.round(bounty * (intelMod.bountyBonusPct / 100)) : 0;
+
+    const totalPayout = outcome === 'VICTORY' ? (bounty + salvageBonus + intelBonus) : 0;
     const prevCredits = st.credits;
     if (totalPayout > 0) st.credits += totalPayout;
 
@@ -1313,6 +1336,8 @@ window.BattleModule = {
         baseBounty: bounty,
         salvagePct,
         salvageBonus,
+        intelBonus,
+        intelOfficerCallsign: reconOff ? reconOff.callsign : '',
         totalPayout,
         prevCredits,
         newCredits: st.credits
@@ -1547,7 +1572,7 @@ window.BattleModule = {
               ${s.financials.totalPayout > 0 ? '+' : ''}${s.financials.totalPayout.toLocaleString()} Cr
             </div>
             <div class="subtext" style="font-size:12px;">
-              ${isVictory ? `Bounty: ${s.financials.baseBounty.toLocaleString()} Cr + Salvage: ${s.financials.salvageBonus.toLocaleString()} Cr (${s.financials.salvagePct}%)` : `No combat bounty awarded (Mission failed)`}
+              ${isVictory ? `Bounty: ${s.financials.baseBounty.toLocaleString()} Cr + Salvage: ${s.financials.salvageBonus.toLocaleString()} Cr (${s.financials.salvagePct}%)${s.financials.intelBonus > 0 ? ` + Intel: ${s.financials.intelBonus.toLocaleString()} Cr (${s.financials.intelOfficerCallsign})` : ''}` : `No combat bounty awarded (Mission failed)`}
             </div>
             <div style="margin-top:6px; font-size:11px; color:var(--accent-amber);" class="mono">
               War Chest: ${s.financials.newCredits.toLocaleString()} Cr

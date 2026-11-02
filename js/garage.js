@@ -407,7 +407,12 @@ window.GarageModule = {
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:8px; max-height:380px; overflow-y:auto; padding-right:4px;">
-                  ${filteredCatalog.map(comp => {
+                  ${(() => {
+                    const qm = window.GameState.getAssignedJobJock('quartermaster');
+                    const qmMod = qm ? (window.TOS_DATA?.companyJobs?.find(j => j.id === 'quartermaster')?.calcModifier(qm)) : null;
+                    const qmDiscountPct = qmMod ? qmMod.discountPct : 0;
+
+                    return filteredCatalog.map(comp => {
                     const ownedItems = window.GameState.getOwnedPartsByCompId(comp.id);
                     const owned = ownedItems.length;
                     const nextToSell = owned > 0 ? ownedItems[ownedItems.length - 1] : null; // sell lowest condition first or show its price
@@ -415,9 +420,10 @@ window.GarageModule = {
                     const sellValue = window.GameState.getPartResaleValue(comp.id, nextSellCond);
                     const baseHalfValue = window.GameState.getPartResaleValue(comp.id, 100);
 
+                    const effectiveCost = Math.round(comp.cost * (1 - (qmDiscountPct / 100)));
                     const fitsSlots = (usedSlots + comp.slots) <= maxSlots;
                     const fitsTons = (metrics.totalTons + comp.tons) <= metrics.maxTons;
-                    const canAfford = st.credits >= comp.cost;
+                    const canAfford = st.credits >= effectiveCost;
                     const canEquip = owned > 0 && fitsSlots && fitsTons;
 
                     return `
@@ -432,7 +438,8 @@ window.GarageModule = {
                             ${comp.dmg > 0 ? `Dmg: ${comp.dmg} • Heat: +${comp.heat}C • Recycle: ${comp.sec}s • Range: ${comp.range} Hex` : `Heat: ${comp.heat}C • Support System`}
                           </div>
                           <div class="mono" style="font-size:12px; margin-top:4px;">
-                            <span style="color:var(--accent-amber); font-weight:700;">Buy: ${comp.cost.toLocaleString()} Cr</span>
+                            <span style="color:var(--accent-amber); font-weight:700;">Buy: ${effectiveCost.toLocaleString()} Cr</span>
+                            ${qmDiscountPct > 0 ? `<span class="badge green" style="font-size:10px; padding:1px 5px; margin-left:4px;">-${qmDiscountPct}% QM</span>` : ''}
                             <span class="subtext" style="margin-left:8px;">• Sell (100%): ${baseHalfValue.toLocaleString()} Cr</span>
                           </div>
                           ${owned > 0 ? `
@@ -450,7 +457,7 @@ window.GarageModule = {
                               ${!canAfford ? 'disabled' : ''}
                               onclick="GarageModule.buyPart('${comp.id}')"
                             >
-                              Buy (${(comp.cost / 1000).toFixed(0)}k Cr)
+                              Buy (${(effectiveCost / 1000).toFixed(1)}k Cr)
                             </button>
                             ${owned > 0 ? `
                               <button
@@ -475,7 +482,8 @@ window.GarageModule = {
                         </div>
                       </div>
                     `;
-                  }).join('')}
+                  }).join('');
+                })()}
                 </div>
               </div>
             </div>
@@ -577,8 +585,8 @@ window.GarageModule = {
     });
 
     if (missingUnits <= 0) return;
-    const bestMechSkill = Math.max(30, ...st.jocks.map(j => j.skills['Mechanic (Repair)'] || 30));
-    const discount = Math.min(0.5, bestMechSkill / 200);
+    const discount = window.GameState.getRepairDiscount();
+    const leadMech = window.GameState.getLeadMechanic();
     const cost = Math.round(missingUnits * 40 * (1 - discount));
     if (st.credits < cost) {
       alert(`Insufficient funds to repair this Mech & its damaged parts (${cost.toLocaleString()} Cr required)!`);
@@ -586,7 +594,8 @@ window.GarageModule = {
     }
 
     st.credits -= cost;
-    window.GameState.advanceTimeWeeks(2, `Repaired ${mech.customName} & Components`);
+    const mechDesc = leadMech ? ` (Lead Mechanic: ${leadMech.callsign}, ${(discount * 100).toFixed(0)}% Guild Discount)` : '';
+    window.GameState.advanceTimeWeeks(2, `Repaired ${mech.customName} & Components${mechDesc}`);
     this.render();
   },
 
@@ -594,12 +603,19 @@ window.GarageModule = {
     const st = window.GameState.data;
     const comp = window.GameState.getComponent(compId);
     if (!comp) return;
-    if (st.credits < comp.cost) {
-      alert(`Insufficient treasury funds to purchase ${comp.name} (${comp.cost.toLocaleString()} Cr)!`);
+
+    // Apply Quartermaster component catalog discount if appointed
+    const qm = window.GameState.getAssignedJobJock('quartermaster');
+    const qmMod = qm ? (window.TOS_DATA?.companyJobs?.find(j => j.id === 'quartermaster')?.calcModifier(qm)) : null;
+    const qmDiscountPct = qmMod ? qmMod.discountPct : 0;
+    const effectiveCost = Math.round(comp.cost * (1 - (qmDiscountPct / 100)));
+
+    if (st.credits < effectiveCost) {
+      alert(`Insufficient treasury funds to purchase ${comp.name} (${effectiveCost.toLocaleString()} Cr required)!`);
       return;
     }
 
-    st.credits -= comp.cost;
+    st.credits -= effectiveCost;
     if (!Array.isArray(st.partStorage)) st.partStorage = [];
     st.partStorage.push({
       uid: 'part-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),

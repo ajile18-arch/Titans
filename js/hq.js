@@ -63,7 +63,7 @@ window.HQModule = {
     // Best Squad Mechanic & Chief Medical Officer
     window.GameState.ensureJobListing();
     const jobListing = st.jobListing;
-    const bestMechanic = st.jocks.reduce((best, j) => (!j.isDead && j.skills['Mechanic (Repair)'] > (best?.skills['Mechanic (Repair)'] || 0) ? j : best), null);
+    const bestMechanic = window.GameState.getLeadMechanic();
     const bestMedic = window.GameState.getChiefMedicalOfficer();
     const woundedJocks = st.jocks.filter(j => !j.isDead && j.health < 100);
     const weeksNeeded = woundedJocks.length > 0
@@ -311,15 +311,20 @@ window.HQModule = {
               </div>
             </div>
             <div class="panel" style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
-              <div style="display:flex; justify-content:space-between;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span class="subtext">Lead Mechanic:</span>
-                <strong>${bestMechanic ? `${bestMechanic.callsign} (${bestMechanic.skills['Mechanic (Repair)']}% Skill)` : 'None (Base Crew)'}</strong>
+                <strong>${bestMechanic ? `🔧 ${bestMechanic.callsign} (${bestMechanic.skills['Mechanic (Repair)']}% Skill)` : 'None (Base Crew)'}</strong>
               </div>
-              <div style="display:flex; justify-content:space-between;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span class="subtext">Chief Medical Officer (CMO):</span>
-                <strong>${bestMedic ? `${bestMedic.callsign} (${bestMedic.skills['Medical (First Aid)']}% Skill)` : 'None (Base Staff)'}</strong>
+                <strong>${bestMedic ? `🩺 ${bestMedic.callsign} (${bestMedic.skills['Medical (First Aid)']}% Skill)` : 'None (Base Staff)'}</strong>
               </div>
-              <div style="display:flex; gap:8px; padding-top:6px;">
+              <div style="display:flex; justify-content:flex-end;">
+                <a href="javascript:void(0)" onclick="App.switchTab('company')" style="font-size:11px; color:var(--accent-cyan); text-decoration:underline;">
+                  🏢 View All Company Staff Appointments &rarr;
+                </a>
+              </div>
+              <div style="display:flex; gap:8px; padding-top:4px;">
                 <button class="btn" style="flex:1;" onclick="HQModule.repairAllMechs()">Repair All Mechs (+2 Wks)</button>
                 <button class="btn ${weeksNeeded > 0 ? 'btn-primary' : ''}" style="flex:1;" ${weeksNeeded === 0 ? 'disabled' : ''} onclick="HQModule.healAllJocks()">
                   ${weeksNeeded > 0 ? `Medical Bay Rehab (+${weeksNeeded} Wk${weeksNeeded > 1 ? 's' : ''})` : `All Pilots 100% HP`}
@@ -1191,6 +1196,7 @@ window.HQModule = {
             const isMerc = j.contract?.type === 'mercenary';
             const fights = j.fightHistory || [];
             const awards = j.awards || [];
+            const staffJob = window.GameState.getJockAssignedJob(j.id);
             return `
               <div class="panel" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; padding:14px;">
                 <div style="display:flex; align-items:center; gap:14px; flex:1; min-width:260px;">
@@ -1203,6 +1209,7 @@ window.HQModule = {
                         ${j.firstName} "${j.callsign}" ${j.lastName}
                       </a>
                       <span class="badge ${isMerc ? 'amber' : 'primary'}">${isMerc ? 'Mercenary' : rk.name}</span>
+                      ${staffJob ? `<span class="badge purple" style="font-size:11px; padding:2px 7px;">${staffJob.icon} ${staffJob.shortTitle}</span>` : ''}
                       ${j.isDead ? `
                         <span class="badge" style="background:#450a0a; color:#f87171; border:1px solid #ef4444; font-weight:900;">☠️ KIA</span>
                       ` : j.medicallyDisabled ? `
@@ -1256,6 +1263,7 @@ window.HQModule = {
     const isMerc = jock.contract?.type === 'mercenary';
     const awardsCount = (jock.awards || []).length;
     const fightsCount = (jock.fightHistory || []).length;
+    const staffJob = window.GameState.getJockAssignedJob(jock.id);
 
     return `
       <!-- Dedicated Jockey Information Page Top Bar -->
@@ -1269,6 +1277,7 @@ window.HQModule = {
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <span class="badge primary">DEDICATED JOCKEY INFORMATION PAGE</span>
                 <span class="badge ${isMerc ? 'amber' : 'green'}">${isMerc ? 'Short-Term Mercenary' : rank.name}</span>
+                ${staffJob ? `<span class="badge purple">${staffJob.icon} ${staffJob.title}</span>` : ''}
                 <span class="badge ${jock.contract?.expired ? 'red' : 'amber'} mono">${window.GameState.getContractSummary(jock)}</span>
               </div>
               <h2 style="font-size:20px; font-weight:800; margin-top:3px;">

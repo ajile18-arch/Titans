@@ -175,6 +175,142 @@ window.TOS_DATA = {
     }
   ],
 
+  companyJobs: [
+    {
+      id: 'cmo',
+      title: 'Chief Medical Officer',
+      shortTitle: 'CMO',
+      icon: '🩺',
+      governingSkill: 'Medical (First Aid)',
+      governingAttr: 'Intelligence',
+      category: 'Medical & Recovery',
+      desc: 'Directs triage bays, pilot trauma rehabilitation, and biological recovery wards.',
+      effectDesc: 'Accelerates weekly health recovery rate for wounded & medically disabled Jockeys.',
+      calcModifier(jock) {
+        if (!jock) return { label: 'Field Dressings Only (+0% bonus)', value: 1.0, bonusPct: 0 };
+        const skill = jock.skills?.['Medical (First Aid)'] || 30;
+        const intBonus = Math.max(0, ((jock.stats?.Intelligence || 20) - 20) * 0.5);
+        const bonusPct = Math.round(skill * 1.0 + intBonus);
+        const mult = 1.0 + (bonusPct / 100);
+        return {
+          label: `+${bonusPct}% Medical Recovery Speed (${mult.toFixed(2)}x)`,
+          value: mult,
+          bonusPct: bonusPct
+        };
+      }
+    },
+    {
+      id: 'leadMechanic',
+      title: 'Chief Engineer / Lead Mechanic',
+      shortTitle: 'Chief Engineer',
+      icon: '🔧',
+      governingSkill: 'Mechanic (Repair)',
+      governingAttr: 'Intelligence',
+      category: 'Hangar & Overhaul',
+      desc: 'Supervises depot technician crews, armor replacement welds, and structural repairs.',
+      effectDesc: 'Reduces Titan armor and internal chassis/component repair bills in the Garage.',
+      calcModifier(jock) {
+        if (!jock) return { label: 'Standard Guild Rates (10% discount)', value: 0.10, discountPct: 10 };
+        const skill = jock.skills?.['Mechanic (Repair)'] || 30;
+        const discountPct = Math.min(50, Math.round(15 + (skill * 0.40)));
+        return {
+          label: `${discountPct}% Repair Cost Discount`,
+          value: discountPct / 100,
+          discountPct: discountPct
+        };
+      }
+    },
+    {
+      id: 'quartermaster',
+      title: 'Quartermaster / Logistics Officer',
+      shortTitle: 'Quartermaster',
+      icon: '📦',
+      governingSkill: 'Damage Control',
+      governingAttr: 'Intelligence',
+      category: 'Procurement & Supply',
+      desc: 'Controls equipment supply chains, surplus parts procurement, and unit overhead.',
+      effectDesc: 'Lowers component store prices in the Garage & reduces monthly payroll overhead.',
+      calcModifier(jock) {
+        if (!jock) return { label: 'Standard Retail (0% discount)', value: 0, discountPct: 0, payrollDiscount: 0 };
+        const intStat = jock.stats?.Intelligence || 20;
+        const dmgCtrl = jock.skills?.['Damage Control'] || 30;
+        const discountPct = Math.min(25, Math.max(5, Math.round((intStat - 15) * 0.5 + (dmgCtrl * 0.18))));
+        const payrollDiscount = Math.min(15, Math.round(discountPct * 0.6));
+        return {
+          label: `${discountPct}% Component Catalog Discount & ${payrollDiscount}% Payroll Savings`,
+          value: discountPct / 100,
+          discountPct: discountPct,
+          payrollDiscount: payrollDiscount
+        };
+      }
+    },
+    {
+      id: 'tacticalOfficer',
+      title: 'Tactical Operations Officer',
+      shortTitle: 'Tactical Officer',
+      icon: '🎖️',
+      governingSkill: 'Leadership',
+      governingAttr: 'Instinct',
+      category: 'Combat Operations',
+      desc: 'Formulates firing solutions, tactical vectors, and coordinated lance strikes.',
+      effectDesc: 'Grants combat firing accuracy (+% to hit) across all weapons.',
+      calcModifier(jock) {
+        if (!jock) return { label: 'Standard Doctrine (+0% to hit)', value: 0, hitBonus: 0 };
+        const ldr = jock.skills?.['Leadership'] || 30;
+        const ins = jock.stats?.Instinct || 20;
+        const hitBonus = Math.min(10, Math.max(2, Math.round((ldr * 0.08) + ((ins - 15) * 0.15))));
+        return {
+          label: `+${hitBonus}% Firing Solution Accuracy`,
+          value: hitBonus,
+          hitBonus: hitBonus
+        };
+      }
+    },
+    {
+      id: 'reconOfficer',
+      title: 'Recon & Intelligence Officer',
+      shortTitle: 'Intel Officer',
+      icon: '📡',
+      governingSkill: 'Recon / Scanner',
+      governingAttr: 'Reflexes',
+      category: 'Recon & Contracts',
+      desc: 'Intercepts regional battlefield telemetry and exploits sponsor contract tolerances.',
+      effectDesc: 'Increases negotiation patience (+1 strike buffer) & awards bonus bounty on victory.',
+      calcModifier(jock) {
+        if (!jock) return { label: 'Standard Recon (+0% bounty)', value: 0, bountyBonusPct: 0, patienceBonus: 0 };
+        const recon = jock.skills?.['Recon / Scanner'] || 30;
+        const bountyBonusPct = Math.min(20, Math.max(5, Math.round(recon * 0.20)));
+        return {
+          label: `+1 Negotiation Patience & +${bountyBonusPct}% Contract Bounty Bonus`,
+          value: bountyBonusPct / 100,
+          bountyBonusPct: bountyBonusPct,
+          patienceBonus: 1
+        };
+      }
+    },
+    {
+      id: 'safetyOfficer',
+      title: 'Safety & Damage Control Officer',
+      shortTitle: 'Safety Officer',
+      icon: '🛡️',
+      governingSkill: 'Damage Control',
+      governingAttr: 'Constitution',
+      category: 'Damage Control & Safety',
+      desc: 'Enforces emergency reactor coolant scrams and cockpit dampening protocols.',
+      effectDesc: 'Reduces pilot cockpit concussion trauma risk and aids emergency heat dissipation.',
+      calcModifier(jock) {
+        if (!jock) return { label: 'Standard Safety Protocols (0% bonus)', value: 0, concussionResist: 0 };
+        const dmgCtrl = jock.skills?.['Damage Control'] || 30;
+        const concussionResist = Math.min(25, Math.max(5, Math.round(dmgCtrl * 0.25)));
+        return {
+          label: `-${concussionResist}% Cockpit Concussion Risk & +1 Heat Dissipation`,
+          value: concussionResist,
+          concussionResist: concussionResist
+        };
+      }
+    }
+  ],
+
   ranks: [
     { name: 'Rookie', minXpSpent: 0, salaryMult: 1.0 },
     { name: 'Green', minXpSpent: 400, salaryMult: 1.3 },

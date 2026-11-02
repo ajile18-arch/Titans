@@ -19,7 +19,8 @@ function createDefaultState() {
       goalId: 'wealth',
       customGoals: 'Build a premier MechJock mercenary company from the ground up.',
       reputationLevel: 1,
-      xp: 0
+      xp: 0,
+      assignedJobs: {}
     },
 
     // Campaign Time Counter (1 Month = 4 Weeks, 1 Year = 12 Months = 48 Weeks)
@@ -359,17 +360,115 @@ window.GameState = {
     return baseWeeks;
   },
 
-  // Chief Medical Officer (CMO): The living Jockey in the company with the highest Medical (First Aid) skill
+  // Ensure company staff job assignments structure is healthy
+  ensureCompanyJobs() {
+    const st = this.data;
+    if (!st.company) st.company = {};
+    if (!st.company.assignedJobs || typeof st.company.assignedJobs !== 'object') {
+      st.company.assignedJobs = {};
+    }
+    // Prune assignments if jockeys are deceased or no longer in squad
+    Object.keys(st.company.assignedJobs).forEach(role => {
+      const jId = st.company.assignedJobs[role];
+      if (jId) {
+        const j = (st.jocks || []).find(jk => jk.id === jId && !jk.isDead);
+        if (!j) st.company.assignedJobs[role] = null;
+      }
+    });
+  },
+
+  // Get the jockey assigned to a specific company job
+  getAssignedJobJock(jobId) {
+    this.ensureCompanyJobs();
+    const st = this.data;
+    const jId = st.company?.assignedJobs?.[jobId];
+    if (!jId) return null;
+    return (st.jocks || []).find(j => j.id === jId && !j.isDead) || null;
+  },
+
+  // Assign a jockey to a company job (unassigns them from any other staff job so 1 jock = 1 post)
+  assignCompanyJob(jobId, jockId) {
+    this.ensureCompanyJobs();
+    const st = this.data;
+    if (!st.company.assignedJobs) st.company.assignedJobs = {};
+
+    if (jockId) {
+      // Reassign from any previous role
+      Object.keys(st.company.assignedJobs).forEach(role => {
+        if (st.company.assignedJobs[role] === jockId && role !== jobId) {
+          st.company.assignedJobs[role] = null;
+        }
+      });
+    }
+
+    st.company.assignedJobs[jobId] = jockId || null;
+    this.save();
+  },
+
+  // Get the company job currently assigned to a jockey, if any
+  getJockAssignedJob(jockId) {
+    this.ensureCompanyJobs();
+    const st = this.data;
+    if (!st.company?.assignedJobs) return null;
+    const roleId = Object.keys(st.company.assignedJobs).find(r => st.company.assignedJobs[r] === jockId);
+    if (!roleId) return null;
+    return (window.TOS_DATA?.companyJobs || []).find(j => j.id === roleId) || { id: roleId, title: roleId, shortTitle: roleId, icon: '📋' };
+  },
+
+  // Chief Medical Officer (CMO): Assigned Jockey, or fallback to the living Jockey with highest Medical skill
   getChiefMedicalOfficer() {
+    this.ensureCompanyJobs();
     const st = this.data;
     if (!st || !Array.isArray(st.jocks)) return null;
     const livingJocks = st.jocks.filter(j => !j.isDead);
     if (livingJocks.length === 0) return null;
+
+    // Check explicit job assignment
+    const assignedId = st.company?.assignedJobs?.cmo;
+    if (assignedId) {
+      const assigned = livingJocks.find(j => j.id === assignedId);
+      if (assigned) return assigned;
+    }
+
+    // Default fallback to highest medical skill
     return livingJocks.reduce((best, j) => {
       const jSkill = j.skills?.['Medical (First Aid)'] || 0;
       const bestSkill = best ? (best.skills?.['Medical (First Aid)'] || 0) : -1;
       return jSkill > bestSkill ? j : best;
     }, null);
+  },
+
+  // Lead Master Mechanic: Assigned Jockey, or fallback to the living Jockey with highest Mechanic skill
+  getLeadMechanic() {
+    this.ensureCompanyJobs();
+    const st = this.data;
+    if (!st || !Array.isArray(st.jocks)) return null;
+    const livingJocks = st.jocks.filter(j => !j.isDead);
+    if (livingJocks.length === 0) return null;
+
+    const assignedId = st.company?.assignedJobs?.leadMechanic;
+    if (assignedId) {
+      const assigned = livingJocks.find(j => j.id === assignedId);
+      if (assigned) return assigned;
+    }
+
+    return livingJocks.reduce((best, j) => {
+      const jSkill = j.skills?.['Mechanic (Repair)'] || 0;
+      const bestSkill = best ? (best.skills?.['Mechanic (Repair)'] || 0) : -1;
+      return jSkill > bestSkill ? j : best;
+    }, null);
+  },
+
+  // Active repair discount in Garage (0.10 to 0.50) based on Lead Mechanic
+  getRepairDiscount() {
+    const leadMech = this.getLeadMechanic();
+    if (!leadMech) return 0.10;
+    const jobDef = (window.TOS_DATA?.companyJobs || []).find(j => j.id === 'leadMechanic');
+    if (jobDef && typeof jobDef.calcModifier === 'function') {
+      return jobDef.calcModifier(leadMech).value;
+    }
+    const skill = leadMech.skills?.['Mechanic (Repair)'] || 30;
+    return Math.min(0.50, Math.max(0.10, skill / 180));
   },
 
   // Calculate HP regained per week for a jockey based on Survival skill and modified by company CMO
@@ -384,8 +483,13 @@ window.GameState = {
     const cmo = this.getChiefMedicalOfficer();
     let cmoMod = 1.0;
     if (cmo) {
-      const cmoSkill = cmo.skills?.['Medical (First Aid)'] || 30;
-      cmoMod = 1.0 + (cmoSkill / 100); // e.g. 60 skill = 1.6x healing rate
+      const jobDef = (window.TOS_DATA?.companyJobs || []).find(j => j.id === 'cmo');
+      if (jobDef && typeof jobDef.calcModifier === 'function') {
+        cmoMod = jobDef.calcModifier(cmo).value;
+      } else {
+        const cmoSkill = cmo.skills?.['Medical (First Aid)'] || 30;
+        cmoMod = 1.0 + (cmoSkill / 100);
+      }
     }
 
     return Math.max(3, Math.round(baseHeal * cmoMod));
@@ -452,7 +556,15 @@ window.GameState = {
 
       // Every 4 weeks (1 Month), process monthly payroll & contract month countdowns
       if (st.calendar.totalWeeks % 4 === 0) {
-        const monthlyUpkeep = (st.jocks || []).reduce((sum, j) => sum + this.getJockSalary(j), 0);
+        let monthlyUpkeep = (st.jocks || []).reduce((sum, j) => sum + this.getJockSalary(j), 0);
+        // Quartermaster discount on base operations & monthly upkeep
+        const qm = this.getAssignedJobJock('quartermaster');
+        if (qm) {
+          const qmMod = (window.TOS_DATA?.companyJobs || []).find(job => job.id === 'quartermaster')?.calcModifier(qm);
+          if (qmMod && qmMod.payrollDiscount) {
+            monthlyUpkeep = Math.round(monthlyUpkeep * (1 - (qmMod.payrollDiscount / 100)));
+          }
+        }
         if (monthlyUpkeep > 0) {
           st.credits = Math.max(0, st.credits - monthlyUpkeep);
         }
