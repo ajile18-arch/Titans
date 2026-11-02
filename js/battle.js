@@ -13,6 +13,8 @@ window.BattleModule = {
   logs: [],
   contractWon: false,
   contractLost: false,
+  playerFallen: false,
+  enemyFallen: false,
   battleStats: { shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 },
 
   // Battle Offer Negotiation State
@@ -41,6 +43,8 @@ window.BattleModule = {
     this.weaponCooldowns = {};
     this.contractWon = false;
     this.contractLost = false;
+    this.playerFallen = false;
+    this.enemyFallen = false;
     this.battleStats = { shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 };
 
     // Build 8x10 Tactical Hex Grid (80 Hexes) matching contract terrain profile
@@ -132,8 +136,24 @@ window.BattleModule = {
     const jock = this.getActiveCombatJock();
     const curDist = this.getHexDistance(this.playerPos.r, this.playerPos.c, this.enemy.r, this.enemy.c);
 
-    // Tactical AI Maneuvering: Advance towards player if far, seeking cover in woods/ridges
-    if (curDist > 3) {
+    // Enemy Prone Recovery Check
+    if (this.enemyFallen) {
+      const standRoll = Math.floor(Math.random() * 100) + 1;
+      const legBreached = (this.enemy.armor.LL <= 0 || this.enemy.armor.RL <= 0);
+      const enemyStandChance = legBreached ? 45 : 68;
+      if (standRoll <= enemyStandChance) {
+        this.enemyFallen = false;
+        this.log(`${this.enemy.name} engages recovery gyros and STANDS BACK UPRIGHT! (Stand Roll ${standRoll} <= ${enemyStandChance}%)`, 'hostile');
+        if (window.SoundFX && window.SoundFX.playMechStand) {
+          window.SoundFX.playMechStand();
+        }
+      } else {
+        this.log(`${this.enemy.name} struggles to find footing on the terrain and REMAINS PRONE! (Stand Roll ${standRoll} > ${enemyStandChance}%)`, 'hostile');
+      }
+    }
+
+    // Tactical AI Maneuvering: Advance towards player if far, seeking cover in woods/ridges (Only if upright)
+    if (!this.enemyFallen && curDist > 3) {
       const neighbors = this.getAdjacentHexes(this.enemy.r, this.enemy.c);
       let bestHex = null;
       let bestScore = -9999;
@@ -165,18 +185,46 @@ window.BattleModule = {
     const coverMod = playerHex?.terrain === 'woods' ? -15 : (playerHex?.terrain === 'rubble' ? -8 : 0);
     const elevMod = (enemyHex?.terrain === 'hill' && playerHex?.terrain !== 'hill') ? 10 : 0;
     const pilotEvade = jock ? Math.round((jock.stats.Piloting - 20) * 0.25) : 0;
-    const toHit = Math.max(15, Math.min(85, this.enemy.hit + coverMod + elevMod - pilotEvade));
+    const enemyPronePenalty = this.enemyFallen ? -20 : 0;
+    const playerProneBonus = this.playerFallen ? 15 : 0;
+    const toHit = Math.max(15, Math.min(85, this.enemy.hit + coverMod + elevMod - pilotEvade + enemyPronePenalty + playerProneBonus));
     const roll = Math.floor(Math.random() * 100) + 1;
 
     if (roll <= toHit && playerMech) {
       const locs = ['CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL', 'HD'];
-      const hitLoc = locs[Math.floor(Math.random() * 7)];
+      const hitLoc = locs[Math.floor(Math.random() * locs.length)];
       playerMech.armor[hitLoc] = Math.max(0, playerMech.armor[hitLoc] - this.enemy.dmg);
       this.battleStats.damageTaken += this.enemy.dmg;
       this.log(`ALERT: ${this.enemy.name} hits your ${hitLoc} for ${this.enemy.dmg} dmg!`, 'hostile');
 
       if (window.SoundFX) {
         window.SoundFX.playIncomingShot(true);
+      }
+
+      // Leg Damage Stability Check: varying chance of falling down based on damage percentage vs pilot skill
+      if ((hitLoc === 'LL' || hitLoc === 'RL') && !this.playerFallen) {
+        const maxLeg = playerMech.maxArmorCurrent?.[hitLoc] || 24;
+        const dmgPct = (this.enemy.dmg / maxLeg) * 100;
+
+        if (dmgPct >= 15 || playerMech.armor[hitLoc] <= 0) {
+          let fallChance = Math.min(85, Math.round(dmgPct * 1.6));
+          if (playerMech.armor[hitLoc] <= 0) fallChance += 25;
+
+          const pilotSkill = jock ? (jock.stats.Piloting || 30) : 30;
+          const pilotResist = Math.round((pilotSkill - 15) * 0.45);
+          const finalFallChance = Math.max(10, Math.min(90, fallChance - pilotResist));
+
+          const fallRoll = Math.floor(Math.random() * 100) + 1;
+          if (fallRoll <= finalFallChance) {
+            this.playerFallen = true;
+            this.log(`CRITICAL INSTABILITY: Heavy strike to ${hitLoc} (${Math.round(dmgPct)}% leg dmg)! Your Titan LOSES BALANCE AND CRASHES TO THE GROUND (PRONE)! (Fall Roll ${fallRoll} <= ${finalFallChance}%)`, 'hostile');
+            if (window.SoundFX && window.SoundFX.playMechFall) {
+              window.SoundFX.playMechFall();
+            }
+          } else {
+            this.log(`GYRO STABILIZED: ${jock ? jock.callsign : 'Pilot'} skillfully countered leg recoil and stayed upright! (Fall Roll ${fallRoll} > ${finalFallChance}%)`, 'player');
+          }
+        }
       }
 
       // Damage installed weapons/components in the struck body location
@@ -212,6 +260,12 @@ window.BattleModule = {
   moveHex(r, c) {
     if (this.contractWon || this.contractLost) return;
     if (r === this.enemy.r && c === this.enemy.c) return;
+
+    if (this.playerFallen) {
+      this.log(`MANEUVER BLOCKED: Your Titan is PRONE on the ground! Click the [STAND UP] button first.`, 'player');
+      this.render();
+      return;
+    }
 
     const jock = this.getActiveCombatJock();
     const st = window.GameState.data;
@@ -260,6 +314,57 @@ window.BattleModule = {
     this.render();
   },
 
+  calcStandUpChance(jock, mech) {
+    if (!jock) return 50;
+    const piloting = jock.stats?.Piloting || 30;
+    const reflexes = jock.stats?.Reflexes || 25;
+    const refBonus = Math.round((reflexes - 20) * 0.25);
+
+    let legMod = 5;
+    const ll = mech?.armor?.LL ?? 10;
+    const rl = mech?.armor?.RL ?? 10;
+    if (ll <= 0 && rl <= 0) legMod = -35;
+    else if (ll <= 0 || rl <= 0) legMod = -18;
+
+    const hex = this.hexes.find(h => h.r === this.playerPos.r && h.c === this.playerPos.c);
+    let terrainMod = 0;
+    if (hex?.terrain === 'rubble') terrainMod = -10;
+    else if (hex?.terrain === 'water') terrainMod = -8;
+    else if (hex?.terrain === 'hill') terrainMod = -5;
+
+    const baseChance = Math.round(piloting * 1.5 + 20);
+    return Math.max(15, Math.min(95, baseChance + refBonus + legMod + terrainMod));
+  },
+
+  standUp() {
+    if (this.contractWon || this.contractLost) return;
+    if (!this.playerFallen) return;
+
+    const st = window.GameState.data;
+    const jock = this.getActiveCombatJock();
+    const mech = st.mechs.find(m => m.id === jock?.assignedMechId) || st.mechs[0];
+    const metrics = window.GameState.computeMechMetrics(mech);
+
+    const chance = this.calcStandUpChance(jock, mech);
+    const roll = Math.floor(Math.random() * 100) + 1;
+
+    this.playerPos.heat += 4;
+    const elapsedSec = 3;
+
+    if (roll <= chance) {
+      this.playerFallen = false;
+      this.log(`STAND UP SUCCESS: ${jock ? jock.callsign : 'Pilot'} engages recovery thrusters and rights the Titan upright! (Piloting Roll ${roll} <= ${chance}%) [${elapsedSec}s elapsed].`, 'player');
+      if (window.SoundFX && window.SoundFX.playMechStand) {
+        window.SoundFX.playMechStand();
+      }
+    } else {
+      this.log(`STAND UP FAILED: Gyro compensator slipped on terrain! Titan remains PRONE. (Piloting Roll ${roll} > ${chance}%) [${elapsedSec}s elapsed].`, 'hostile');
+    }
+
+    this.advanceTime(elapsedSec, mech, metrics);
+    this.render();
+  },
+
   setAim(loc) {
     this.aimTarget = loc;
     this.render();
@@ -289,7 +394,11 @@ window.BattleModule = {
     // Enemy Cover Penalty (Woods / Ruins)
     const coverPenalty = enemyHex?.terrain === 'woods' ? -15 : (enemyHex?.terrain === 'rubble' ? -8 : 0);
 
-    return Math.max(10, Math.min(95, skillVal + refBonus + metrics.hitBonus + rangePenalty + heatPenalty + aimMod + elevationBonus + coverPenalty));
+    // Prone Posture Modifiers (Shooting while prone gives -20% aim penalty; firing at a prone target gives +15% hit bonus)
+    const playerPronePenalty = this.playerFallen ? -20 : 0;
+    const enemyProneBonus = this.enemyFallen ? 15 : 0;
+
+    return Math.max(10, Math.min(95, skillVal + refBonus + metrics.hitBonus + rangePenalty + heatPenalty + aimMod + elevationBonus + coverPenalty + playerPronePenalty + enemyProneBonus));
   },
 
   fireWeapon(instanceKey) {
@@ -323,6 +432,30 @@ window.BattleModule = {
 
       if (window.SoundFX) {
         window.SoundFX.playWeaponShot(weapon, true);
+      }
+
+      // Check Enemy Leg Damage Stability / Falling Down
+      if ((hitLoc === 'LL' || hitLoc === 'RL') && !this.enemyFallen && !this.contractWon) {
+        const maxLeg = this.enemy.maxArmor?.[hitLoc] || 38;
+        const dmgPct = (weapon.dmg / maxLeg) * 100;
+
+        if (dmgPct >= 15 || this.enemy.armor[hitLoc] <= 0) {
+          let fallChance = Math.min(85, Math.round(dmgPct * 1.6));
+          if (this.enemy.armor[hitLoc] <= 0) fallChance += 25;
+          const enemyPilotResist = 12;
+          const finalFallChance = Math.max(10, Math.min(85, fallChance - enemyPilotResist));
+
+          const fallRoll = Math.floor(Math.random() * 100) + 1;
+          if (fallRoll <= finalFallChance) {
+            this.enemyFallen = true;
+            this.log(`KINETIC IMPACT: Heavy strike to ${this.enemy.name}'s ${hitLoc} (${Math.round(dmgPct)}% leg dmg)! Hostile Titan LOSES BALANCE AND CRASHES PRONE!`, 'player');
+            if (window.SoundFX && window.SoundFX.playMechFall) {
+              window.SoundFX.playMechFall();
+            }
+          } else {
+            this.log(`STABILITY HELD: ${this.enemy.name} stumbles from the leg impact but maintains upright footing.`, 'hostile');
+          }
+        }
       }
 
       // Check Victory (Head, CT, or both Legs destroyed)
@@ -433,14 +566,15 @@ window.BattleModule = {
     return '#10b981';               // Nominal (70-100% Emerald Green)
   },
 
-  renderHexMechSprite(cx, cy, armor, maxArmor, label, borderColor) {
+  renderHexMechSprite(cx, cy, armor, maxArmor, label, borderColor, isProne = false) {
     const c = loc => this.getPartDamageColor(armor[loc] ?? 0, maxArmor[loc] ?? 1);
     const s = loc => (armor[loc] <= 0 ? '#ef4444' : '#0f172a');
+    const transformAttr = isProne ? `transform="rotate(65 ${cx} ${cy}) translate(0, 3)"` : '';
 
     return `
-      <g>
+      <g ${transformAttr}>
         <!-- Team Indicator Base Ring -->
-        <ellipse cx="${cx}" cy="${cy + 12}" rx="17" ry="5" fill="none" stroke="${borderColor}" stroke-width="1.6" stroke-dasharray="3,2" />
+        <ellipse cx="${cx}" cy="${cy + 12}" rx="17" ry="5" fill="none" stroke="${borderColor}" stroke-width="${isProne ? 2.2 : 1.6}" stroke-dasharray="${isProne ? '4,2' : '3,2'}" />
         <!-- HD (Head) -->
         <rect x="${cx - 4.5}" y="${cy - 20}" width="9" height="6.5" rx="1.5" fill="${c('HD')}" stroke="${s('HD')}" stroke-width="1" />
         <!-- CT (Center Torso) -->
@@ -455,7 +589,7 @@ window.BattleModule = {
         <rect x="${cx - 8.5}" y="${cy + 1}" width="6.5" height="12.5" rx="1" fill="${c('LL')}" stroke="${s('LL')}" stroke-width="1" />
         <rect x="${cx + 2}" y="${cy + 1}" width="6.5" height="12.5" rx="1" fill="${c('RL')}" stroke="${s('RL')}" stroke-width="1" />
         <!-- Callsign / Unit Tag -->
-        <text x="${cx}" y="${cy + 23}" text-anchor="middle" fill="#f8fafc" font-size="8.5" font-weight="bold">${label}</text>
+        <text x="${cx}" y="${cy + 23}" text-anchor="middle" fill="${isProne ? '#f87171' : '#f8fafc'}" font-size="8.5" font-weight="bold">${label}</text>
       </g>
     `;
   },
@@ -1939,6 +2073,7 @@ window.BattleModule = {
     const secs = String(this.clockSec % 60).padStart(2, '0');
     const dist = this.getHexDistance(this.playerPos.r, this.playerPos.c, this.enemy.r, this.enemy.c);
     const maxMove = Math.max(2, Math.min(3, metrics?.tpl?.baseSpeedHex || 2));
+    const standChance = this.calcStandUpChance(jock, mech);
 
     // Build 8x10 SVG Hex Grid with Stylized Terrain Artwork & Mini-Mech Sprites
     const R = 27;
@@ -1950,7 +2085,7 @@ window.BattleModule = {
       const isP = h.r === this.playerPos.r && h.c === this.playerPos.c;
       const isE = h.r === this.enemy.r && h.c === this.enemy.c;
       const moveDist = this.getHexDistance(this.playerPos.r, this.playerPos.c, h.r, h.c);
-      const isReachable = (moveDist > 0 && moveDist <= maxMove && !isE);
+      const isReachable = (moveDist > 0 && moveDist <= maxMove && !isE && !this.playerFallen);
 
       const stroke = isP ? '#38bdf8'
                    : isE ? '#f43f5e'
@@ -1964,10 +2099,11 @@ window.BattleModule = {
       let innerContent = this.renderHexTileArtwork(h, cx, cy, R, isP || isE);
 
       if (isP) {
-        const pLabel = jock ? jock.callsign.slice(0, 7).toUpperCase() : 'PLAYER';
-        innerContent += this.renderHexMechSprite(cx, cy - 2, mech.armor, mech.maxArmorCurrent, pLabel, '#38bdf8');
+        const pLabel = this.playerFallen ? 'PRONE' : (jock ? jock.callsign.slice(0, 7).toUpperCase() : 'PLAYER');
+        innerContent += this.renderHexMechSprite(cx, cy - 2, mech.armor, mech.maxArmorCurrent, pLabel, this.playerFallen ? '#ef4444' : '#38bdf8', this.playerFallen);
       } else if (isE) {
-        innerContent += this.renderHexMechSprite(cx, cy - 2, this.enemy.armor, this.enemy.maxArmor, 'HOSTILE', '#f43f5e');
+        const eLabel = this.enemyFallen ? 'PRONE' : 'HOSTILE';
+        innerContent += this.renderHexMechSprite(cx, cy - 2, this.enemy.armor, this.enemy.maxArmor, eLabel, this.enemyFallen ? '#f97316' : '#f43f5e', this.enemyFallen);
       } else if (isReachable) {
         innerContent += `
           <circle cx="${cx}" cy="${cy}" r="3.5" fill="#38bdf8" opacity="0.85" />
@@ -2020,6 +2156,12 @@ window.BattleModule = {
               <div class="hud-pill">
                 <div class="label">Torso Arc</div>
                 <div class="val">${this.playerPos.facing}</div>
+              </div>
+              <div class="hud-pill" style="${this.playerFallen ? 'border:1px solid #ef4444; background:rgba(239,68,68,0.15);' : ''}">
+                <div class="label" style="${this.playerFallen ? 'color:#f87171;' : ''}">Titan Posture</div>
+                <div class="val" style="color:${this.playerFallen ? '#f87171' : 'var(--accent-green)'}; font-weight:700;">
+                  ${this.playerFallen ? 'PRONE (DOWNED)' : 'UPRIGHT'}
+                </div>
               </div>
             </div>
 
@@ -2075,8 +2217,30 @@ window.BattleModule = {
               </div>
             </div>
 
+            <!-- Prone Warning & Stand Up Button Banner -->
+            ${this.playerFallen ? `
+              <div style="background:linear-gradient(90deg, rgba(185,28,28,0.35) 0%, rgba(220,38,38,0.18) 100%); border:2px solid #ef4444; border-radius:8px; padding:12px 16px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; box-shadow:0 0 16px rgba(239,68,68,0.4);">
+                <div>
+                  <div style="color:#ffffff; font-weight:800; font-size:14px; display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:18px; color:#f87171;">&#9888;</span> TITAN CRASHED PRONE (ACTUATOR FAILURE)
+                  </div>
+                  <div class="subtext" style="color:#fecaca; font-size:12px; margin-top:3px;">
+                    Maneuver blocked &bull; Aim penalty: -20% &bull; Jockey Piloting: <strong>${jock ? jock.stats.Piloting : 30}</strong> (Recovery Chance: <strong>${standChance}%</strong>)
+                  </div>
+                </div>
+                <button class="btn btn-primary" style="background:#dc2626; color:#ffffff; font-weight:800; font-size:13px; padding:10px 18px; border:2px solid #f87171; box-shadow:0 4px 14px rgba(220,38,38,0.6); cursor:pointer;" onclick="BattleModule.standUp()">
+                  &#9650; STAND UP (${standChance}%) &rarr;
+                </button>
+              </div>
+            ` : ''}
+
             <!-- Action-Time Maneuver Controls -->
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              ${this.playerFallen ? `
+                <button class="btn btn-primary" style="flex:1 1 100%; padding:10px; background:#dc2626; color:#ffffff; font-weight:800; border:1px solid #f87171;" onclick="BattleModule.standUp()">
+                  &#9650; STAND UP TITAN &bull; Piloting Check: ${standChance}% (3s / +4C)
+                </button>
+              ` : ''}
               <button class="btn" style="flex:1; padding:10px;" onclick="BattleModule.twistTorso()">
                 Twist Torso Arc (2s)
               </button>
@@ -2089,7 +2253,7 @@ window.BattleModule = {
           <!-- Your Titan Live Armor Status -->
           <div class="card">
             <div class="section-header">
-              <div class="section-title">Your Titan Telemetry: ${mech.customName} (${jock ? jock.callsign : 'Pilot'})</div>
+              <div class="section-title">Your Titan Telemetry: ${mech.customName} (${jock ? jock.callsign : 'Pilot'}) ${this.playerFallen ? '<span class="badge" style="background:#dc2626; color:#fff; font-size:11px; margin-left:8px;">PRONE</span>' : ''}</div>
             </div>
             <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
               ${Object.entries(mech.armor).map(([loc, val]) => {
@@ -2115,8 +2279,8 @@ window.BattleModule = {
           <div class="card">
             <div class="section-header">
               <div>
-                <div class="section-title">Target Lock: ${this.enemy.name} (${this.enemy.weight})</div>
-                <div class="subtext">Select a Called Shot body part or fire at General mass</div>
+                <div class="section-title">Target Lock: ${this.enemy.name} (${this.enemy.weight}) ${this.enemyFallen ? '<span class="badge" style="background:#dc2626; color:#fff; font-size:11px; margin-left:8px; animation:pulse 1.5s infinite;">PRONE (+15% HIT)</span>' : ''}</div>
+                <div class="subtext">Select a Called Shot body part or fire at General mass. Leg hits may topple enemy!</div>
               </div>
               ${this.contractWon ? `
                 <div style="display:flex; align-items:center; gap:8px;">
@@ -2132,9 +2296,10 @@ window.BattleModule = {
               <div style="display:flex; flex-wrap:wrap; gap:6px;">
                 ${aimLocations.map(loc => {
                   const mod = this.getAimModifier(loc);
+                  const tag = (loc === 'LL' || loc === 'RL') ? `${loc} (${mod}% &bull; Leg Trip)` : `${loc} (${mod >= 0 ? '+0%' : mod + '%'})`;
                   return `
                     <button class="btn ${this.aimTarget === loc ? 'btn-primary' : ''}" onclick="BattleModule.setAim('${loc}')">
-                      ${loc} (${mod >= 0 ? '+0%' : mod + '%'})
+                      ${tag}
                     </button>
                   `;
                 }).join('')}

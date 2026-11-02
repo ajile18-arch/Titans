@@ -654,6 +654,88 @@ window.SoundFX = {
       noise.start(t);
       noise.stop(t + 0.24);
     }
+  },
+
+  // ==========================================
+  // 7. TITAN STABILITY: CRASH / FALL & STAND UP
+  // ==========================================
+  playMechFall(t) {
+    this.ensureContext();
+    if (!this.ctx || (window.MusicModule && window.MusicModule.muted)) return;
+    const ctx = this.ctx;
+    const now = typeof t === 'number' && t > 0 ? t : ctx.currentTime;
+
+    // Heavy ground impact seismic thud
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(85, now);
+    osc.frequency.exponentialRampToValueAtTime(24, now + 0.4);
+
+    gain.gain.setValueAtTime(0.65, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    osc.connect(gain);
+    gain.connect(this.master);
+    osc.start(now);
+    osc.stop(now + 0.5);
+
+    // Concussive ground crunch & metal crash
+    const noise = this.createNoiseNode(ctx);
+    if (noise) {
+      const filter = ctx.createBiquadFilter();
+      const ngain = ctx.createGain();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(280, now);
+      filter.frequency.exponentialRampToValueAtTime(50, now + 0.42);
+
+      ngain.gain.setValueAtTime(0.001, now);
+      ngain.gain.linearRampToValueAtTime(0.7, now + 0.03);
+      ngain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+      noise.connect(filter);
+      filter.connect(ngain);
+      ngain.connect(this.master);
+      noise.start(now);
+      noise.stop(now + 0.48);
+    }
+  },
+
+  playMechStand(t) {
+    this.ensureContext();
+    if (!this.ctx || (window.MusicModule && window.MusicModule.muted)) return;
+    const ctx = this.ctx;
+    const now = typeof t === 'number' && t > 0 ? t : ctx.currentTime;
+
+    // Hydraulic servo whine rising as actuators push Titan upright
+    const servo = ctx.createOscillator();
+    const sGain = ctx.createGain();
+    servo.type = 'triangle';
+    servo.frequency.setValueAtTime(140, now);
+    servo.frequency.exponentialRampToValueAtTime(420, now + 0.28);
+
+    sGain.gain.setValueAtTime(0.001, now);
+    sGain.gain.linearRampToValueAtTime(0.4, now + 0.08);
+    sGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+    servo.connect(sGain);
+    sGain.connect(this.master);
+    servo.start(now);
+    servo.stop(now + 0.34);
+
+    // Mechanical gyro lock / pneumatic clamp snap
+    const lock = ctx.createOscillator();
+    const lGain = ctx.createGain();
+    lock.type = 'square';
+    lock.frequency.setValueAtTime(320, now + 0.26);
+    lock.frequency.exponentialRampToValueAtTime(120, now + 0.38);
+
+    lGain.gain.setValueAtTime(0.35, now + 0.26);
+    lGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+    lock.connect(lGain);
+    lGain.connect(this.master);
+    lock.start(now + 0.26);
+    lock.stop(now + 0.42);
   }
 };
 
