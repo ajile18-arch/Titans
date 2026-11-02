@@ -1101,18 +1101,96 @@ window.BattleModule = {
     const isVictory = s.outcome === 'VICTORY';
     const isDefeat = s.outcome === 'DEFEAT' || s.outcome.includes('DEFEAT');
 
-    const heroBadge = isVictory ? `
-      <span class="badge green" style="font-size:13px; padding:6px 14px; box-shadow:0 0 16px rgba(16,185,129,0.4);">
-        &#9876; TACTICAL VICTORY // MISSION ACCOMPLISHED
-      </span>
+    const heroBannerHtml = isVictory ? `
+      <div class="card" style="padding:22px 26px; border:2px solid var(--accent-green); background:linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(6, 78, 59, 0.35) 50%, rgba(2, 44, 34, 0.45) 100%); box-shadow:0 0 32px rgba(16,185,129,0.32);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div style="display:flex; align-items:center; gap:18px;">
+            <div style="font-size:46px; line-height:1; filter:drop-shadow(0 0 16px rgba(16,185,129,0.6));">
+              &#9876;
+            </div>
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="badge green" style="font-weight:900; font-size:11px; letter-spacing:0.06em; padding:3px 10px;">TACTICAL ENGAGEMENT RESOLVED</span>
+                <span class="badge primary">${s.client.badge || 'CONTRACT'}</span>
+              </div>
+              <h1 style="font-size:32px; font-weight:900; color:#10b981; margin:4px 0 2px 0; text-transform:uppercase; letter-spacing:0.03em; text-shadow:0 0 20px rgba(16,185,129,0.5);">
+                VICTORY &bull; YOU WON THE BATTLE!
+              </h1>
+              <div style="font-size:15px; color:#ecfdf5; font-weight:600;">
+                Operation: <strong>${s.title}</strong> &bull; Hostile Neutralized: <strong style="color:#fca5a5;">${s.enemy.name}</strong> (${s.enemy.weight}) via ${s.killMethod}
+              </div>
+              <div class="subtext" style="font-size:12px; margin-top:3px;">
+                Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; Pilot: <strong>${s.jockProgression.callsign}</strong>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <button class="btn btn-primary" style="background:#10b981; color:#000; font-weight:900; padding:12px 24px; font-size:15px; box-shadow:0 0 20px rgba(16,185,129,0.4);" onclick="BattleModule.closeSummary()">
+              &#10003; Complete Debriefing &rarr;
+            </button>
+          </div>
+        </div>
+      </div>
     ` : isDefeat ? `
-      <span class="badge red" style="font-size:13px; padding:6px 14px; box-shadow:0 0 16px rgba(239,68,68,0.4);">
-        &#9888; CRITICAL CASUALTY // TITAN BREACH &amp; EJECTED
-      </span>
+      <div class="card" style="padding:22px 26px; border:2px solid var(--accent-red); background:linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(127, 29, 29, 0.35) 50%, rgba(69, 10, 10, 0.45) 100%); box-shadow:0 0 32px rgba(239,68,68,0.32);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div style="display:flex; align-items:center; gap:18px;">
+            <div style="font-size:46px; line-height:1; filter:drop-shadow(0 0 16px rgba(239,68,68,0.6));">
+              &#9888;
+            </div>
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="badge red" style="font-weight:900; font-size:11px; letter-spacing:0.06em; padding:3px 10px;">TACTICAL CASUALTY</span>
+                <span class="badge primary">${s.client.badge || 'CONTRACT'}</span>
+              </div>
+              <h1 style="font-size:32px; font-weight:900; color:#ef4444; margin:4px 0 2px 0; text-transform:uppercase; letter-spacing:0.03em; text-shadow:0 0 20px rgba(239,68,68,0.5);">
+                DEFEAT &bull; YOU LOST THE BATTLE
+              </h1>
+              <div style="font-size:15px; color:#fef2f2; font-weight:600;">
+                Operation: <strong>${s.title}</strong> &bull; Critical Core Breach sustained against <strong style="color:#fca5a5;">${s.enemy.name}</strong> (${s.enemy.weight})
+              </div>
+              <div class="subtext" style="font-size:12px; margin-top:3px;">
+                Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; Pilot ${s.jockProgression.callsign} ejected safely (+75 Survival XP)
+              </div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <button class="btn btn-secondary" style="color:var(--accent-red); border-color:var(--accent-red); font-weight:800; padding:12px 24px; font-size:15px;" onclick="BattleModule.closeSummary()">
+              Complete Debriefing &rarr;
+            </button>
+          </div>
+        </div>
+      </div>
     ` : `
-      <span class="badge amber" style="font-size:13px; padding:6px 14px;">
-        &#128737; TACTICAL RETREAT // COMBAT WITHDRAWAL
-      </span>
+      <div class="card" style="padding:22px 26px; border:2px solid var(--accent-amber); background:linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(120, 53, 15, 0.35) 50%, rgba(69, 26, 3, 0.45) 100%); box-shadow:0 0 32px rgba(245,158,11,0.28);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div style="display:flex; align-items:center; gap:18px;">
+            <div style="font-size:46px; line-height:1; filter:drop-shadow(0 0 16px rgba(245,158,11,0.6));">
+              &#128737;
+            </div>
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="badge amber" style="font-weight:900; font-size:11px; letter-spacing:0.06em; padding:3px 10px;">COMBAT WITHDRAWAL</span>
+                <span class="badge primary">${s.client.badge || 'CONTRACT'}</span>
+              </div>
+              <h1 style="font-size:32px; font-weight:900; color:#f59e0b; margin:4px 0 2px 0; text-transform:uppercase; letter-spacing:0.03em; text-shadow:0 0 20px rgba(245,158,11,0.5);">
+                TACTICAL RETREAT &bull; BATTLE ABORTED
+              </h1>
+              <div style="font-size:15px; color:#fffbeb; font-weight:600;">
+                Operation: <strong>${s.title}</strong> &bull; Lance withdrew to preserve combat assets against <strong style="color:#fca5a5;">${s.enemy.name}</strong>
+              </div>
+              <div class="subtext" style="font-size:12px; margin-top:3px;">
+                Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; Pilot ${s.jockProgression.callsign} evacuated safely
+              </div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <button class="btn btn-secondary" style="color:var(--accent-amber); border-color:var(--accent-amber); font-weight:800; padding:12px 24px; font-size:15px;" onclick="BattleModule.closeSummary()">
+              Complete Debriefing &rarr;
+            </button>
+          </div>
+        </div>
+      </div>
     `;
 
     const partsHtml = s.recoveredParts.length === 0 ? `
@@ -1179,42 +1257,27 @@ window.BattleModule = {
     return `
       <div style="display:flex; flex-direction:column; gap:18px; max-width:1120px; margin:0 auto;">
         
-        <!-- Hero After-Action Header Banner -->
-        <div class="card" style="padding:20px 24px; border-color:${isVictory ? 'var(--accent-green)' : (isDefeat ? 'var(--accent-red)' : 'var(--accent-amber)')}; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-            <div>
-              <div style="display:flex; align-items:center; gap:10px;">
-                ${heroBadge}
-                <span class="badge primary">${s.client.badge || 'CONTRACT'}</span>
-              </div>
-              <h1 style="font-size:26px; font-weight:900; margin-top:6px; text-transform:uppercase; letter-spacing:0.02em;">
-                ${s.title}
-              </h1>
-              <div class="subtext" style="font-size:13px; margin-top:2px;">
-                Client Sponsor: <strong>${s.client.name}</strong> • Hostile: <strong>${s.enemy.name}</strong> (${s.enemy.weight}) • Date: ${s.date}
-              </div>
-            </div>
-            <div style="text-align:right;">
-              <button class="btn btn-primary" style="background:var(--accent-green); color:#000; font-weight:900; padding:10px 20px; font-size:14px;" onclick="BattleModule.closeSummary()">
-                &#10003; Complete Debriefing &rarr;
-              </button>
-            </div>
-          </div>
-        </div>
+        <!-- Big Prominent Won / Lost Hero Banner -->
+        ${heroBannerHtml}
 
         <!-- 4 Primary Metric HUD Cards -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
           
           <!-- Metric 1: Financial Settlement -->
           <div class="card" style="padding:16px;">
-            <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:800; color:var(--text-muted);">
-              Total Financial Settlement
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div class="subtext" style="font-size:11px; text-transform:uppercase; font-weight:800; color:var(--text-muted);">
+                Total Financial Settlement
+              </div>
+              <span class="badge ${isVictory ? 'green' : 'red'}" style="font-size:10px;">
+                ${isVictory ? 'WON' : 'LOST'}
+              </span>
             </div>
             <div class="mono" style="font-size:24px; font-weight:900; color:${s.financials.totalPayout > 0 ? 'var(--accent-green)' : 'var(--accent-red)'}; margin:4px 0;">
               ${s.financials.totalPayout > 0 ? '+' : ''}${s.financials.totalPayout.toLocaleString()} Cr
             </div>
             <div class="subtext" style="font-size:12px;">
-              Bounty: ${s.financials.baseBounty.toLocaleString()} Cr + Salvage: ${s.financials.salvageBonus.toLocaleString()} Cr (${s.financials.salvagePct}%)
+              ${isVictory ? `Bounty: ${s.financials.baseBounty.toLocaleString()} Cr + Salvage: ${s.financials.salvageBonus.toLocaleString()} Cr (${s.financials.salvagePct}%)` : `No combat bounty awarded (Mission failed)`}
             </div>
             <div style="margin-top:6px; font-size:11px; color:var(--accent-amber);" class="mono">
               War Chest: ${s.financials.newCredits.toLocaleString()} Cr
