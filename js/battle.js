@@ -32,6 +32,13 @@ window.BattleModule = {
   initEncounter(contract = null) {
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
+    if (jock && (jock.medicallyDisabled || jock.health < 25) && !jock.isDead) {
+      alert(`Deployment Blocked: Pilot ${jock.callsign} is MEDICALLY DISABLED (${jock.health}% HP). Grounded from combat duty until 100% full recovery in Medical Bay!`);
+      this.active = false;
+      this.arenaTab = 'offers';
+      this.render();
+      return;
+    }
     const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
 
     this.active = true;
@@ -94,9 +101,12 @@ window.BattleModule = {
 
   getActiveCombatJock() {
     const st = window.GameState.data;
-    const sel = st.jocks.find(j => j.id === st.selectedJockId && j.assignedMechId && !j.isDead);
+    const sel = st.jocks.find(j => j.id === st.selectedJockId && j.assignedMechId && !j.isDead && !j.medicallyDisabled);
     if (sel) return sel;
-    return st.jocks.find(j => j.assignedMechId && !j.isDead) || st.jocks.find(j => !j.isDead) || st.jocks[0];
+    return st.jocks.find(j => j.assignedMechId && !j.isDead && !j.medicallyDisabled)
+        || st.jocks.find(j => !j.isDead && !j.medicallyDisabled)
+        || st.jocks.find(j => !j.isDead)
+        || st.jocks[0];
   },
 
   log(msg, type = 'system') {
@@ -1209,6 +1219,17 @@ window.BattleModule = {
       const beforeAwardsCount = (jock.awards || []).length;
       this.recordBattleHistory(jock, mech, outcome === 'VICTORY' ? 'VICTORY' : 'DEFEAT', killMethod, jockXpEarned, killCode);
       newlyAwarded = (jock.awards || []).slice(beforeAwardsCount).map(a => a.title);
+
+      // Check Medical Disability Threshold (< 25% Health)
+      if (jock && !jock.isDead) {
+        if (jock.health < 25) {
+          jock.medicallyDisabled = true;
+          jock.status = 'Medically Disabled';
+        } else if (jock.health >= 100) {
+          jock.medicallyDisabled = false;
+          jock.status = 'Active';
+        }
+      }
     }
 
     // Salvage Component Recovery
@@ -1305,8 +1326,11 @@ window.BattleModule = {
         fightsRemaining: jock?.contract?.fightsRemaining ?? 0,
         newlyAwarded,
         isDead: jock?.isDead || false,
+        medicallyDisabled: jock?.medicallyDisabled || false,
         health: jock ? jock.health : 0,
-        status: jock ? (jock.status || (jock.isDead ? 'KIA' : 'Active')) : 'Unknown'
+        status: jock ? (jock.status || (jock.isDead ? 'KIA' : 'Active')) : 'Unknown',
+        weeklyHealRate: jock ? window.GameState.calcJockWeeklyHealRate(jock) : 0,
+        cmoCallsign: window.GameState.getChiefMedicalOfficer()?.callsign || 'Staff Medic'
       },
       companyProgression: {
         name: st.company?.name || 'Mercenary Company',
@@ -1657,6 +1681,18 @@ window.BattleModule = {
                       Cockpit was compromised during battle. Pilot lost their life in service and is honored in the memorial roster.
                     </div>
                   </div>
+                ` : s.jockProgression.medicallyDisabled ? `
+                  <div style="background:rgba(239,68,68,0.22); border:2px solid #ef4444; border-radius:6px; padding:10px;">
+                    <div style="color:#ef4444; font-weight:900; font-size:13px; display:flex; align-items:center; gap:6px;">
+                      <span>&#9888;</span> MEDICALLY DISABLED // GROUNDED (&lt;25% HP)
+                    </div>
+                    <div class="subtext" style="color:#fca5a5; font-size:12px; margin-top:3px;">
+                      Critical trauma (${s.jockProgression.health}% HP). Pilot is grounded from combat duty until healed to 100% full recovery.
+                    </div>
+                    <div class="subtext" style="color:#fde68a; font-size:11px; margin-top:3px;">
+                      Recovery rate: <strong>+${s.jockProgression.weeklyHealRate} HP/wk</strong> (Survival + CMO <strong>${s.jockProgression.cmoCallsign}</strong>).
+                    </div>
+                  </div>
                 ` : `
                   <div style="display:flex; justify-content:space-between;">
                     <span class="subtext">Pilot Medical Status:</span>
@@ -1800,6 +1836,10 @@ window.BattleModule = {
                   ${!isReady ? `
                     <button class="btn btn-primary" onclick="BattleModule.advanceToScheduledBattle('${b.id}')">
                       Advance Time to Drop Date (${wksLeft} Wk${wksLeft > 1 ? 's' : ''}) &rarr;
+                    </button>
+                  ` : (activeJock && (activeJock.medicallyDisabled || activeJock.health < 25)) ? `
+                    <button class="btn" style="background:#450a0a; color:#fca5a5; border:1px solid #ef4444; font-weight:800; padding:10px 16px; font-size:13px; cursor:not-allowed;" disabled title="Pilot is Medically Disabled until 100% HP">
+                      &#9888; PILOT GROUNDED (${activeJock.health}% HP)
                     </button>
                   ` : `
                     <button class="btn btn-primary" style="background:var(--accent-green); color:#000; font-weight:800; padding:10px 20px; font-size:14px; box-shadow:0 0 16px rgba(16,185,129,0.4);" onclick="BattleModule.deployScheduledBattle('${b.id}')">

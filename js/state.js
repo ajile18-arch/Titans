@@ -359,6 +359,61 @@ window.GameState = {
     return baseWeeks;
   },
 
+  // Chief Medical Officer (CMO): The living Jockey in the company with the highest Medical (First Aid) skill
+  getChiefMedicalOfficer() {
+    const st = this.data;
+    if (!st || !Array.isArray(st.jocks)) return null;
+    const livingJocks = st.jocks.filter(j => !j.isDead);
+    if (livingJocks.length === 0) return null;
+    return livingJocks.reduce((best, j) => {
+      const jSkill = j.skills?.['Medical (First Aid)'] || 0;
+      const bestSkill = best ? (best.skills?.['Medical (First Aid)'] || 0) : -1;
+      return jSkill > bestSkill ? j : best;
+    }, null);
+  },
+
+  // Calculate HP regained per week for a jockey based on Survival skill and modified by company CMO
+  calcJockWeeklyHealRate(jock) {
+    if (!jock || jock.isDead) return 0;
+    // Jockey's own Survival skill: physiological endurance & natural recovery rate
+    const survival = jock.skills?.['Survival'] || 30;
+    const conStat = jock.stats?.Constitution || 20;
+    const baseHeal = 4 + (survival * 0.12) + Math.max(0, (conStat - 15) * 0.2);
+
+    // Company Chief Medical Officer modifier:
+    const cmo = this.getChiefMedicalOfficer();
+    let cmoMod = 1.0;
+    if (cmo) {
+      const cmoSkill = cmo.skills?.['Medical (First Aid)'] || 30;
+      cmoMod = 1.0 + (cmoSkill / 100); // e.g. 60 skill = 1.6x healing rate
+    }
+
+    return Math.max(3, Math.round(baseHeal * cmoMod));
+  },
+
+  // Process weekly healing for all wounded jockeys across calendar progression
+  processWeeklyJockHealing() {
+    const st = this.data;
+    if (!st || !Array.isArray(st.jocks)) return;
+
+    st.jocks.forEach(j => {
+      if (j.isDead) return;
+      if (j.health < 100) {
+        const rate = this.calcJockWeeklyHealRate(j);
+        j.health = Math.min(100, j.health + rate);
+
+        // Once healed to full 100% HP, lift medical disability clearance
+        if (j.health >= 100) {
+          j.health = 100;
+          if (j.medicallyDisabled) {
+            j.medicallyDisabled = false;
+            j.status = 'Active';
+          }
+        }
+      }
+    });
+  },
+
   // Advance campaign time by N weeks; processes monthly wage upkeep, contract durations & incoming Job Listing applicants
   advanceTimeWeeks(weeksToAdd, actionLabel = '') {
     this.ensureCalendar();
@@ -370,6 +425,9 @@ window.GameState = {
     for (let i = 0; i < wCount; i++) {
       st.calendar.totalWeeks += 1;
       this.ensureCalendar();
+
+      // Weekly natural health regeneration (modified by Survival & Chief Medical Officer)
+      this.processWeeklyJockHealing();
 
       // If a Jockey Job Listing is active, applicants respond at a measured, realistic pace (roughly once every 3 to 4 weeks)
       if (st.jobListing && st.jobListing.active && window.HQModule && typeof window.HQModule.generateApplicant === 'function') {

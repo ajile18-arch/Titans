@@ -60,11 +60,15 @@ window.HQModule = {
       return;
     }
 
-    // Best Squad Mechanic & Medic
+    // Best Squad Mechanic & Chief Medical Officer
     window.GameState.ensureJobListing();
     const jobListing = st.jobListing;
-    const bestMechanic = st.jocks.reduce((best, j) => (j.skills['Mechanic (Repair)'] > (best?.skills['Mechanic (Repair)'] || 0) ? j : best), null);
-    const bestMedic = st.jocks.reduce((best, j) => (j.skills['Medical (First Aid)'] > (best?.skills['Medical (First Aid)'] || 0) ? j : best), null);
+    const bestMechanic = st.jocks.reduce((best, j) => (!j.isDead && j.skills['Mechanic (Repair)'] > (best?.skills['Mechanic (Repair)'] || 0) ? j : best), null);
+    const bestMedic = window.GameState.getChiefMedicalOfficer();
+    const woundedJocks = st.jocks.filter(j => !j.isDead && j.health < 100);
+    const weeksNeeded = woundedJocks.length > 0
+      ? Math.max(1, Math.max(...woundedJocks.map(j => Math.ceil((100 - j.health) / Math.max(1, window.GameState.calcJockWeeklyHealRate(j))))))
+      : 0;
     const comp = st.company || {};
     const goalObj = (window.TOS_DATA.companyGoals || []).find(g => g.id === comp.goalId) || window.TOS_DATA.companyGoals[0];
 
@@ -309,15 +313,17 @@ window.HQModule = {
             <div class="panel" style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
               <div style="display:flex; justify-content:space-between;">
                 <span class="subtext">Lead Mechanic:</span>
-                <strong>${bestMechanic ? `${bestMechanic.callsign} (${bestMechanic.skills['Mechanic (Repair)']}% Skill)` : 'None'}</strong>
+                <strong>${bestMechanic ? `${bestMechanic.callsign} (${bestMechanic.skills['Mechanic (Repair)']}% Skill)` : 'None (Base Crew)'}</strong>
               </div>
               <div style="display:flex; justify-content:space-between;">
-                <span class="subtext">Lead Medic:</span>
-                <strong>${bestMedic ? `${bestMedic.callsign} (${bestMedic.skills['Medical (First Aid)']}% Skill)` : 'None'}</strong>
+                <span class="subtext">Chief Medical Officer (CMO):</span>
+                <strong>${bestMedic ? `${bestMedic.callsign} (${bestMedic.skills['Medical (First Aid)']}% Skill)` : 'None (Base Staff)'}</strong>
               </div>
               <div style="display:flex; gap:8px; padding-top:6px;">
                 <button class="btn" style="flex:1;" onclick="HQModule.repairAllMechs()">Repair All Mechs (+2 Wks)</button>
-                <button class="btn" style="flex:1;" onclick="HQModule.healAllJocks()">Treat Wounded Jocks (+2 Wks)</button>
+                <button class="btn ${weeksNeeded > 0 ? 'btn-primary' : ''}" style="flex:1;" ${weeksNeeded === 0 ? 'disabled' : ''} onclick="HQModule.healAllJocks()">
+                  ${weeksNeeded > 0 ? `Medical Bay Rehab (+${weeksNeeded} Wk${weeksNeeded > 1 ? 's' : ''})` : `All Pilots 100% HP`}
+                </button>
               </div>
             </div>
           </div>
@@ -1199,6 +1205,8 @@ window.HQModule = {
                       <span class="badge ${isMerc ? 'amber' : 'primary'}">${isMerc ? 'Mercenary' : rk.name}</span>
                       ${j.isDead ? `
                         <span class="badge" style="background:#450a0a; color:#f87171; border:1px solid #ef4444; font-weight:900;">☠️ KIA</span>
+                      ` : j.medicallyDisabled ? `
+                        <span class="badge" style="background:#dc2626; color:#ffffff; font-weight:900; border:1px solid #f87171;">&#9888; MEDICALLY DISABLED (${j.health}% HP)</span>
                       ` : `
                         <span class="badge ${j.health < 40 ? 'red' : (j.health < 75 ? 'amber' : 'green')}">HP ${j.health}%</span>
                       `}
@@ -1209,8 +1217,9 @@ window.HQModule = {
                       <span>Assigned Titan: <strong style="color:#f8fafc;">${j.isDead ? 'None (KIA)' : (mech ? mech.customName : 'Unassigned')}</strong></span>
                       <span>Fights: <strong style="color:#f8fafc;">${j.missions || fights.length}</strong></span>
                       <span>Kills: <strong style="color:#f8fafc;">${j.kills}</strong></span>
-                      <span>Commendations: <strong style="color:var(--accent-amber);">${awards.length}</strong></span>
-                      <span>Ready XP: <strong style="color:var(--accent-green);">${j.xp} XP</strong></span>
+                      ${j.medicallyDisabled ? `
+                        <span>Status: <strong style="color:#f87171;">Grounded (&lt;25% HP) &bull; +${window.GameState.calcJockWeeklyHealRate(j)} HP/wk</strong></span>
+                      ` : ''}
                       <span>Wage: <strong>${j.isDead ? '0 Cr (Deceased)' : (isMerc ? '0 Cr/mo (Flat Fee)' : salary.toLocaleString() + ' Cr/mo')}</strong></span>
                     </div>
                   </div>
@@ -1491,6 +1500,9 @@ window.HQModule = {
                 ${jock.isDead ? `
                   <span class="badge" style="background:#450a0a; color:#f87171; border:1px solid #ef4444; font-weight:900;">☠️ KILLED IN ACTION</span>
                   <span class="badge red mono">Fell in Battle (${jock.kiaDate || 'KIA'})</span>
+                ` : jock.medicallyDisabled ? `
+                  <span class="badge" style="background:#dc2626; color:#ffffff; font-weight:900; border:1px solid #f87171;">&#9888; MEDICALLY DISABLED (${jock.health}% HP)</span>
+                  <span class="badge amber mono">Healing: +${window.GameState.calcJockWeeklyHealRate(jock)} HP/wk</span>
                 ` : `
                   <span class="badge ${jock.health < 40 ? 'red' : (jock.health < 75 ? 'amber' : 'green')}">HP ${jock.health}%</span>
                   <span class="badge ${jock.contract?.expired ? 'red' : 'amber'} mono">${window.GameState.getContractSummary(jock)}</span>
@@ -1541,7 +1553,11 @@ window.HQModule = {
             </div>
             <div style="display:flex; gap:8px;">
               <button class="btn" onclick="App.switchTab('garage')">Inspect Mech in Garage &rarr;</button>
-              <button class="btn btn-primary" onclick="App.switchTab('battle')">Deploy to Battle Arena &rarr;</button>
+              ${jock.medicallyDisabled ? `
+                <button class="btn" disabled style="background:#450a0a; color:#fca5a5; border:1px solid #ef4444;" title="Pilot is Medically Disabled until 100% HP">&#9888; Medically Grounded (&lt;25% HP)</button>
+              ` : `
+                <button class="btn btn-primary" onclick="App.switchTab('battle')">Deploy to Battle Arena &rarr;</button>
+              `}
             </div>
           `}
         </div>
@@ -1799,15 +1815,12 @@ window.HQModule = {
 
   healAllJocks() {
     const st = window.GameState.data;
-    const anyWounded = st.jocks.some(j => !j.isDead && j.health < 100);
-    st.jocks.forEach(j => {
-      if (!j.isDead) j.health = 100;
-    });
-    if (anyWounded) {
-      window.GameState.advanceTimeWeeks(2, 'Medical Bay Trauma Treatment');
-    } else {
-      window.GameState.save();
-    }
+    const wounded = st.jocks.filter(j => !j.isDead && j.health < 100);
+    if (wounded.length === 0) return;
+
+    // Calculate maximum weeks needed for all wounded pilots to reach full 100% HP
+    const weeksNeeded = Math.max(1, Math.max(...wounded.map(j => Math.ceil((100 - j.health) / Math.max(1, window.GameState.calcJockWeeklyHealRate(j))))));
+    window.GameState.advanceTimeWeeks(weeksNeeded, `Medical Bay Full Rehabilitation (${weeksNeeded} Wks)`);
     this.render();
   },
 
