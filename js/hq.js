@@ -523,6 +523,7 @@ window.HQModule = {
     this.proposedFights = 10;
     this.candidateWalkedOut = false;
     this.interviewSubTab = 'inquire';
+    this.lastAskedQId = '';
     this.interviewQuestionCategory = 'all';
     this.negotiationMessage = `"Thanks for calling me in from the applicant queue, Commander. I'm ready to discuss joining your company. Ask me anything about my combat training or cockpit record."`;
     this.interviewOpen = true;
@@ -596,6 +597,7 @@ window.HQModule = {
       clue
     };
     this.negotiationMessage = reply;
+    this.lastAskedQId = qId;
 
     this.render();
   },
@@ -623,6 +625,7 @@ window.HQModule = {
   },
 
   testCounterOffer() {
+    this.lastAskedQId = '';
     if (!this.candidate || this.candidateWalkedOut) return;
     this.updateNegotiationInputs();
     const c = this.candidate;
@@ -745,6 +748,28 @@ window.HQModule = {
     this.render();
   },
 
+  // Full question readout shown in the spoken response box: hover preview, or the last asked question kept up
+  getInterviewQuestionLineHtml(previewId = '') {
+    const qs = window.TOS_DATA.interviewQuestions || [];
+    if (previewId) {
+      const q = qs.find(x => x.id === previewId);
+      if (q) {
+        const asked = !!this.askedQuestions[q.id];
+        return `<span class="badge ${q.type === 'attribute' ? 'primary' : 'green'} mono" style="font-size:10px;">${q.badge}</span> ${asked ? 'Already asked' : 'Potential question'}: "${q.prompt}"`;
+      }
+    }
+    const last = qs.find(x => x.id === this.lastAskedQId);
+    if (last) {
+      return `<span class="badge ${last.type === 'attribute' ? 'primary' : 'green'} mono" style="font-size:10px;">${last.badge}</span> You asked: "${last.prompt}"`;
+    }
+    return '<span class="subtext" style="font-weight:400;">Hover over a topic below to read the full question.</span>';
+  },
+
+  previewInterviewQuestion(qId) {
+    const el = document.getElementById('interview-question-line');
+    if (el) el.innerHTML = this.getInterviewQuestionLineHtml(qId);
+  },
+
   renderInterviewPOVScreen() {
     if (!this.interviewOpen || !this.candidate) return '';
     const st = window.GameState.data;
@@ -820,6 +845,9 @@ window.HQModule = {
               <span>${c.callsign}'s Spoken Response:</span>
               ${latestClue ? `<span class="mono" style="color:var(--accent-green);">&rarr; ${latestClue}</span>` : '<span class="subtext mono">Awaiting Topic</span>'}
             </div>
+            <div id="interview-question-line" style="font-size:13px; font-weight:700; color:#93c5fd; margin-bottom:6px; text-align:left;">
+              ${this.getInterviewQuestionLineHtml()}
+            </div>
             <div style="font-size:14px; font-style:italic; color:#f8fafc; line-height:1.45;">
               ${this.negotiationMessage}
             </div>
@@ -884,7 +912,7 @@ window.HQModule = {
                       class="btn ${alreadyAsked ? '' : 'btn-primary'}"
                       style="text-align:left; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px;"
                       ${disabled ? 'disabled' : ''}
-                      onclick="HQModule.askInterviewQuestion('${q.id}')"
+                      onclick="HQModule.askInterviewQuestion('${q.id}')" onmouseenter="HQModule.previewInterviewQuestion('${q.id}')" onmouseleave="HQModule.previewInterviewQuestion('')" onfocus="HQModule.previewInterviewQuestion('${q.id}')" onblur="HQModule.previewInterviewQuestion('')"
                     >
                       <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                         <span class="badge ${q.type === 'attribute' ? 'primary' : 'green'} mono" style="margin-right:6px; font-size:10px;">${q.badge}</span>

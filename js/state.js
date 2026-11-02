@@ -496,8 +496,8 @@ window.GameState = {
   },
 
   getMaxInterviewQuestions() {
-    // At Company Reputation Level 1, only 3 questions can be asked per interview (2 + RepLevel)
-    return 2 + this.getCompanyReputationLevel();
+    // Interviews are limited to exactly 3 questions
+    return 3;
   },
 
   getMechTemplate(mech) {
