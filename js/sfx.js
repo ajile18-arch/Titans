@@ -84,7 +84,7 @@ window.SoundFX = {
     if (cat.includes('missile') || name.includes('lrm') || name.includes('srm') || name.includes('rocket')) {
       return 'missile';
     }
-    if (cat.includes('close combat') || name.includes('axe') || name.includes('blade') || name.includes('melee')) {
+    if (weapon.isPhysical || cat.includes('close combat') || cat.includes('physical') || name.includes('axe') || name.includes('blade') || name.includes('melee') || name.includes('punch') || name.includes('kick')) {
       return 'melee';
     }
     return 'ballistic'; // Autocannon, Gauss, Cannons

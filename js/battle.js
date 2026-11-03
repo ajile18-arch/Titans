@@ -466,13 +466,72 @@ window.BattleModule = {
     }
 
     if (!weapons.length) {
-      return [
+      weapons.push(
         { id: 'w-ppc', name: 'Particle Projector Cannon (PPC)', cat: 'Energy', damage: 24, accMod: 0, ammo: null, loc: 'RA' },
         { id: 'w-lrm', name: 'LRM-10 Missile Launcher', cat: 'Missile', damage: 16, accMod: 5, ammo: 8, loc: 'LT' },
         { id: 'w-laser', name: 'Twin Medium Pulse Lasers', cat: 'Energy', damage: 14, accMod: 6, ammo: null, loc: 'LA' },
         { id: 'w-ac', name: 'Rotary Autocannon RAC/5', cat: 'Ballistic', damage: 18, accMod: 2, ammo: 12, loc: 'RT' }
-      ];
+      );
     }
+
+    // Physical Melee Attacks when in an Approached State (Punch LA/RA, Kick LL/RL)
+    if (this.isCloseRange) {
+      const tons = mech?.weightTons || 50;
+      const punchDmg = Math.max(12, Math.round(tons * 0.3));
+      const kickDmg = Math.max(18, Math.round(tons * 0.5));
+
+      weapons.push(
+        {
+          id: 'phys-punch-la',
+          name: '🥊 Punch (Left Arm)',
+          shortName: 'Punch (LA)',
+          cat: 'Physical',
+          damage: punchDmg,
+          accMod: 16,
+          ammo: null,
+          loc: 'LA',
+          isPhysical: true,
+          physType: 'punch'
+        },
+        {
+          id: 'phys-punch-ra',
+          name: '🥊 Punch (Right Arm)',
+          shortName: 'Punch (RA)',
+          cat: 'Physical',
+          damage: punchDmg,
+          accMod: 16,
+          ammo: null,
+          loc: 'RA',
+          isPhysical: true,
+          physType: 'punch'
+        },
+        {
+          id: 'phys-kick-ll',
+          name: '🦵 Kick (Left Leg)',
+          shortName: 'Kick (LL)',
+          cat: 'Physical',
+          damage: kickDmg,
+          accMod: 14,
+          ammo: null,
+          loc: 'LL',
+          isPhysical: true,
+          physType: 'kick'
+        },
+        {
+          id: 'phys-kick-rl',
+          name: '🦵 Kick (Right Leg)',
+          shortName: 'Kick (RL)',
+          cat: 'Physical',
+          damage: kickDmg,
+          accMod: 14,
+          ammo: null,
+          loc: 'RL',
+          isPhysical: true,
+          physType: 'kick'
+        }
+      );
+    }
+
     return weapons;
   },
 
@@ -482,9 +541,17 @@ window.BattleModule = {
     let hit = 72;
 
     if (isPlayer) {
-      const gunnery = jock?.skills?.gunnery || 50;
-      hit += Math.round((gunnery - 50) * 0.4);
-      hit += (weapon.accMod || 0);
+      if (weapon?.isPhysical) {
+        // High hit probability for close-combat melee physical attacks
+        hit = 84;
+        const meleeSkill = jock?.skills?.['Close Combat'] || jock?.skills?.piloting || 50;
+        hit += Math.round((meleeSkill - 50) * 0.3);
+        hit += (weapon.accMod || 14);
+      } else {
+        const gunnery = jock?.skills?.gunnery || jock?.skills?.['Energy Weapons'] || 50;
+        hit += Math.round((gunnery - 50) * 0.4);
+        hit += (weapon?.accMod || 0);
+      }
 
       // Chassis Affinity Comfort Modifier
       const mech = jock ? st.mechs?.find(m => m.id === jock.assignedMechId) : st.mechs?.[0];
@@ -592,15 +659,44 @@ window.BattleModule = {
 
         // Determine hit location
         const locChart = ['HD', 'CT', 'CT', 'CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL'];
-        let loc = (this.aimTarget !== 'General' && Math.random() < 0.65) ? this.aimTarget : locChart[Math.floor(Math.random() * locChart.length)];
+        let loc;
+        if (this.aimTarget !== 'General' && Math.random() < 0.65) {
+          loc = this.aimTarget;
+        } else if (weapon.isPhysical && weapon.physType === 'punch') {
+          const punchLocs = ['HD', 'CT', 'CT', 'LT', 'RT', 'LA', 'RA'];
+          loc = punchLocs[Math.floor(Math.random() * punchLocs.length)];
+        } else if (weapon.isPhysical && weapon.physType === 'kick') {
+          const kickLocs = ['LL', 'LL', 'RL', 'RL', 'CT'];
+          loc = kickLocs[Math.floor(Math.random() * kickLocs.length)];
+        } else {
+          loc = locChart[Math.floor(Math.random() * locChart.length)];
+        }
         if (!this.enemy.armor[loc]) loc = 'CT';
 
         this.enemy.armor[loc] = Math.max(0, this.enemy.armor[loc] - dmg);
         const isCrit = (Math.random() < 0.22);
         const critText = isCrit ? ' [CRITICAL!]' : '';
         const drText = enemyDR > 0 ? ` (absorbed ${armorAbsorbed} DMG via Hostile Armor Rating ${this.enemy.armorRating} [-${enemyDR}% DR])` : '';
-        this.log(`${jock ? jock.callsign : 'Pilot'} fired ${weapon.name} at ${loc}! Direct Hit for ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
+
+        if (weapon.physType === 'punch') {
+          this.log(`MELEE PUNCH: ${jock ? jock.callsign : 'Pilot'} landed a heavy ${weapon.name} across ${this.enemy.name}'s ${loc}! Impact dealt ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
+        } else if (weapon.physType === 'kick') {
+          this.log(`HEAVY KICK: ${jock ? jock.callsign : 'Pilot'} drove a brutal ${weapon.name} into ${this.enemy.name}'s ${loc}! Direct Hit for ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
+        } else {
+          this.log(`${jock ? jock.callsign : 'Pilot'} fired ${weapon.name} at ${loc}! Direct Hit for ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
+        }
         this.spawnDamagePopup(`-${dmg} [${loc}]${critText}`, false, isCrit);
+
+        // --- Kick Knockdown Check (Heavy brawling kicks can trip/topple mechs) ---
+        if (weapon.physType === 'kick' && !this.enemyFallen) {
+          const kickTripRoll = Math.floor(Math.random() * 100) + 1;
+          if (kickTripRoll <= 35) {
+            this.enemyFallen = true;
+            if (window.SoundFX && typeof window.SoundFX.playMechFall === 'function') window.SoundFX.playMechFall();
+            this.log(`KICK KNOCKDOWN: The staggering impact of the ${weapon.name} toppled ${this.enemy.name} to the ground (PRONE)! (Trip Roll ${kickTripRoll} <= 35%)`, 'crit');
+            this.spawnDamagePopup('KNOCKDOWN (PRONE)!', false, true);
+          }
+        }
 
         // --- Leg Damage Knockdown Check (50% reduced fall rate table) ---
         if ((loc === 'LL' || loc === 'RL') && !this.enemyFallen) {
@@ -2508,8 +2604,8 @@ window.BattleModule = {
                 </defs>
                 <line x1="${this.activeBeam.from.x}" y1="${this.activeBeam.from.y}"
                       x2="${this.activeBeam.to.x}" y2="${this.activeBeam.to.y}"
-                      stroke="${this.activeBeam.type === 'laser' ? '#38bdf8' : (this.activeBeam.type === 'ppc' ? '#a855f7' : (this.activeBeam.type === 'missile' ? '#f59e0b' : '#ef4444'))}"
-                      stroke-width="2.5"
+                      stroke="${this.activeBeam.type === 'laser' ? '#38bdf8' : (this.activeBeam.type === 'ppc' ? '#a855f7' : (this.activeBeam.type === 'missile' ? '#f59e0b' : (this.activeBeam.type === 'melee' ? '#f97316' : '#ef4444')))}"
+                      stroke-width="${this.activeBeam.type === 'melee' ? '4.5' : '2.5'}"
                       stroke-linecap="round"
                       filter="url(#beam-glow)"/>
                 <circle cx="${this.activeBeam.to.x}" cy="${this.activeBeam.to.y}" r="4" fill="#ffffff" filter="url(#beam-glow)"/>
@@ -2664,14 +2760,21 @@ window.BattleModule = {
               </div>
             ` : this.commandTab === 'attack' ? `
               <div style="display:flex; flex-direction:column; gap:5px;">
+                ${this.isCloseRange ? `
+                  <div style="font-size:10px; font-weight:800; color:#fbbf24; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:2px; display:flex; justify-content:space-between;">
+                    <span>⚔️ Close Combat &amp; Ranged Arsenal</span>
+                    <span>Point-Blank</span>
+                  </div>
+                ` : ''}
                 ${weapons.map((w, idx) => {
                   const hit = this.calcHitChance(w, true, this.aimTarget);
+                  const isPhys = !!w.isPhysical;
                   return `
-                    <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerAttack(${idx})" style="padding:7px 10px; font-size:12px;">
+                    <button class="jrpg-menu-btn ${isPhys ? 'physical-attack' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerAttack(${idx})" style="padding:6px 10px; font-size:12px; ${isPhys ? 'border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.08);' : ''}">
                       <div>
                         <div><strong>${w.name}</strong></div>
-                        <div class="subtext mono" style="font-size:10px; color:#94a3b8;">
-                          ${w.damage} DMG &bull; ${w.ammo !== null ? `&bull; Ammo: ${w.ammo}` : ''}
+                        <div class="subtext mono" style="font-size:10px; color:${isPhys ? '#fbbf24' : '#94a3b8'};">
+                          ${w.damage} DMG &bull; ${w.ammo !== null ? `Ammo: ${w.ammo}` : (isPhys ? (w.physType === 'kick' ? 'Brawling Kick • Trip Chance' : 'Close Combat Punch') : 'Energy')}
                         </div>
                       </div>
                       <span class="badge ${hit >= 70 ? 'green' : (hit >= 50 ? 'amber' : 'red')} mono" style="font-size:11px;">
