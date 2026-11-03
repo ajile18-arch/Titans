@@ -328,6 +328,10 @@ window.App = {
       if (btn) btn.classList.toggle('active', t === tab);
     });
 
+    if (window.MusicModule && typeof window.MusicModule.setMode === 'function') {
+      window.MusicModule.setMode(tab === 'battle' ? 'battle' : 'ambient');
+    }
+
     this.updateHUD();
     if (tab === 'hq') window.HQModule.render();
     else if (tab === 'garage') window.GarageModule.render();

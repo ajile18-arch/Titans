@@ -73,6 +73,9 @@ window.BattleModule = {
     this.arenaTab = 'combat';
     this.currentContract = contract;
     this.round = 1;
+    if (window.MusicModule && typeof window.MusicModule.setMode === 'function') {
+      window.MusicModule.setMode('battle');
+    }
     this.turn = 'player';
     this.commandTab = 'attack';
     this.aimTarget = 'General';
