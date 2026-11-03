@@ -840,6 +840,41 @@ window.SoundFX = {
     playStep(now);
     // Second heavy mechanical stride
     playStep(now + 0.65);
+  },
+
+  // Mechanical ratchet servo click + pneumatic latch clamp when equipping a weapon or component
+  playEquipPart(t) {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = (typeof t === 'number' && t > 0) ? t : ctx.currentTime;
+
+    // 1. High-tech clamp servo tone
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(320, now + 0.12);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.35, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+    osc.connect(gain);
+    gain.connect(this.master);
+    osc.start(now);
+    osc.stop(now + 0.15);
+
+    // 2. Heavy pneumatic hardpoint lock click
+    const click = ctx.createOscillator();
+    const cGain = ctx.createGain();
+    click.type = 'triangle';
+    click.frequency.setValueAtTime(140, now + 0.06);
+    click.frequency.exponentialRampToValueAtTime(45, now + 0.22);
+    cGain.gain.setValueAtTime(0.001, now + 0.06);
+    cGain.gain.linearRampToValueAtTime(0.5, now + 0.08);
+    cGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    click.connect(cGain);
+    cGain.connect(this.master);
+    click.start(now + 0.06);
+    click.stop(now + 0.25);
   }
 };
 

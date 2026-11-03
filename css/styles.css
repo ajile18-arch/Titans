@@ -1566,3 +1566,415 @@ body {
 @keyframes mech-spark {
   0% { opacity: 1; } 20% { opacity: 0; } 45% { opacity: 1; } 55% { opacity: 0; } 100% { opacity: 0; }
 }
+
+/* ==========================================================================
+   GARAGE & MECH FACTORY: LARGE INTERACTIVE SCHEMATIC & DRAG-AND-DROP WORKSHOP
+   ========================================================================== */
+
+.mech-schematic-card {
+  position: relative;
+  background: linear-gradient(180deg, #070d18 0%, #0b1325 100%);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+}
+
+.mech-schematic-stage {
+  position: relative;
+  min-height: 520px;
+  background-color: #030712;
+  background-image: 
+    linear-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, rgba(30, 58, 138, 0.22) 0%, rgba(3, 7, 18, 0.95) 75%);
+  background-size: 24px 24px, 24px 24px, 100% 100%;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Blueprint laser scanline sweep */
+.mech-schematic-stage::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #38bdf8 50%, transparent 100%);
+  box-shadow: 0 0 10px #38bdf8;
+  opacity: 0.4;
+  animation: schematic-laser-sweep 5s linear infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes schematic-laser-sweep {
+  0% { top: 0%; opacity: 0; }
+  10% { opacity: 0.6; }
+  90% { opacity: 0.6; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* Central Mech Backdrop Sprite */
+.mech-schematic-center-view {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.mech-schematic-sprite {
+  max-height: 350px;
+  max-width: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 18px rgba(56, 189, 248, 0.2));
+  transition: all 0.3s ease;
+  user-select: none;
+  pointer-events: none;
+}
+
+.mech-schematic-shadow {
+  position: absolute;
+  bottom: 12px;
+  width: 220px;
+  height: 24px;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+}
+
+/* 3-Column Anatomy Grid */
+.schematic-anatomy-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(200px, 1.2fr) minmax(180px, 1fr);
+  gap: 12px;
+  position: relative;
+  z-index: 10;
+}
+
+.schematic-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Interactive Hardpoint / Body Part Node */
+.schematic-hardpoint-node {
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  backdrop-filter: blur(4px);
+}
+
+.schematic-hardpoint-node:hover {
+  border-color: #38bdf8;
+  background: rgba(30, 41, 59, 0.95);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+.schematic-hardpoint-node.selected {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px #38bdf8, 0 0 16px rgba(56, 189, 248, 0.45);
+  background: rgba(14, 116, 144, 0.25);
+}
+
+/* Condition Visual Coding */
+.schematic-hardpoint-node.status-intact {
+  border-left: 3px solid #10b981;
+}
+
+.schematic-hardpoint-node.status-damaged {
+  border-left: 3px solid #f59e0b;
+}
+
+.schematic-hardpoint-node.status-critical {
+  border-left: 3px solid #f97316;
+  animation: pulse-crit 2s infinite;
+}
+
+.schematic-hardpoint-node.status-destroyed {
+  border: 2px solid #ef4444 !important;
+  background: repeating-linear-gradient(45deg, rgba(28, 25, 23, 0.95), rgba(28, 25, 23, 0.95) 8px, rgba(127, 29, 29, 0.6) 8px, rgba(127, 29, 29, 0.6) 16px) !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.65);
+}
+
+@keyframes pulse-crit {
+  0%, 100% { box-shadow: 0 0 6px rgba(249, 115, 22, 0.2); }
+  50% { box-shadow: 0 0 16px rgba(249, 115, 22, 0.6); }
+}
+
+/* Hardpoint Header */
+.hardpoint-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.hardpoint-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hardpoint-code {
+  font-family: var(--font-mono, monospace);
+  font-weight: 800;
+  font-size: 13px;
+  color: #38bdf8;
+}
+
+.hardpoint-name {
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+/* Health / Armor Bar */
+.hardpoint-hp-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hardpoint-hp-track {
+  width: 100%;
+  height: 5px;
+  background: #1e293b;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.hardpoint-hp-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.hardpoint-hp-fill.green { background: #10b981; }
+.hardpoint-hp-fill.lime { background: #84cc16; }
+.hardpoint-hp-fill.amber { background: #f59e0b; }
+.hardpoint-hp-fill.red { background: #ef4444; }
+
+/* Weapons list in schematic hardpoint */
+.hardpoint-weapons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.schematic-weapon-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: rgba(2, 6, 23, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  transition: all 0.15s ease;
+}
+
+.schematic-weapon-chip:hover {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.schematic-weapon-chip.is-destroyed {
+  border-color: #ef4444;
+  background: rgba(69, 10, 10, 0.6);
+  color: #fca5a5;
+  text-decoration: line-through;
+}
+
+.chip-unequip-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  transition: color 0.15s ease;
+}
+
+.chip-unequip-btn:hover {
+  color: #ef4444;
+}
+
+/* Empty hardpoint prompt */
+.hardpoint-empty-slot {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: #64748b;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 4px 6px;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+/* Drag-and-drop landing target highlights */
+.is-dragging-part .schematic-hardpoint-node {
+  border-style: dashed;
+}
+
+.is-dragging-part .schematic-hardpoint-node.drop-target-eligible {
+  border-color: #38bdf8;
+  background: rgba(14, 116, 144, 0.2);
+  animation: drop-pulse 1.5s infinite;
+}
+
+@keyframes drop-pulse {
+  0%, 100% { border-color: rgba(56, 189, 248, 0.5); }
+  50% { border-color: #38bdf8; box-shadow: 0 0 14px rgba(56, 189, 248, 0.4); }
+}
+
+.schematic-hardpoint-node.drop-hover-valid {
+  border-color: #10b981 !important;
+  border-style: solid !important;
+  background: rgba(6, 78, 59, 0.85) !important;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.7) !important;
+  transform: scale(1.02);
+}
+
+.schematic-hardpoint-node.drop-hover-invalid {
+  border-color: #ef4444 !important;
+  border-style: solid !important;
+  background: rgba(69, 10, 10, 0.85) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.7) !important;
+}
+
+.schematic-hardpoint-node.drop-hover-destroyed {
+  border-color: #ef4444 !important;
+  background: repeating-linear-gradient(45deg, #450a0a, #450a0a 6px, #7f1d1d 6px, #7f1d1d 12px) !important;
+}
+
+/* Success flash on dropping component */
+.hardpoint-locked-flash {
+  animation: hardpoint-flash 0.6s ease-out;
+}
+
+@keyframes hardpoint-flash {
+  0% { box-shadow: 0 0 30px #10b981; border-color: #10b981; }
+  100% { box-shadow: none; }
+}
+
+/* Attachable Dragged Part Preview (Matches larger schematic aesthetic) */
+.mech-attachable-part-preview {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  z-index: 99999;
+  background: rgba(15, 23, 42, 0.98);
+  border: 2px solid #38bdf8;
+  border-radius: 6px;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.75), inset 0 0 10px rgba(56, 189, 248, 0.25);
+  padding: 8px 12px;
+  min-width: 230px;
+  pointer-events: none;
+  font-family: var(--font-sans, sans-serif);
+}
+
+.attachable-coupling {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  color: #38bdf8;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.35);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+.attachable-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachable-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.attachable-name {
+  font-weight: 800;
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.attachable-meta {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.attachable-footer {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(56, 189, 248, 0.25);
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  color: #10b981;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* Draggable Inventory Card Styling */
+.inventory-part-card {
+  transition: all 0.15s ease;
+}
+
+.inventory-part-card[draggable="true"] {
+  cursor: grab;
+}
+
+.inventory-part-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.inventory-part-card.is-being-dragged {
+  opacity: 0.45;
+  border-style: dashed !important;
+  border-color: #38bdf8 !important;
+}
+
+/* Mech Switcher Pills Header */
+.mech-switcher-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mech-switcher-pill:hover {
+  border-color: var(--border-bright);
+  background: var(--bg-hover);
+}
+
+.mech-switcher-pill.active {
+  border-color: var(--primary);
+  background: rgba(59, 130, 246, 0.18);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}

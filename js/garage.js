@@ -178,53 +178,57 @@ window.GarageModule = {
     container.innerHTML = `
       ${this.renderShopkeeperBanner(repLvl, totalSpareParts)}
       <div class="grid-12">
-        <!-- Left 5 Cols: Hangar Bay Roster & Reputation-Gated Chassis Shop + 8-Location Titan Paperdoll -->
-        <div class="col-5" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Left 7 Cols: Fleet Selection Bar & Large Interactive Mech Factory Schematic Bay -->
+        <div class="col-7" style="display:flex; flex-direction:column; gap:16px;">
           
-          <!-- Hangar Roster & Chassis Dealership (Reputation Gated) -->
+          <!-- Hangar Bay Roster & Chassis Dealership (Reputation Gated) -->
           <div class="card">
             <div class="section-header">
               <div>
-                <div class="section-title">Hangar Bay &amp; Chassis Shop (${st.mechs.length} Units)</div>
-                <div class="subtext">Higher Company Reputation unlocks heavier Mech Chassis to buy</div>
+                <div class="section-title">Hangar Fleet Roster (${st.mechs.length} Mech${st.mechs.length > 1 ? 's' : ''})</div>
+                <div class="subtext">Select an active Titan to configure, or buy a new chassis frame</div>
               </div>
               <span class="badge amber mono">Rep Lvl ${repLvl}</span>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:8px;">
+            <!-- Fleet Selector Pills -->
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
               ${st.mechs.map(m => {
                 const mm = window.GameState.computeMechMetrics(m);
                 const rInfo = window.GameState.getChassisResaleInfo(m);
                 const pilot = st.jocks.find(j => j.assignedMechId === m.id);
                 const isSel = m.id === mech.id;
                 return `
-                  <div class="list-item ${isSel ? 'selected' : ''}" onclick="GarageModule.selectMech('${m.id}')">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                      <strong>${m.customName}</strong>
-                      <div style="display:flex; gap:6px; align-items:center;">
-                        <span class="badge ${rInfo.conditionPct < 100 ? 'amber' : 'green'} mono">Cond: ${rInfo.conditionPct}%</span>
-                        <span class="badge primary">${mm.tpl.weightClass} (${mm.maxTons}t)</span>
+                  <div
+                    class="mech-switcher-pill ${isSel ? 'active' : ''}"
+                    onclick="GarageModule.selectMech('${m.id}')"
+                    title="${m.customName} (${mm.tpl.model}) • ${pilot ? `Pilot: ${pilot.callsign}` : 'No Pilot'}"
+                  >
+                    <div style="display:flex; flex-direction:column; gap:2px;">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <strong style="font-size:13px; color:${isSel ? '#38bdf8' : '#f1f5f9'};">${m.customName}</strong>
+                        <span class="badge primary" style="font-size:10px;">${mm.tpl.weightClass} (${mm.maxTons}t)</span>
                       </div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:12px;" class="subtext">
-                      <span>Pilot: <strong>${pilot ? pilot.callsign : 'Unassigned'}</strong></span>
-                      <span class="mono" style="color:${mm.totalTons > mm.maxTons ? 'var(--accent-red)' : 'var(--accent-green)'};">
-                        ${mm.totalTons} / ${mm.maxTons}t • Sell: ${rInfo.chassisResale.toLocaleString()} Cr
-                      </span>
+                      <div style="display:flex; align-items:center; gap:6px; font-size:11px;" class="subtext mono">
+                        <span class="badge ${rInfo.conditionPct < 100 ? 'amber' : 'green'} mono" style="font-size:9px; padding:1px 4px;">
+                          ${rInfo.conditionPct}% HP
+                        </span>
+                        <span>${pilot ? `Pilot: ${pilot.callsign}` : 'Unassigned'}</span>
+                      </div>
                     </div>
                   </div>
                 `;
               }).join('')}
             </div>
 
-            <!-- Buy New Titan Chassis Bar (Filtered/Locked by Company Reputation) -->
-            <div class="panel" style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+            <!-- Buy New Titan Chassis Bar -->
+            <div class="panel" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
               <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
-                <span class="subtext" style="font-weight:700;">Buy New Mech Chassis (Stripped Frame):</span>
-                <span class="mono subtext">Win every 2 fights for +1 Rep Lvl</span>
+                <span class="subtext" style="font-weight:700;">Buy New Titan Chassis Frame:</span>
+                <span class="mono subtext">Win fights for higher Rep Lvls</span>
               </div>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <select id="new-chassis-select" class="select" style="flex:1;">
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <select id="new-chassis-select" class="select" style="flex:1; min-width:200px;">
                   ${window.TOS_DATA.chassisTemplates.map(t => {
                     const req = t.reqRepLevel || 1;
                     const locked = repLvl < req;
@@ -241,59 +245,26 @@ window.GarageModule = {
             </div>
           </div>
 
-          <!-- 8-Location Interactive Paperdoll -->
-          <div class="card">
-            <div class="section-header">
-              <div>
-                <div class="section-title">8-Part Titan Anatomy Diagram</div>
-                <div class="subtext">Click any body section to inspect slots, internal structure &amp; equip owned parts</div>
-              </div>
-              <div style="display:flex; gap:6px;">
-                <button class="btn" onclick="GarageModule.repairCurrentMech()">Repair Structure (+2 Wks)</button>
-                <button class="btn btn-primary" onclick="GarageModule.fillMaxArmor()">Fill Open Weight (+1 Wk)</button>
-              </div>
-            </div>
-
-            <div class="paperdoll-grid">
-              <div></div>
-              ${this.renderPartBox(mech, tpl, 'HD', activeLoc)}
-              <div></div>
-
-              ${this.renderPartBox(mech, tpl, 'LA', activeLoc)}
-              ${this.renderPartBox(mech, tpl, 'CT', activeLoc)}
-              ${this.renderPartBox(mech, tpl, 'RA', activeLoc)}
-
-              ${this.renderPartBox(mech, tpl, 'LT', activeLoc)}
-              <div class="panel" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px; padding:6px;">
-                <img src="${tpl.sprite || 'assets/mechs/mech_guillotine.png'}" alt="${tpl.model}" style="width:76px; height:76px; object-fit:contain; filter:drop-shadow(0 4px 8px rgba(0,0,0,0.85));" />
-                <strong class="mono" style="font-size:12px;">Structure: ${metrics.totalCurrentArmor}/${metrics.totalMaxArmor} (${resaleInfo.conditionPct}%)</strong>
-                <span class="badge cyan mono" style="font-size:10px;">🛡️ Armor: ${metrics.armorTons}t (Rating ${metrics.armorRating})</span>
-              </div>
-              ${this.renderPartBox(mech, tpl, 'RT', activeLoc)}
-
-              ${this.renderPartBox(mech, tpl, 'LL', activeLoc)}
-              <div></div>
-              ${this.renderPartBox(mech, tpl, 'RL', activeLoc)}
-            </div>
-          </div>
+          <!-- Large Detailed Interactive Mech Factory Schematic Bay -->
+          ${this.renderInteractiveMechSchematic(mech, tpl, metrics, resaleInfo, activeLoc)}
 
         </div>
 
-        <!-- Right 7 Cols: Blueprint Telemetry & Sell Chassis + Selected Body Part Slot Workshop + Mech Parts Shop -->
-        <div class="col-7" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Right 5 Cols: Blueprint Telemetry, Armor Plating, Active Hardpoint Workshop & Inventory -->
+        <div class="col-5" style="display:flex; flex-direction:column; gap:16px;">
           
           <!-- Blueprint Telemetry, Condition & Chassis Sell-Back Card -->
           <div class="card">
             <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; border-bottom:1px solid var(--border); padding-bottom:12px;">
               <div style="display:flex; align-items:center; gap:8px; flex:1;">
-                <input id="mech-name-inp" class="input" style="max-width:240px; font-weight:700; font-size:15px;" value="${mech.customName}" onchange="GarageModule.renameMech(this.value)" />
+                <input id="mech-name-inp" class="input" style="max-width:200px; font-weight:700; font-size:14px;" value="${mech.customName}" onchange="GarageModule.renameMech(this.value)" />
                 <span class="badge primary">${tpl.weightClass} (${tpl.maxTons}t)</span>
-                <span class="badge ${resaleInfo.conditionPct < 100 ? 'amber' : 'green'} mono">Chassis Cond: ${resaleInfo.conditionPct}%</span>
+                <span class="badge ${resaleInfo.conditionPct < 100 ? 'amber' : 'green'} mono">Chassis: ${resaleInfo.conditionPct}%</span>
               </div>
 
-              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <div class="hud-pill">
-                  <div class="label">Mass / Max Tonnage</div>
+                  <div class="label">Mass / Max</div>
                   <div class="val" style="color:${overTons ? 'var(--accent-red)' : 'var(--accent-green)'};">
                     ${metrics.totalTons} / ${metrics.maxTons}.0 t
                   </div>
@@ -311,48 +282,43 @@ window.GarageModule = {
                   </div>
                 </div>
                 <div class="hud-pill">
-                  <div class="label">Alpha Heat / Cooling</div>
+                  <div class="label">Alpha Heat / Cool</div>
                   <div class="val" style="color:${overHeat ? 'var(--accent-red)' : 'var(--accent-amber)'};">
                     ${metrics.alphaHeat} / ${metrics.coolingCap} C
                   </div>
-                </div>
-                <div class="hud-pill">
-                  <div class="label">Chassis Sell-Back (${Math.round(50 * (resaleInfo.conditionPct / 100))}%)</div>
-                  <div class="val" style="color:var(--accent-amber);">${resaleInfo.chassisResale.toLocaleString()} Cr</div>
                 </div>
               </div>
             </div>
 
             <!-- Assigned Jock & Sell Back Chassis Controls -->
-            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; font-size:13px;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; font-size:12px; margin-top:10px;">
               <div>
                 Assigned Jock: <strong>${assignedJock ? `${assignedJock.firstName} "${assignedJock.callsign}" ${assignedJock.lastName}` : 'Unassigned (Assign in HQ)'}</strong>
                 ${assignedJock ? (() => {
                   const tpl = window.GameState.getMechTemplate(mech);
                   const wClass = tpl ? tpl.weightClass : 'Medium';
                   const affInfo = window.GameState.getJockChassisAffinity(assignedJock, wClass);
-                  return `<span class="badge ${affInfo.tier.badgeClass} mono" style="margin-left:6px; font-size:11px;" title="${affInfo.tier.desc}">Chassis Comfort: ${affInfo.rating}% (${affInfo.tier.tier} &bull; ${affInfo.tier.hitBonus >= 0 ? '+' : ''}${affInfo.tier.hitBonus}% Hit)</span>`;
+                  return `<span class="badge ${affInfo.tier.badgeClass} mono" style="margin-left:6px; font-size:10px;">Comfort: ${affInfo.rating}% (${affInfo.tier.tier})</span>`;
                 })() : ''}
-                <div class="subtext" style="margin-top:2px;">
-                  Resale Rule: <strong>50% Base Value</strong> at 100% Condition, reduced proportionally if damaged (${resaleInfo.conditionPct}% Cond = ${resaleInfo.chassisResale.toLocaleString()} Cr for Chassis).
-                </div>
               </div>
 
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
                 <button
                   class="btn btn-danger"
+                  style="font-size:11px; padding:4px 8px;"
                   title="Strip all equipped parts into Hangar Storage and sell the Chassis for ${resaleInfo.chassisResale.toLocaleString()} Cr"
                   onclick="GarageModule.sellChassis('${mech.id}', false)"
                 >
-                  Sell Chassis Only (+${resaleInfo.chassisResale.toLocaleString()} Cr)
+                  Sell Chassis (${(resaleInfo.chassisResale / 1000).toFixed(1)}k Cr)
                 </button>
                 ${resaleInfo.partCount > 0 ? `
                   <button
                     class="btn btn-danger"
+                    style="font-size:11px; padding:4px 8px;"
                     title="Sell both the Chassis and all ${resaleInfo.partCount} equipped parts for ${resaleInfo.totalResale.toLocaleString()} Cr"
                     onclick="GarageModule.sellChassis('${mech.id}', true)"
                   >
-                    Sell Chassis + All Parts (+${resaleInfo.totalResale.toLocaleString()} Cr)
+                    Sell All (${(resaleInfo.totalResale / 1000).toFixed(1)}k Cr)
                   </button>
                 ` : ''}
               </div>
@@ -366,201 +332,280 @@ window.GarageModule = {
                 <div class="section-title" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                   <span>🛡️ Armor Plating Allocation</span>
                   <span class="badge cyan mono" style="font-size:11px;">Armor Rating: ${metrics.armorRating}</span>
-                  <span class="badge green mono" style="font-size:11px;">-${metrics.damageReductionPct}% Damage Taken</span>
+                  <span class="badge green mono" style="font-size:11px;">-${metrics.damageReductionPct}% DR</span>
                 </div>
                 <div class="subtext">
-                  Equip armor plating using open weight capacity up to ${metrics.maxTons}.0 tons. Armor Rating directly reduces incoming damage from all attacks.
+                  Equip armor plating using open weight up to ${metrics.maxTons}.0 tons.
                 </div>
               </div>
               <div class="hud-pill" style="border-color:${metrics.openWeight < 0 ? 'var(--accent-red)' : 'var(--accent-green)'};">
                 <div class="label">Open Weight Left</div>
-                <div class="val" style="color:${metrics.openWeight < 0 ? 'var(--accent-red)' : 'var(--accent-green)'};">
-                  ${metrics.openWeight >= 0 ? `${metrics.openWeight.toFixed(1)} t Free` : `${Math.abs(metrics.openWeight).toFixed(1)} t Over`}
+                <div class="val" style="color:${metrics.openWeight < 0 ? 'var(--accent-red)' : 'var(--accent-green)'}; font-size:13px;">
+                  ${metrics.openWeight >= 0 ? `${metrics.openWeight.toFixed(1)} t` : `${Math.abs(metrics.openWeight).toFixed(1)} t Over`}
                 </div>
               </div>
             </div>
 
             <!-- Interactive Armor Weight Controls -->
-            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.06); border-bottom:1px solid rgba(255,255,255,0.06);">
-              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                <span class="subtext mono" style="font-size:12px; font-weight:700;">Equipped Armor:</span>
-                <button class="btn" onclick="GarageModule.adjustArmorTons(-5)">-5t</button>
-                <button class="btn" onclick="GarageModule.adjustArmorTons(-1)">-1t</button>
-                <button class="btn" onclick="GarageModule.adjustArmorTons(-0.5)">-0.5t</button>
-                <div style="padding:6px 14px; background:#020617; border:1px solid var(--accent-cyan); border-radius:4px; text-align:center; min-width:105px;">
-                  <div class="mono" style="font-size:16px; font-weight:900; color:#38bdf8;">${metrics.armorTons.toFixed(1)} Tons</div>
-                  <div class="subtext mono" style="font-size:10px; color:#94a3b8;">${metrics.armorRating} Rating</div>
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-top:1px solid rgba(255,255,255,0.06); border-bottom:1px solid rgba(255,255,255,0.06);">
+              <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+                <button class="btn" style="padding:4px 6px; font-size:11px;" onclick="GarageModule.adjustArmorTons(-5)">-5t</button>
+                <button class="btn" style="padding:4px 6px; font-size:11px;" onclick="GarageModule.adjustArmorTons(-1)">-1t</button>
+                <button class="btn" style="padding:4px 6px; font-size:11px;" onclick="GarageModule.adjustArmorTons(-0.5)">-0.5t</button>
+                <div style="padding:4px 10px; background:#020617; border:1px solid var(--accent-cyan); border-radius:4px; text-align:center; min-width:85px;">
+                  <div class="mono" style="font-size:14px; font-weight:900; color:#38bdf8;">${metrics.armorTons.toFixed(1)}t</div>
+                  <div class="subtext mono" style="font-size:9px; color:#94a3b8;">${metrics.armorRating} Rating</div>
                 </div>
-                <button class="btn" onclick="GarageModule.adjustArmorTons(0.5)">+0.5t</button>
-                <button class="btn" onclick="GarageModule.adjustArmorTons(1)">+1t</button>
-                <button class="btn" onclick="GarageModule.adjustArmorTons(5)">+5t</button>
+                <button class="btn" style="padding:4px 6px; font-size:11px;" onclick="GarageModule.adjustArmorTons(0.5)">+0.5t</button>
+                <button class="btn" style="padding:4px 6px; font-size:11px;" onclick="GarageModule.adjustArmorTons(1)">+1t</button>
+                <button class="btn" style="padding:4px 6px; font-size:11px;" onclick="GarageModule.adjustArmorTons(5)">+5t</button>
               </div>
 
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button class="btn btn-primary" onclick="GarageModule.fillMaxArmor()" title="Equip maximum armor plating up to chassis weight capacity">
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-primary" style="padding:5px 8px; font-size:11px;" onclick="GarageModule.fillMaxArmor()" title="Equip maximum armor plating up to chassis weight capacity">
                   🛡️ Fill Max Armor (${metrics.openWeight > 0 ? `+${metrics.openWeight.toFixed(1)}t` : 'Full'})
                 </button>
-                <button class="btn btn-secondary" onclick="GarageModule.stripArmor()" title="Remove all armor to test heavy weapon loadouts">
-                  Strip Armor (0t)
+                <button class="btn btn-secondary" style="padding:5px 8px; font-size:11px;" onclick="GarageModule.stripArmor()" title="Remove all armor to test heavy weapon loadouts">
+                  Strip (0t)
                 </button>
               </div>
-            </div>
-
-            <!-- Armor Absorption Telemetry Bar -->
-            <div style="margin-top:8px; background:#020617; padding:8px 12px; border-radius:4px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; font-size:12px; gap:8px;">
-              <span class="subtext">
-                Combat Protection: <strong>${metrics.damageReductionPct}% of incoming weapon damage</strong> will be absorbed by heavy plating before reaching internal structure.
-              </span>
-              <span class="mono" style="color:#38bdf8; font-weight:700;">
-                Chassis Weight: ${metrics.totalTons} / ${metrics.maxTons}.0 t
-              </span>
             </div>
           </div>
 
-          <!-- Selected Body Part Slot & Armor Editor + Mech Parts Shop -->
+          <!-- Selected Body Part Slot Workshop -->
           <div class="card">
             <div class="section-header">
               <div>
-                <span class="section-title">${locObj.name}</span>
-                <span class="badge primary mono" style="margin-left:8px;">Critical Slots: ${usedSlots} / ${maxSlots}</span>
+                <span class="section-title">${locObj.name} (${activeLoc})</span>
+                <span class="badge primary mono" style="margin-left:8px;">Slots: ${usedSlots} / ${maxSlots}</span>
               </div>
+              <span class="subtext mono">Structure: <strong style="color:${curArmor <= 0 ? 'var(--accent-red)' : 'var(--accent-green)'};">${curArmor} / ${limArmor} HP</strong></span>
+            </div>
 
-              <!-- Location Structural Integrity -->
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span class="subtext mono">Structural Integrity: <strong style="color:var(--accent-green);">${curArmor} / ${limArmor} HP</strong></span>
+            <!-- Installed in this Location -->
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div class="subtext" style="font-weight:600; text-transform:uppercase; font-size:11px;">Equipped in ${activeLoc}:</div>
+              ${installedIds.length === 0 ? `
+                <div class="panel subtext" style="padding:8px 10px; font-size:12px;">
+                  No parts equipped in ${activeLoc}. Drag a part from Storage or Shop below onto the diagram, or click <strong>Equip</strong>!
+                </div>
+              ` : installedIds.map((cid, idx) => {
+                const comp = window.GameState.getComponent(cid);
+                if (!comp) return '';
+                const cond = window.GameState.getInstalledPartCondition(mech, activeLoc, idx);
+                const sellPrice = window.GameState.getPartResaleValue(cid, cond);
+                const icon = this.getComponentIcon(comp);
+                const partDead = curArmor <= 0 || cond <= 0;
+                return `
+                  <div class="panel" style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 10px;">
+                    <div style="flex:1; min-width:0;">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <span>${icon}</span>
+                        <strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${comp.name}</strong>
+                        <span class="badge ${partDead ? 'red' : (cond < 100 ? 'amber' : 'green')} mono" style="font-size:9px;">
+                          ${partDead ? 'DEAD' : `${cond}%`}
+                        </span>
+                      </div>
+                      <div class="subtext" style="font-size:11px; margin-top:2px;">
+                        ${comp.tons}t • ${comp.slots}s ${comp.dmg ? `• ${comp.dmg} Dmg` : ''} • Sell: ${sellPrice.toLocaleString()} Cr
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:4px; flex-shrink:0;">
+                      <button class="btn" style="padding:3px 8px; font-size:11px;" onclick="GarageModule.removeComponent('${activeLoc}', ${idx})">
+                        Unequip (+1 Wk)
+                      </button>
+                      <button class="btn btn-danger" style="padding:3px 6px; font-size:11px;" onclick="GarageModule.sellInstalledComponent('${activeLoc}', ${idx})">
+                        Sell
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Hangar Storage (Owned Spare Parts) -->
+          <div class="card" style="border: 1px solid rgba(56, 189, 248, 0.35);">
+            <div class="section-header">
+              <div>
+                <div class="section-title" style="display:flex; align-items:center; gap:6px;">
+                  <span>📦 Hangar Storage (${(st.partStorage || []).length} Spare)</span>
+                  <span class="badge green mono" style="font-size:10px;">Drag to Equip</span>
+                </div>
+                <div class="subtext" style="font-size:11px;">
+                  Drag any part onto the Mech picture to mount, or click to equip in active slot
+                </div>
               </div>
             </div>
 
-            <div class="grid-12">
-              <!-- Installed in this Location (5 Cols) -->
-              <div class="col-5" style="display:flex; flex-direction:column; gap:8px;">
-                <div class="subtext" style="font-weight:600; text-transform:uppercase;">Equipped in ${activeLoc} (Unequip or Sell Back)</div>
-                ${installedIds.length === 0 ? `<div class="panel subtext">No parts equipped in ${activeLoc}. Buy parts in the Shop on the right, then click <strong>Equip</strong>!</div>` : installedIds.map((cid, idx) => {
-                  const comp = window.GameState.getComponent(cid);
+            ${(st.partStorage || []).length === 0 ? `
+              <div class="panel subtext" style="text-align:center; padding:10px; font-size:12px;">
+                Storage is empty. Purchase weapons in the Catalog below, or strip parts from Mechs!
+              </div>
+            ` : `
+              <div style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; padding-right:4px;">
+                ${st.partStorage.map(item => {
+                  const comp = window.GameState.getComponent(item.compId);
                   if (!comp) return '';
-                  const cond = window.GameState.getInstalledPartCondition(mech, activeLoc, idx);
-                  const sellPrice = window.GameState.getPartResaleValue(cid, cond);
+                  const cond = item.condition ?? 100;
+                  const sellVal = window.GameState.getPartResaleValue(item.compId, cond);
+                  const icon = this.getComponentIcon(comp);
                   return `
-                    <div class="panel" style="display:flex; flex-direction:column; gap:6px;">
-                      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-                        <strong>${comp.name}</strong>
-                        <span class="badge ${cond < 100 ? 'amber' : 'green'} mono">${cond}% Cond</span>
+                    <div
+                      class="panel inventory-part-card"
+                      draggable="true"
+                      ondragstart="GarageModule.onPartDragStart(event, '${item.compId}', '${item.uid}')"
+                      ondragend="GarageModule.onPartDragEnd(event)"
+                      style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 10px; cursor:grab;"
+                    >
+                      <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+                        <span style="font-size:16px;">${icon}</span>
+                        <div style="overflow:hidden;">
+                          <div style="display:flex; align-items:center; gap:6px;">
+                            <strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${comp.name}</strong>
+                            <span class="badge ${cond < 100 ? 'amber' : 'green'} mono" style="font-size:9px;">${cond}%</span>
+                          </div>
+                          <div class="subtext" style="font-size:11px;">
+                            ${comp.tons}t • ${comp.slots}s ${comp.dmg ? `• ${comp.dmg} Dmg` : ''} • Sell: ${sellVal.toLocaleString()} Cr
+                          </div>
+                        </div>
                       </div>
-                      <div class="subtext" style="display:flex; justify-content:space-between;">
-                        <span>${comp.tons}t • ${comp.slots}s ${comp.dmg ? `• ${comp.dmg} Dmg` : ''}</span>
-                        <span class="mono" style="color:var(--accent-amber);">Sell Value: ${sellPrice.toLocaleString()} Cr</span>
-                      </div>
-                      <div style="display:flex; gap:6px; margin-top:2px;">
-                        <button class="btn" style="flex:1; padding:4px 8px; font-size:12px;" onclick="GarageModule.removeComponent('${activeLoc}', ${idx})">
-                          Unequip (+1 Wk)
+
+                      <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                        <span class="badge cyan mono" style="font-size:9px; padding:2px 5px;" title="Drag onto any hardpoint on the Mech picture">
+                          ⠿ DRAG
+                        </span>
+                        <button
+                          class="btn btn-primary"
+                          style="padding:3px 7px; font-size:11px;"
+                          onclick="GarageModule.mountComponent('${activeLoc}', '${item.compId}')"
+                          title="Equip to selected ${activeLoc}"
+                        >
+                          + Equip
                         </button>
-                        <button class="btn btn-danger" style="flex:1; padding:4px 8px; font-size:12px;" onclick="GarageModule.sellInstalledComponent('${activeLoc}', ${idx})">
-                          Sell (+${sellPrice.toLocaleString()} Cr)
+                        <button
+                          class="btn btn-danger"
+                          style="padding:3px 6px; font-size:11px;"
+                          onclick="GarageModule.sellStoredPartByUid('${item.uid}')"
+                          title="Sell for ${sellVal.toLocaleString()} Cr"
+                        >
+                          Sell
                         </button>
                       </div>
                     </div>
                   `;
                 }).join('')}
               </div>
+            `}
+          </div>
 
-              <!-- Mech Parts Shop & Owned Inventory (7 Cols) -->
-              <div class="col-7" style="display:flex; flex-direction:column; gap:8px;">
-                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:space-between;">
-                  <div>
-                    <span class="subtext" style="font-weight:700; text-transform:uppercase; color:#93c5fd;">Mech Parts Shop &amp; Hangar Storage (${totalSpareParts} Spare)</span>
-                    <div class="subtext" style="font-size:11px;">Buy parts to equip, or sell back at <strong>50% Base Value</strong> (less if damaged)</div>
-                  </div>
-                  <div style="display:flex; flex-wrap:wrap; gap:4px;">
-                    ${categories.map(cat => `
-                      <button class="btn ${this.filterCat === cat ? 'btn-primary' : ''}" style="padding:3px 8px;" onclick="GarageModule.setFilter('${cat}')">
-                        ${cat === 'All' ? 'All' : cat.split(' ')[0]}
-                      </button>
-                    `).join('')}
-                  </div>
-                </div>
-
-                <div style="display:flex; flex-direction:column; gap:8px; max-height:380px; overflow-y:auto; padding-right:4px;">
-                  ${(() => {
-                    const qm = window.GameState.getAssignedJobJock('quartermaster');
-                    const qmMod = qm ? (window.TOS_DATA?.companyJobs?.find(j => j.id === 'quartermaster')?.calcModifier(qm)) : null;
-                    const qmDiscountPct = qmMod ? qmMod.discountPct : 0;
-
-                    return filteredCatalog.map(comp => {
-                    const ownedItems = window.GameState.getOwnedPartsByCompId(comp.id);
-                    const owned = ownedItems.length;
-                    const nextToSell = owned > 0 ? ownedItems[ownedItems.length - 1] : null; // sell lowest condition first or show its price
-                    const nextSellCond = nextToSell ? (nextToSell.condition ?? 100) : 100;
-                    const sellValue = window.GameState.getPartResaleValue(comp.id, nextSellCond);
-                    const baseHalfValue = window.GameState.getPartResaleValue(comp.id, 100);
-
-                    const effectiveCost = Math.round(comp.cost * (1 - (qmDiscountPct / 100)));
-                    const fitsSlots = (usedSlots + comp.slots) <= maxSlots;
-                    const fitsTons = (metrics.totalTons - metrics.armorTons + comp.tons) <= metrics.maxTons;
-                    const canAfford = st.credits >= effectiveCost;
-                    const canEquip = owned > 0 && fitsSlots && fitsTons;
-
-                    return `
-                      <div class="panel" style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; border-color:${owned > 0 ? 'var(--accent-green)' : 'var(--border)'};">
-                        <div style="flex:1; min-width:190px;">
-                          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                            <strong>${comp.name}</strong>
-                            <span class="badge">${comp.tons}t / ${comp.slots} Slot${comp.slots > 1 ? 's' : ''}</span>
-                            <span class="badge ${owned > 0 ? 'green' : 'amber'} mono">Owned: ${owned}</span>
-                          </div>
-                          <div class="subtext" style="margin-top:3px;">
-                            ${comp.dmg > 0 ? `Dmg: ${comp.dmg} • Heat: +${comp.heat}C • Recycle: ${comp.sec}s • Range: ${comp.range} Hex` : `Heat: ${comp.heat}C • Support System`}
-                          </div>
-                          <div class="mono" style="font-size:12px; margin-top:4px;">
-                            <span style="color:var(--accent-amber); font-weight:700;">Buy: ${effectiveCost.toLocaleString()} Cr</span>
-                            ${qmDiscountPct > 0 ? `<span class="badge green" style="font-size:10px; padding:1px 5px; margin-left:4px;">-${qmDiscountPct}% QM</span>` : ''}
-                            <span class="subtext" style="margin-left:8px;">• Sell (100%): ${baseHalfValue.toLocaleString()} Cr</span>
-                          </div>
-                          ${owned > 0 ? `
-                            <div class="mono subtext" style="font-size:11px; margin-top:2px; color:#93c5fd;">
-                              In Storage: ${ownedItems.map(p => `${p.condition ?? 100}%`).join(', ')}
-                            </div>
-                          ` : ''}
-                        </div>
-
-                        <div style="display:flex; flex-direction:column; gap:5px; min-width:162px;">
-                          <div style="display:flex; gap:4px;">
-                            <button
-                              class="btn"
-                              style="flex:1; padding:5px 8px; border-color:var(--accent-amber); color:#fde68a;"
-                              ${!canAfford ? 'disabled' : ''}
-                              onclick="GarageModule.buyPart('${comp.id}')"
-                            >
-                              Buy (${(effectiveCost / 1000).toFixed(1)}k Cr)
-                            </button>
-                            ${owned > 0 ? `
-                              <button
-                                class="btn btn-danger"
-                                style="padding:5px 8px; font-size:11px;"
-                                title="Sell 1 stored ${comp.name} (${nextSellCond}% Condition) for ${sellValue.toLocaleString()} Cr"
-                                onclick="GarageModule.sellPart('${comp.id}')"
-                              >
-                                Sell (+${(sellValue / 1000).toFixed(1)}k)
-                              </button>
-                            ` : ''}
-                          </div>
-
-                          <button
-                            class="btn ${canEquip ? 'btn-primary' : ''}"
-                            style="padding:5px 8px;"
-                            ${!canEquip ? 'disabled' : ''}
-                            onclick="GarageModule.mountComponent('${activeLoc}', '${comp.id}')"
-                          >
-                            ${owned <= 0 ? 'Buy First to Equip' : (!fitsSlots ? 'No Slot Room' : (!fitsTons ? 'Over Tonnage' : `+ Equip in ${activeLoc} (+1 Wk)`))}
-                          </button>
-                        </div>
-                      </div>
-                    `;
-                  }).join('');
-                })()}
-                </div>
+          <!-- Mech Parts Shop Catalog -->
+          <div class="card">
+            <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:space-between; margin-bottom:8px;">
+              <div>
+                <span class="subtext" style="font-weight:700; text-transform:uppercase; color:#93c5fd;">Mech Parts Catalog</span>
+                <div class="subtext" style="font-size:11px;">Buy parts to equip or hold in storage</div>
+              </div>
+              <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                ${categories.map(cat => `
+                  <button class="btn ${this.filterCat === cat ? 'btn-primary' : ''}" style="padding:3px 7px; font-size:11px;" onclick="GarageModule.setFilter('${cat}')">
+                    ${cat === 'All' ? 'All' : cat.split(' ')[0]}
+                  </button>
+                `).join('')}
               </div>
             </div>
 
+            <div style="display:flex; flex-direction:column; gap:8px; max-height:360px; overflow-y:auto; padding-right:4px;">
+              ${(() => {
+                const qm = window.GameState.getAssignedJobJock('quartermaster');
+                const qmMod = qm ? (window.TOS_DATA?.companyJobs?.find(j => j.id === 'quartermaster')?.calcModifier(qm)) : null;
+                const qmDiscountPct = qmMod ? qmMod.discountPct : 0;
+
+                return filteredCatalog.map(comp => {
+                  const ownedItems = window.GameState.getOwnedPartsByCompId(comp.id);
+                  const owned = ownedItems.length;
+                  const nextToSell = owned > 0 ? ownedItems[ownedItems.length - 1] : null;
+                  const nextSellCond = nextToSell ? (nextToSell.condition ?? 100) : 100;
+                  const sellValue = window.GameState.getPartResaleValue(comp.id, nextSellCond);
+                  const baseHalfValue = window.GameState.getPartResaleValue(comp.id, 100);
+
+                  const effectiveCost = Math.round(comp.cost * (1 - (qmDiscountPct / 100)));
+                  const fitsSlots = (usedSlots + comp.slots) <= maxSlots;
+                  const fitsTons = (metrics.totalTons - metrics.armorTons + comp.tons) <= metrics.maxTons;
+                  const canAfford = st.credits >= effectiveCost;
+                  const canEquip = owned > 0 && fitsSlots && fitsTons;
+                  const icon = this.getComponentIcon(comp);
+
+                  return `
+                    <div
+                      class="panel inventory-part-card ${owned > 0 ? 'draggable' : ''}"
+                      ${owned > 0 ? `
+                        draggable="true"
+                        ondragstart="GarageModule.onPartDragStart(event, '${comp.id}')"
+                        ondragend="GarageModule.onPartDragEnd(event)"
+                      ` : ''}
+                      style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; border-color:${owned > 0 ? 'var(--accent-green)' : 'var(--border)'};"
+                    >
+                      <div style="flex:1; min-width:180px;">
+                        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                          <span>${icon}</span>
+                          <strong>${comp.name}</strong>
+                          <span class="badge" style="font-size:10px;">${comp.tons}t / ${comp.slots}s</span>
+                          <span class="badge ${owned > 0 ? 'green' : 'amber'} mono" style="font-size:10px;">Owned: ${owned}</span>
+                        </div>
+                        <div class="subtext" style="margin-top:2px; font-size:11px;">
+                          ${comp.dmg > 0 ? `Dmg: ${comp.dmg} • Heat: +${comp.heat}C • Recycle: ${comp.sec}s • Range: ${comp.range} Hex` : `Heat: ${comp.heat}C • Support System`}
+                        </div>
+                        <div class="mono" style="font-size:11px; margin-top:3px;">
+                          <span style="color:var(--accent-amber); font-weight:700;">Buy: ${effectiveCost.toLocaleString()} Cr</span>
+                          ${qmDiscountPct > 0 ? `<span class="badge green" style="font-size:9px; padding:1px 4px; margin-left:3px;">-${qmDiscountPct}% QM</span>` : ''}
+                          <span class="subtext" style="margin-left:6px;">• Sell: ${sellValue.toLocaleString()} Cr</span>
+                        </div>
+                      </div>
+
+                      <div style="display:flex; flex-direction:column; gap:4px; min-width:130px;">
+                        <div style="display:flex; gap:4px;">
+                          <button
+                            class="btn"
+                            style="flex:1; padding:4px 6px; font-size:11px; border-color:var(--accent-amber); color:#fde68a;"
+                            ${!canAfford ? 'disabled' : ''}
+                            onclick="GarageModule.buyPart('${comp.id}')"
+                          >
+                            Buy (${(effectiveCost / 1000).toFixed(1)}k)
+                          </button>
+                          ${owned > 0 ? `
+                            <button
+                              class="btn btn-danger"
+                              style="padding:4px 6px; font-size:10px;"
+                              title="Sell 1 stored ${comp.name} (${nextSellCond}% Cond) for ${sellValue.toLocaleString()} Cr"
+                              onclick="GarageModule.sellPart('${comp.id}')"
+                            >
+                              Sell
+                            </button>
+                          ` : ''}
+                        </div>
+
+                        ${owned > 0 ? `
+                          <div style="display:flex; gap:3px;">
+                            <span class="badge cyan mono" style="font-size:9px; padding:2px 4px; display:inline-flex; align-items:center;" title="Drag this component onto any hardpoint on the Mech picture">
+                              ⠿ DRAG
+                            </span>
+                            <button
+                              class="btn ${canEquip ? 'btn-primary' : ''}"
+                              style="flex:1; padding:3px 6px; font-size:10px;"
+                              ${!canEquip ? 'disabled' : ''}
+                              onclick="GarageModule.mountComponent('${activeLoc}', '${comp.id}')"
+                            >
+                              ${!fitsSlots ? 'No Room' : (!fitsTons ? 'Over Tonnage' : `+ Equip (${activeLoc})`)}
+                            </button>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  `;
+                }).join('');
+              })()}
+            </div>
           </div>
 
         </div>
@@ -568,23 +613,415 @@ window.GarageModule = {
     `;
   },
 
-  renderPartBox(mech, tpl, code, activeLoc) {
-    const isSel = code === activeLoc;
-    const compIds = mech.locations[code] || [];
-    const usedSlots = compIds.reduce((a, cid) => a + (window.GameState.getComponent(cid)?.slots || 0), 0);
-    const maxSlots = tpl.slotLimits[code];
-    const curArmor = mech.maxArmorCurrent[code];
-    const limArmor = tpl.maxArmor[code];
+  LOCATION_INFO: {
+    HD: { name: 'Cockpit / Head', label: 'HD' },
+    LA: { name: 'Left Arm', label: 'LA' },
+    LT: { name: 'Left Torso', label: 'LT' },
+    CT: { name: 'Center Torso (Core)', label: 'CT' },
+    RT: { name: 'Right Torso', label: 'RT' },
+    RA: { name: 'Right Arm', label: 'RA' },
+    LL: { name: 'Left Leg', label: 'LL' },
+    RL: { name: 'Right Leg', label: 'RL' }
+  },
+
+  getComponentIcon(comp) {
+    if (!comp) return '⚙️';
+    const cat = comp.cat || '';
+    if (cat.includes('Energy')) return '⚡';
+    if (cat.includes('Ballistic') || cat.includes('Cannon')) return '💥';
+    if (cat.includes('Missile')) return '🚀';
+    if (cat.includes('Close Combat') || cat.includes('Melee')) return '⚔️';
+    return '🛡️';
+  },
+
+  // Large Detailed Interactive Mech Factory Schematic Bay
+  renderInteractiveMechSchematic(mech, tpl, metrics, resaleInfo, activeLoc) {
+    const destroyedLocs = ['HD', 'CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL'].filter(loc => (mech.armor?.[loc] ?? 0) <= 0);
+    const destroyedCount = destroyedLocs.length;
 
     return `
-      <div class="part-box ${isSel ? 'selected' : ''}" onclick="GarageModule.selectPart('${code}')">
-        <div style="font-weight:700; font-size:14px;">${code}</div>
-        <div class="mono subtext" style="margin-top:2px;">Structure: ${curArmor}/${limArmor}</div>
-        <div class="mono" style="font-size:12px; margin-top:2px; color:${usedSlots >= maxSlots ? 'var(--accent-amber)' : 'var(--accent-green)'};">
-          Slots: ${usedSlots}/${maxSlots}
+      <div class="card mech-schematic-card" style="padding:0;">
+        <!-- Header Bar -->
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid rgba(56, 189, 248, 0.25); background:rgba(15, 23, 42, 0.85);">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="badge primary mono" style="font-size:11px;">BAY-01 ACTIVE</span>
+              <strong style="font-size:16px; color:#ffffff;">${mech.customName}</strong>
+              <span class="badge cyan mono" style="font-size:11px;">${tpl.model} (${tpl.maxTons}t ${tpl.weightClass})</span>
+              <span class="badge ${resaleInfo.conditionPct < 100 ? (resaleInfo.conditionPct < 50 ? 'red' : 'amber') : 'green'} mono" style="font-size:11px;">
+                ${resaleInfo.conditionPct}% Integrity
+              </span>
+            </div>
+            <div class="subtext" style="font-size:11px; margin-top:2px;">
+              🛡️ Armor: <strong>${metrics.armorTons}t</strong> (Rating ${metrics.armorRating} • -${metrics.damageReductionPct}% DR) • Alpha Heat: <strong>${metrics.alphaHeat} C</strong> • Cooling: <strong>${metrics.coolingCap} C</strong>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn ${destroyedCount > 0 || resaleInfo.conditionPct < 100 ? 'btn-primary' : ''}" style="font-size:12px; padding:6px 10px;" onclick="GarageModule.repairCurrentMech()">
+              ${destroyedCount > 0 ? `⚠️ Repair Chassis & Parts (+2 Wks)` : `Repair Structure (+2 Wks)`}
+            </button>
+            <button class="btn" style="font-size:12px; padding:6px 10px;" onclick="GarageModule.fillMaxArmor()">
+              Fill Max Armor (+1 Wk)
+            </button>
+          </div>
+        </div>
+
+        <!-- The Interactive Blueprint Schematic Stage -->
+        <div class="mech-schematic-stage">
+          
+          <div class="schematic-anatomy-grid">
+            
+            <!-- Left Flank Column: Left Arm (LA), Left Torso (LT), Left Leg (LL) -->
+            <div class="schematic-column">
+              ${this.renderSchematicHardpointNode(mech, tpl, 'LA', activeLoc)}
+              ${this.renderSchematicHardpointNode(mech, tpl, 'LT', activeLoc)}
+              ${this.renderSchematicHardpointNode(mech, tpl, 'LL', activeLoc)}
+            </div>
+
+            <!-- Center Column: Head (HD) at top, Central Mech Sprite & Shadow, Center Torso (CT) at bottom -->
+            <div class="schematic-column" style="justify-content:space-between; align-items:stretch;">
+              ${this.renderSchematicHardpointNode(mech, tpl, 'HD', activeLoc)}
+
+              <div class="mech-schematic-center-view">
+                <div class="mech-schematic-shadow"></div>
+                <img
+                  src="${tpl.sprite || 'assets/mechs/mech_guillotine.png'}"
+                  alt="${tpl.model}"
+                  class="mech-schematic-sprite"
+                  style="${destroyedCount > 0 ? 'filter:drop-shadow(0 14px 28px rgba(0,0,0,0.95)) drop-shadow(0 0 16px rgba(239,68,68,0.6)) grayscale(25%);' : ''}"
+                />
+                ${destroyedCount > 0 ? `
+                  <div style="position:absolute; bottom:20px; background:rgba(127,29,29,0.95); border:1px solid #ef4444; border-radius:4px; padding:4px 10px; font-size:11px; font-weight:800; color:#fff; display:flex; align-items:center; gap:6px; box-shadow:0 0 14px rgba(239,68,68,0.8);">
+                    <span>⚠️ ${destroyedCount} SECTION${destroyedCount > 1 ? 'S' : ''} BREACHED / DESTROYED</span>
+                  </div>
+                ` : ''}
+              </div>
+
+              ${this.renderSchematicHardpointNode(mech, tpl, 'CT', activeLoc)}
+            </div>
+
+            <!-- Right Flank Column: Right Arm (RA), Right Torso (RT), Right Leg (RL) -->
+            <div class="schematic-column">
+              ${this.renderSchematicHardpointNode(mech, tpl, 'RA', activeLoc)}
+              ${this.renderSchematicHardpointNode(mech, tpl, 'RT', activeLoc)}
+              ${this.renderSchematicHardpointNode(mech, tpl, 'RL', activeLoc)}
+            </div>
+
+          </div>
+
+          <!-- Bottom Telemetry & Drag-and-Drop Instruction Strip -->
+          <div style="margin-top:12px; padding:6px 12px; background:rgba(15, 23, 42, 0.75); border:1px solid rgba(56, 189, 248, 0.2); border-radius:4px; display:flex; justify-content:space-between; align-items:center; font-size:11px; flex-wrap:wrap; gap:8px;">
+            <span class="subtext">
+              💡 <strong>Interactive Hardpoints:</strong> Drag any owned part from <strong>Hangar Storage</strong> or the <strong>Catalog</strong> on the right to mount it on compatible locations. Click any section to inspect.
+            </span>
+            <span class="mono" style="color:#38bdf8; font-weight:700;">
+              Chassis Weight: ${metrics.totalTons} / ${metrics.maxTons}.0 t
+            </span>
+          </div>
+
         </div>
       </div>
     `;
+  },
+
+  // Renders a single interactive hardpoint box on the schematic diagram
+  renderSchematicHardpointNode(mech, tpl, locCode, activeLoc) {
+    const isSel = (locCode === activeLoc);
+    const locInfo = this.LOCATION_INFO[locCode] || { name: locCode, label: locCode };
+    const curArmor = Math.max(0, mech.armor?.[locCode] ?? 0);
+    const maxArmor = Math.max(1, mech.maxArmorCurrent?.[locCode] ?? tpl.maxArmor[locCode] ?? 10);
+    const armorPct = Math.round((curArmor / maxArmor) * 100);
+    const isDestroyed = (curArmor <= 0);
+    const isCritical = (!isDestroyed && armorPct <= 34);
+    const isDamaged = (!isDestroyed && armorPct < 100);
+
+    let statusClass = 'status-intact';
+    let statusBadge = '<span class="badge green mono" style="font-size:9px; padding:1px 4px;">INTACT</span>';
+    let barColor = 'green';
+
+    if (isDestroyed) {
+      statusClass = 'status-destroyed';
+      statusBadge = '<span class="badge red mono" style="font-size:9px; font-weight:900; padding:1px 4px;">⚠️ DESTROYED</span>';
+      barColor = 'red';
+    } else if (isCritical) {
+      statusClass = 'status-critical';
+      statusBadge = `<span class="badge red mono" style="font-size:9px; padding:1px 4px;">CRIT (${armorPct}%)</span>`;
+      barColor = 'red';
+    } else if (isDamaged) {
+      statusClass = 'status-damaged';
+      statusBadge = `<span class="badge amber mono" style="font-size:9px; padding:1px 4px;">${armorPct}%</span>`;
+      barColor = armorPct < 70 ? 'amber' : 'lime';
+    }
+
+    const compIds = mech.locations[locCode] || [];
+    const usedSlots = compIds.reduce((a, cid) => a + (window.GameState.getComponent(cid)?.slots || 0), 0);
+    const maxSlots = tpl.slotLimits[locCode] || 4;
+
+    return `
+      <div
+        id="schematic-node-${locCode}"
+        class="schematic-hardpoint-node ${statusClass} ${isSel ? 'selected' : ''}"
+        data-loc="${locCode}"
+        onclick="GarageModule.selectPart('${locCode}')"
+        ondragover="GarageModule.onSchematicDragOver(event, '${locCode}')"
+        ondragleave="GarageModule.onSchematicDragLeave(event, '${locCode}')"
+        ondrop="GarageModule.onSchematicDrop(event, '${locCode}')"
+        title="Click to inspect ${locInfo.name} in workshop, or drag an item here to mount"
+      >
+        <div class="hardpoint-header">
+          <div class="hardpoint-title">
+            <span class="hardpoint-code">${locCode}</span>
+            <span class="hardpoint-name" style="font-size:12px;">${locInfo.name}</span>
+          </div>
+          ${statusBadge}
+        </div>
+
+        <!-- Structural Health Bar -->
+        <div class="hardpoint-hp-bar">
+          <div style="display:flex; justify-content:space-between; font-size:10px; font-family:var(--font-mono, monospace);">
+            <span style="color:#94a3b8;">${isDestroyed ? '<strong style="color:#ef4444;">OFFLINE</strong>' : 'Structure:'}</span>
+            <span style="color:${isDestroyed ? '#ef4444' : (armorPct < 100 ? '#f59e0b' : '#10b981')}; font-weight:700;">
+              ${curArmor}/${maxArmor} HP
+            </span>
+          </div>
+          <div class="hardpoint-hp-track">
+            <div class="hardpoint-hp-fill ${barColor}" style="width:${armorPct}%;"></div>
+          </div>
+        </div>
+
+        <!-- Critical Slots Meter -->
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; font-family:var(--font-mono, monospace);">
+          <span style="color:#64748b;">Slots:</span>
+          <span style="color:${usedSlots >= maxSlots ? '#f59e0b' : '#38bdf8'}; font-weight:700;">
+            ${usedSlots} / ${maxSlots} Used
+          </span>
+        </div>
+
+        <!-- Weapons & Equipment Mounted in this Location -->
+        <div class="hardpoint-weapons-list">
+          ${compIds.length === 0 ? `
+            <div class="hardpoint-empty-slot">
+              ${isDestroyed ? '⛔ Hardpoint Destroyed' : '+ Drop Part to Mount'}
+            </div>
+          ` : compIds.map((cid, idx) => {
+            const comp = window.GameState.getComponent(cid);
+            if (!comp) return '';
+            const cond = window.GameState.getInstalledPartCondition(mech, locCode, idx);
+            const partDead = isDestroyed || cond <= 0;
+            const icon = this.getComponentIcon(comp);
+            return `
+              <div class="schematic-weapon-chip ${partDead ? 'is-destroyed' : ''}" title="${comp.name} (${comp.tons}t, ${comp.slots}s) • ${partDead ? 'DESTROYED' : `${cond}% Condition`}">
+                <div style="display:flex; align-items:center; gap:5px; overflow:hidden;">
+                  <span>${icon}</span>
+                  <span class="mono" style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:90px;">
+                    ${comp.name}
+                  </span>
+                </div>
+                <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                  <span class="badge ${partDead ? 'red' : (cond < 100 ? 'amber' : 'green')} mono" style="font-size:9px; padding:1px 4px;">
+                    ${partDead ? 'DEAD' : `${cond}%`}
+                  </span>
+                  <button
+                    class="chip-unequip-btn"
+                    title="Unequip ${comp.name}"
+                    onclick="event.stopPropagation(); GarageModule.removeComponent('${locCode}', ${idx})"
+                  >
+                    &times;
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  },
+
+  renderPartBox(mech, tpl, code, activeLoc) {
+    return this.renderSchematicHardpointNode(mech, tpl, code, activeLoc);
+  },
+
+  // Drag and Drop Event Handlers
+  onPartDragStart(event, compId, uid = '') {
+    const comp = window.GameState.getComponent(compId);
+    if (!comp) return;
+
+    this.draggedPart = { compId, uid, comp };
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'copyMove';
+      event.dataTransfer.setData('text/plain', JSON.stringify({ compId, uid }));
+    }
+
+    const garageEl = document.getElementById('view-garage');
+    if (garageEl) garageEl.classList.add('is-dragging-part');
+
+    if (event.currentTarget) {
+      event.currentTarget.classList.add('is-being-dragged');
+    }
+
+    // Highlight eligible drop zones on the schematic
+    const st = window.GameState.data;
+    const mech = st.mechs.find(m => m.id === st.selectedMechId);
+    if (mech) {
+      const metrics = window.GameState.computeMechMetrics(mech);
+      const locs = ['HD', 'CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL'];
+      locs.forEach(loc => {
+        const node = document.getElementById(`schematic-node-${loc}`);
+        if (!node) return;
+        const curArmor = Math.max(0, mech.armor?.[loc] ?? 0);
+        if (curArmor <= 0) return; // destroyed location
+        const usedSlots = (mech.locations[loc] || []).reduce((a, cid) => a + (window.GameState.getComponent(cid)?.slots || 0), 0);
+        const maxSlots = metrics.tpl.slotLimits[loc] || 4;
+        const nonArmorTons = +(metrics.totalTons - metrics.armorTons).toFixed(1);
+        const fitsSlots = (usedSlots + comp.slots) <= maxSlots;
+        const fitsTons = (nonArmorTons + comp.tons) <= metrics.maxTons;
+        if (fitsSlots && fitsTons) {
+          node.classList.add('drop-target-eligible');
+        }
+      });
+    }
+
+    // Create the attachable preview element matching the schematic aesthetic
+    const existing = document.getElementById('mech-drag-ghost');
+    if (existing) existing.remove();
+
+    const ghost = document.createElement('div');
+    ghost.id = 'mech-drag-ghost';
+    ghost.className = 'mech-attachable-part-preview';
+    const icon = this.getComponentIcon(comp);
+    ghost.innerHTML = `
+      <div class="attachable-coupling">
+        <span>⬡ HARDPOINT MODULE</span>
+        <span>[COUPLING READY]</span>
+      </div>
+      <div class="attachable-body">
+        <span class="attachable-icon">${icon}</span>
+        <div style="flex:1; min-width:0;">
+          <div class="attachable-name">${comp.name}</div>
+          <div class="attachable-meta">${comp.tons}t • ${comp.slots} Slot${comp.slots > 1 ? 's' : ''} ${comp.dmg ? `• ${comp.dmg} Dmg` : ''}</div>
+        </div>
+      </div>
+      <div class="attachable-footer">
+        ⚡ ATTACHABLE MODULE ➔ DROP TO MOUNT
+      </div>
+    `;
+    document.body.appendChild(ghost);
+
+    if (event.dataTransfer && typeof event.dataTransfer.setDragImage === 'function') {
+      event.dataTransfer.setDragImage(ghost, 115, 30);
+    }
+  },
+
+  onPartDragEnd(event) {
+    this.draggedPart = null;
+    const garageEl = document.getElementById('view-garage');
+    if (garageEl) garageEl.classList.remove('is-dragging-part');
+
+    if (event.currentTarget) {
+      event.currentTarget.classList.remove('is-being-dragged');
+    }
+
+    const ghost = document.getElementById('mech-drag-ghost');
+    if (ghost) ghost.remove();
+
+    // Remove all drop highlight classes from nodes
+    document.querySelectorAll('.schematic-hardpoint-node').forEach(node => {
+      node.classList.remove('drop-target-eligible', 'drop-hover-valid', 'drop-hover-invalid', 'drop-hover-destroyed');
+    });
+  },
+
+  onSchematicDragOver(event, locCode) {
+    event.preventDefault();
+    if (!this.draggedPart) return;
+
+    const node = event.currentTarget;
+    const comp = this.draggedPart.comp;
+    const st = window.GameState.data;
+    const mech = st.mechs.find(m => m.id === st.selectedMechId);
+    if (!mech || !comp) return;
+
+    const curArmor = Math.max(0, mech.armor?.[locCode] ?? 0);
+    if (curArmor <= 0) {
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+      node.classList.add('drop-hover-destroyed');
+      node.classList.remove('drop-hover-valid', 'drop-hover-invalid');
+      return;
+    }
+
+    const metrics = window.GameState.computeMechMetrics(mech);
+    const usedSlots = (mech.locations[locCode] || []).reduce((a, cid) => a + (window.GameState.getComponent(cid)?.slots || 0), 0);
+    const maxSlots = metrics.tpl.slotLimits[locCode] || 4;
+    const nonArmorTons = +(metrics.totalTons - metrics.armorTons).toFixed(1);
+
+    const fitsSlots = (usedSlots + comp.slots) <= maxSlots;
+    const fitsTons = (nonArmorTons + comp.tons) <= metrics.maxTons;
+
+    if (fitsSlots && fitsTons) {
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+      node.classList.add('drop-hover-valid');
+      node.classList.remove('drop-hover-invalid', 'drop-hover-destroyed');
+    } else {
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+      node.classList.add('drop-hover-invalid');
+      node.classList.remove('drop-hover-valid', 'drop-hover-destroyed');
+    }
+  },
+
+  onSchematicDragLeave(event, locCode) {
+    const node = event.currentTarget;
+    node.classList.remove('drop-hover-valid', 'drop-hover-invalid', 'drop-hover-destroyed');
+  },
+
+  onSchematicDrop(event, locCode) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    let compId = this.draggedPart?.compId;
+    if (!compId) {
+      try {
+        const raw = event.dataTransfer?.getData('text/plain');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          compId = parsed.compId;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    this.onPartDragEnd(event);
+
+    if (!compId) return;
+
+    const st = window.GameState.data;
+    const mech = st.mechs.find(m => m.id === st.selectedMechId);
+    if (!mech) return;
+
+    // Check if location is destroyed
+    const curArmor = Math.max(0, mech.armor?.[locCode] ?? 0);
+    if (curArmor <= 0) {
+      alert(`Cannot equip component on ${locCode}: Location structural integrity is breached/destroyed! Repair the chassis first.`);
+      return;
+    }
+
+    // Mount the component
+    this.mountComponent(locCode, compId);
+
+    // Audio feedback
+    if (window.SoundFX && typeof window.SoundFX.playEquipPart === 'function') {
+      window.SoundFX.playEquipPart();
+    }
+
+    // Success flash on target node
+    setTimeout(() => {
+      const node = document.getElementById(`schematic-node-${locCode}`);
+      if (node) {
+        node.classList.add('hardpoint-locked-flash');
+        setTimeout(() => node.classList.remove('hardpoint-locked-flash'), 600);
+      }
+    }, 50);
   },
 
   selectMech(id) {
@@ -767,9 +1204,19 @@ window.GarageModule = {
     const ownedItems = window.GameState.getOwnedPartsByCompId(compId);
     if (!mech || !comp || ownedItems.length === 0) return;
 
+    // Check if location is destroyed
+    const curArmor = Math.max(0, mech.armor?.[locCode] ?? 0);
+    if (curArmor <= 0) {
+      alert(`Cannot equip ${comp.name} on ${locCode}: Location structure is destroyed! Repair the chassis first.`);
+      return;
+    }
+
     const metrics = window.GameState.computeMechMetrics(mech);
     const usedSlots = (mech.locations[locCode] || []).reduce((a, cid) => a + (window.GameState.getComponent(cid)?.slots || 0), 0);
-    if (usedSlots + comp.slots > metrics.tpl.slotLimits[locCode]) return;
+    if (usedSlots + comp.slots > metrics.tpl.slotLimits[locCode]) {
+      alert(`Cannot equip ${comp.name}: Requires ${comp.slots} critical slot(s), but ${locCode} only has ${metrics.tpl.slotLimits[locCode] - usedSlots} slot(s) remaining!`);
+      return;
+    }
 
     // Check if equipment fits chassis mass limit
     const nonArmorTons = +(metrics.totalTons - metrics.armorTons).toFixed(1);
@@ -792,6 +1239,13 @@ window.GarageModule = {
     mech.locations[locCode].push(compId);
     mech.partConditions[locCode].push(bestPart.condition ?? 100);
     window.GameState.advanceTimeWeeks(1, `Equipped ${comp.name} in ${locCode}`);
+
+    if (window.SoundFX && typeof window.SoundFX.playEquipPart === 'function') {
+      window.SoundFX.playEquipPart();
+    }
+
+    window.GameState.save();
+    if (window.App && typeof window.App.updateHUD === 'function') window.App.updateHUD();
     this.render();
   },
 
