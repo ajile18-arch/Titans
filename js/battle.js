@@ -6,6 +6,11 @@ window.BattleModule = {
 
   // Stylized 3D Duel State (Pokemon / Final Fantasy Style)
   round: 1,
+  firstTurn: 'player', // 'player' | 'enemy' (decided by chassis affinity)
+  initiativeWinner: 'player',
+  playerChassisClass: 'Medium',
+  playerAffinity: 20,
+  playerAffTier: null,
   turn: 'player', // 'player' | 'enemy' | 'animating' | 'ended'
   commandTab: 'attack', // 'attack' | 'defend' | 'tactics' | 'retreat'
   aimTarget: 'General', // 'General' | 'HD' | 'CT' | 'LT' | 'RT' | 'LA' | 'RA' | 'LL' | 'RL'
@@ -47,6 +52,57 @@ window.BattleModule = {
         || st.jocks[0];
   },
 
+  getChassisClass(text) {
+    if (!text) return 'Medium';
+    const str = String(text).toLowerCase();
+    if (str.includes('recon')) return 'Recon';
+    if (str.includes('assault')) return 'Assault';
+    if (str.includes('heavy')) return 'Heavy';
+    if (str.includes('light')) return 'Light';
+    if (str.includes('medium')) return 'Medium';
+    return 'Medium';
+  },
+
+  calcEnemyAffinity(enemy) {
+    if (typeof enemy?.affinity === 'number') return enemy.affinity;
+    const threat = String(enemy?.threat || 'Moderate').toLowerCase();
+    const seed = (enemy?.name || enemy?.pilot || 'Hostile').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    let base = 38;
+    let spread = 12;
+    if (threat.includes('low')) {
+      base = 22; spread = 12;
+    } else if (threat.includes('challeng')) {
+      base = 52; spread = 12;
+    } else if (threat.includes('high')) {
+      base = 68; spread = 10;
+    } else if (threat.includes('dead')) {
+      base = 84; spread = 10;
+    } else {
+      base = 36; spread = 12;
+    }
+    const offset = seed % spread;
+    return Math.min(99, Math.max(15, base + offset));
+  },
+
+  onPlayerActionComplete() {
+    if (this.battleOver || this.contractWon || this.contractLost) return;
+    if (this.firstTurn === 'player') {
+      this.runEnemyTurn();
+    } else {
+      this.endRound();
+    }
+  },
+
+  onEnemyActionComplete() {
+    if (this.battleOver || this.contractWon || this.contractLost) return;
+    if (this.firstTurn === 'enemy') {
+      this.turn = 'player';
+      this.render();
+    } else {
+      this.endRound();
+    }
+  },
+
   initEncounter(contract = null) {
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
@@ -76,7 +132,6 @@ window.BattleModule = {
     if (window.MusicModule && typeof window.MusicModule.setMode === 'function') {
       window.MusicModule.setMode('battle');
     }
-    this.turn = 'player';
     this.commandTab = 'attack';
     this.aimTarget = 'General';
     this.selectedPlayerPart = null;
@@ -104,6 +159,8 @@ window.BattleModule = {
         armor: { ...contract.enemy.armor },
         maxArmor: { ...contract.enemy.maxArmor },
         pilot: contract.enemy.pilot || 'Hostile Combat AI',
+        threat: contract.enemy.threat || 'Moderate',
+        affinity: contract.enemy.affinity,
         weapons: [
           { name: 'Particle Projector Cannon (PPC)', cat: 'Energy', dmg: 24, accMod: 0 },
           { name: 'Long-Range Missile 15 (LRM-15)', cat: 'Missile', dmg: 18, accMod: 4 },
@@ -113,9 +170,9 @@ window.BattleModule = {
       };
     } else {
       const enemyTemplates = [
-        { name: 'Enemy TAT-110M "Enforcer"', weight: '110t Medium', dmg: 14, hit: 66, pilot: 'Sector Raider' },
-        { name: 'Enemy TAT-155H "Warhammer"', weight: '155t Heavy', dmg: 18, hit: 70, pilot: 'Veteran Duelist' },
-        { name: 'Enemy TAT-190A "Colossus"', weight: '190t Assault', dmg: 24, hit: 74, pilot: 'Elite Warlord' }
+        { name: 'Enemy TAT-110M "Enforcer"', weight: '110t Medium', dmg: 14, hit: 66, pilot: 'Sector Raider', threat: 'Low' },
+        { name: 'Enemy TAT-155H "Warhammer"', weight: '155t Heavy', dmg: 18, hit: 70, pilot: 'Veteran Duelist', threat: 'Challenging' },
+        { name: 'Enemy TAT-190A "Colossus"', weight: '190t Assault', dmg: 24, hit: 74, pilot: 'Elite Warlord', threat: 'Deadly' }
       ];
       const pick = enemyTemplates[(st.missionsCompleted || 0) % enemyTemplates.length];
       this.enemy = {
@@ -126,6 +183,7 @@ window.BattleModule = {
         armor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
         maxArmor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
         pilot: pick.pilot,
+        threat: pick.threat || 'Moderate',
         weapons: [
           { name: 'Heavy Ion Blast', cat: 'Energy', dmg: pick.dmg + 4, accMod: 0 },
           { name: 'Missile Swarm', cat: 'Missile', dmg: pick.dmg, accMod: 5 },
@@ -134,11 +192,63 @@ window.BattleModule = {
       };
     }
 
+    // Determine hostile chassis weight class & affinity
+    const enemyClass = this.getChassisClass(this.enemy.weight);
+    const enemyAffinity = this.calcEnemyAffinity(this.enemy);
+    const enemyAffTier = window.GameState.getAffinityTier(enemyAffinity);
+    this.enemy.chassisClass = enemyClass;
+    this.enemy.affinity = enemyAffinity;
+    this.enemy.affTier = enemyAffTier;
+
+    // Determine player chassis weight class & affinity
+    const playerTpl = mech ? window.GameState.getMechTemplate(mech) : null;
+    const playerClass = playerTpl ? playerTpl.weightClass : 'Medium';
+    window.GameState.ensureJockAffinity(jock);
+    const playerAffinity = jock ? (jock.affinity?.[playerClass] ?? 20) : 20;
+    const playerAffTier = window.GameState.getAffinityTier(playerAffinity);
+    this.playerChassisClass = playerClass;
+    this.playerAffinity = playerAffinity;
+    this.playerAffTier = playerAffTier;
+
+    // INITIATIVE DECISION: Whoever has a higher affinity in their size of Mech has the first turn!
+    if (playerAffinity > enemyAffinity) {
+      this.firstTurn = 'player';
+      this.initiativeWinner = 'player';
+    } else if (enemyAffinity > playerAffinity) {
+      this.firstTurn = 'enemy';
+      this.initiativeWinner = 'enemy';
+    } else {
+      // Tie-breaker: pilot Piloting attribute or default commander advantage
+      const piloting = jock?.stats?.Piloting || 25;
+      this.firstTurn = (piloting >= 25) ? 'player' : 'enemy';
+      this.initiativeWinner = this.firstTurn;
+    }
+
+    this.turn = this.firstTurn;
+
+    const pName = jock ? jock.callsign : 'Pilot';
+    const eName = this.enemy.pilot || 'Hostile Pilot';
+    const isPlayerFirst = (this.initiativeWinner === 'player');
+
     this.logs = [
-      { time: '[RND 1]', text: `COMBAT DROP: 1v1 Arena Duel initiated! ${jock ? jock.callsign : 'Pilot'} deployed in ${mech ? mech.customName : 'Titan'}.`, type: 'system' },
+      { time: '[RND 1]', text: `COMBAT DROP: 1v1 Arena Duel initiated! ${pName} deployed in ${mech ? mech.customName : 'Titan'}.`, type: 'system' },
       { time: '[RND 1]', text: `HOSTILE CONTACT: Locked onto ${this.enemy.name} (${this.enemy.weight}) piloted by ${this.enemy.pilot}.`, type: 'hostile' },
-      { time: '[RND 1]', text: `SYSTEMS ONLINE: Awaiting pilot command...`, type: 'player' }
+      {
+        time: '[INITIATIVE]',
+        text: isPlayerFirst
+          ? `INITIATIVE SEIZED: ${pName} (${playerAffinity}% ${playerClass} Affinity [${playerAffTier.tier}]) out-maneuvered ${eName} (${enemyAffinity}% ${enemyClass} Affinity [${enemyAffTier.tier}])! Commander has the opening turn!`
+          : `INITIATIVE LOST: Hostile ${eName} (${enemyAffinity}% ${enemyClass} Affinity [${enemyAffTier.tier}]) out-paced ${pName} (${playerAffinity}% ${playerClass} Affinity [${playerAffTier.tier}])! Hostile attacks first!`,
+        type: isPlayerFirst ? 'player' : 'hostile'
+      }
     ];
+
+    if (this.firstTurn === 'enemy') {
+      setTimeout(() => {
+        if (!this.contractWon && !this.contractLost && !this.battleOver && this.turn === 'enemy') {
+          this.runEnemyTurn();
+        }
+      }, 1200);
+    }
   },
 
   log(msg, type = 'system') {
@@ -495,7 +605,7 @@ window.BattleModule = {
 
       setTimeout(() => {
         if (!this.contractWon && !this.contractLost && !this.battleOver) {
-          this.runEnemyTurn();
+          this.onPlayerActionComplete();
         }
       }, 1100);
 
@@ -518,7 +628,7 @@ window.BattleModule = {
 
     setTimeout(() => {
       if (!this.contractWon && !this.contractLost && !this.battleOver) {
-        this.runEnemyTurn();
+        this.onPlayerActionComplete();
       }
     }, 900);
   },
@@ -548,7 +658,7 @@ window.BattleModule = {
 
       this.render();
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) this.onPlayerActionComplete();
       }, 1000);
       return;
     }
@@ -559,7 +669,7 @@ window.BattleModule = {
       this.log(`EVASIVE JINK: Jump jets & sprint thrusters engaged! +30% Evasion against hostile attacks next turn.`, 'player');
       this.render();
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) this.onPlayerActionComplete();
       }, 900);
       return;
     }
@@ -570,7 +680,7 @@ window.BattleModule = {
       this.log(`TACTICAL SCAN: Target structural telemetry acquired! Target internal weaknesses tagged (+15% Hit Chance for 2 turns).`, 'player');
       this.render();
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) this.onPlayerActionComplete();
       }, 900);
       return;
     }
@@ -607,7 +717,7 @@ window.BattleModule = {
           this.log(`ENEMY RECOVERY: ${this.enemy.name} engaged hydraulic lifters and stood back up! (UPRIGHT)`, 'hostile');
           this.spawnDamagePopup('ENEMY UPRIGHT', false, false);
           this.render();
-          this.endRound();
+          this.onEnemyActionComplete();
           return;
         } else {
           this.log(`ENEMY STUMBLED: ${this.enemy.name} failed to regain balance and remains PRONE!`, 'player');
@@ -740,14 +850,14 @@ window.BattleModule = {
           this.spawnDamagePopup('EVADED!', true, false);
         }
 
-        this.endRound();
+        this.onEnemyActionComplete();
       }, 350);
 
     }, 600);
   },
 
   endRound() {
-    if (this.battleOver) return;
+    if (this.battleOver || this.contractWon || this.contractLost) return;
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
     const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
@@ -758,8 +868,19 @@ window.BattleModule = {
 
     this.round++;
     this.battleStats.rounds = this.round;
-    this.turn = 'player';
-    this.render();
+
+    if (this.firstTurn === 'player') {
+      this.turn = 'player';
+      this.render();
+    } else {
+      this.turn = 'enemy';
+      this.render();
+      setTimeout(() => {
+        if (!this.battleOver && !this.contractWon && !this.contractLost && this.turn === 'enemy') {
+          this.runEnemyTurn();
+        }
+      }, 800);
+    }
   },
 
   openNegotiation(offerId) {
@@ -2188,9 +2309,15 @@ window.BattleModule = {
               <span class="badge ${isPlayerTurn ? 'green' : 'amber'}" style="font-size:12px; font-weight:900; letter-spacing:0.5px;">
                 ROUND ${this.round} &bull; ${isPlayerTurn ? 'COMMANDER ACTION PHASE' : 'HOSTILE COMBAT PHASE'}
               </span>
+              <span class="badge ${this.firstTurn === 'player' ? 'cyan' : 'amber'} mono" style="font-size:11px; font-weight:800;" title="Initiative awarded to higher mech chassis affinity">
+                INITIATIVE: ${this.firstTurn === 'player' ? '★ PLAYER FIRST' : '⚠️ HOSTILE FIRST'} (${this.playerAffinity}% vs ${this.enemy.affinity}%)
+              </span>
             `}
             <span class="subtext mono" style="font-size:12px;">
               Target: <strong style="color:var(--accent-red);">${this.enemy.name}</strong> (${this.enemy.weight}) &bull; Pilot: ${this.enemy.pilot}
+              <span class="badge ${this.enemy.affTier?.badgeClass || 'purple'} mono" style="font-size:9px; margin-left:4px;" title="Hostile chassis affinity: ${this.enemy.affinity}%">
+                Affinity: ${this.enemy.affinity}% (${this.enemy.affTier?.tier || 'Familiar'})
+              </span>
             </span>
             <span class="jrpg-topbar-meter" title="Hostile armor ${curEnemyArmor} / ${maxEnemyArmor}">
               <span>HOSTILE ARMOR ${enemyArmorPct}%</span>
@@ -2386,6 +2513,16 @@ window.BattleModule = {
                 <button class="btn btn-primary" style="margin-top:6px; width:100%; padding:10px; font-weight:800; font-size:13px; background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; box-shadow:0 0 16px ${this.contractWon ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}; cursor:pointer;" onclick="BattleModule.proceedToDebriefing()">
                   ${this.contractWon ? '🏆 Continue to Debriefing & Salvage &rarr;' : '📋 Continue to Debriefing &rarr;'}
                 </button>
+              </div>
+            ` : !isPlayerTurn ? `
+              <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; height:100%; gap:8px; padding:12px; background:rgba(239,68,68,0.06); border:1px dashed rgba(239,68,68,0.3); border-radius:6px;">
+                <div style="font-size:20px;">⚠️</div>
+                <div style="font-size:13px; font-weight:900; color:var(--accent-amber); text-transform:uppercase; letter-spacing:0.5px;">
+                  Hostile Action In Progress
+                </div>
+                <div class="subtext mono" style="font-size:11px; max-width:260px; line-height:1.4;">
+                  Hostile ${this.enemy.name} is calculating firing solution... Controls will unlock when hostile turn finishes.
+                </div>
               </div>
             ` : this.commandTab === 'attack' ? `
               <div style="display:flex; flex-direction:column; gap:5px;">
