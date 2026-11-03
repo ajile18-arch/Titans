@@ -451,14 +451,17 @@ window.BattleModule = {
         (compIds || []).forEach(cId => {
           const comp = window.GameState.getComponent(cId);
           if (comp && (comp.cat === 'Energy Weapons' || comp.cat === 'Ballistic Weapons' || comp.cat === 'Missile Weapons' || comp.cat === 'Close Combat')) {
+            const isMeleeWeapon = (comp.cat === 'Close Combat' || comp.range === 1 || comp.id === 'paxe' || comp.id === 'vsword' || comp.name.toLowerCase().includes('axe') || comp.name.toLowerCase().includes('blade') || comp.name.toLowerCase().includes('sword'));
             weapons.push({
               id: comp.id,
               name: comp.name,
               cat: comp.cat.replace(' Weapons', ''),
-              damage: comp.damage || (comp.heat ? Math.round(comp.heat * 1.4) : 14),
-              accMod: comp.accMod || 0,
+              damage: comp.damage || comp.dmg || (comp.heat ? Math.round(comp.heat * 1.4) : 14),
+              accMod: isMeleeWeapon ? (comp.accMod || 16) : (comp.accMod || 0),
               ammo: comp.ammoMax ? (comp.ammo ?? comp.ammoMax) : null,
-              loc: loc
+              loc: loc,
+              isMelee: isMeleeWeapon,
+              requiresApproach: isMeleeWeapon
             });
           }
         });
@@ -541,12 +544,16 @@ window.BattleModule = {
     let hit = 72;
 
     if (isPlayer) {
-      if (weapon?.isPhysical) {
-        // High hit probability for close-combat melee physical attacks
+      if (weapon?.isPhysical || weapon?.isMelee || weapon?.cat === 'Close Combat') {
+        // Melee weapons require Approached state (range: 1)
+        if (weapon?.isMelee && !this.isCloseRange) {
+          return 0;
+        }
+        // High hit probability for close-combat melee physical attacks & melee weapons
         hit = 84;
         const meleeSkill = jock?.skills?.['Close Combat'] || jock?.skills?.piloting || 50;
         hit += Math.round((meleeSkill - 50) * 0.3);
-        hit += (weapon.accMod || 14);
+        hit += (weapon?.accMod || 16);
       } else {
         const gunnery = jock?.skills?.gunnery || jock?.skills?.['Energy Weapons'] || 50;
         hit += Math.round((gunnery - 50) * 0.4);
@@ -574,7 +581,13 @@ window.BattleModule = {
       if (this.sensorLockTurns > 0) hit += 15;
       if (this.isCloseRange) hit += 10;
     } else {
-      hit = this.enemy?.hit || 68;
+      if (weapon?.isPhysical || weapon?.isMelee || weapon?.cat === 'Close Combat') {
+        if (weapon?.isMelee && !this.isCloseRange) return 0;
+        hit = 82;
+        hit += (weapon?.accMod || 14);
+      } else {
+        hit = this.enemy?.hit || 68;
+      }
 
       // Pilot Chassis Mastery Evasion Bonus (e.g. Apex Specialist)
       const mech = jock ? st.mechs?.find(m => m.id === jock.assignedMechId) : st.mechs?.[0];
@@ -617,6 +630,12 @@ window.BattleModule = {
     const weapons = this.getPlayerWeapons(mech);
     const weapon = weapons[weaponIndex] || weapons[0];
     if (!weapon) return;
+
+    // Melee weapons require an "Approached" state
+    if (weapon.isMelee && !this.isCloseRange) {
+      alert(`Out of Melee Reach: ${weapon.name} requires your Mech to be in an "Approached" state! Use the 'Approach' tactic in Box 2 to close the distance first.`);
+      return;
+    }
 
     this.turn = 'animating';
     this.battleStats.shotsFired++;
@@ -682,6 +701,8 @@ window.BattleModule = {
           this.log(`MELEE PUNCH: ${jock ? jock.callsign : 'Pilot'} landed a heavy ${weapon.name} across ${this.enemy.name}'s ${loc}! Impact dealt ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
         } else if (weapon.physType === 'kick') {
           this.log(`HEAVY KICK: ${jock ? jock.callsign : 'Pilot'} drove a brutal ${weapon.name} into ${this.enemy.name}'s ${loc}! Direct Hit for ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
+        } else if (weapon.isMelee) {
+          this.log(`MELEE WEAPON STRIKE: ${jock ? jock.callsign : 'Pilot'} swung ${weapon.name} into ${this.enemy.name}'s ${loc}! Brutal Direct Hit for ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
         } else {
           this.log(`${jock ? jock.callsign : 'Pilot'} fired ${weapon.name} at ${loc}! Direct Hit for ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
         }
@@ -939,9 +960,11 @@ window.BattleModule = {
       }
 
       // Enemy Attack
-      const weapons = this.enemy.weapons || [
+      const allWeapons = this.enemy.weapons || [
         { name: 'Heavy Cannon', cat: 'Ballistic', dmg: this.enemy.dmg, accMod: 0 }
       ];
+      const validWeapons = allWeapons.filter(w => !w.isMelee || this.isCloseRange);
+      const weapons = validWeapons.length ? validWeapons : allWeapons;
       const weapon = weapons[Math.floor(Math.random() * weapons.length)];
 
       const hitChance = this.calcHitChance(weapon, false);
@@ -2767,18 +2790,21 @@ window.BattleModule = {
                   </div>
                 ` : ''}
                 ${weapons.map((w, idx) => {
-                  const hit = this.calcHitChance(w, true, this.aimTarget);
+                  const isMeleeBlocked = (w.isMelee && !this.isCloseRange);
+                  const hit = isMeleeBlocked ? 0 : this.calcHitChance(w, true, this.aimTarget);
                   const isPhys = !!w.isPhysical;
+                  const isMelee = !!w.isMelee;
+                  const btnDisabled = !isPlayerTurn || isMeleeBlocked;
                   return `
-                    <button class="jrpg-menu-btn ${isPhys ? 'physical-attack' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerAttack(${idx})" style="padding:6px 10px; font-size:12px; ${isPhys ? 'border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.08);' : ''}">
+                    <button class="jrpg-menu-btn ${isPhys || isMelee ? 'physical-attack' : ''}" ${btnDisabled ? 'disabled' : ''} onclick="BattleModule.executePlayerAttack(${idx})" style="padding:6px 10px; font-size:12px; ${isMeleeBlocked ? 'opacity:0.55; border-style:dashed;' : ''} ${isPhys || isMelee ? 'border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.08);' : ''}">
                       <div>
                         <div><strong>${w.name}</strong></div>
-                        <div class="subtext mono" style="font-size:10px; color:${isPhys ? '#fbbf24' : '#94a3b8'};">
-                          ${w.damage} DMG &bull; ${w.ammo !== null ? `Ammo: ${w.ammo}` : (isPhys ? (w.physType === 'kick' ? 'Brawling Kick • Trip Chance' : 'Close Combat Punch') : 'Energy')}
+                        <div class="subtext mono" style="font-size:10px; color:${isMeleeBlocked ? '#f87171' : (isPhys || isMelee ? '#fbbf24' : '#94a3b8')};">
+                          ${w.damage} DMG &bull; ${isMeleeBlocked ? '⚠️ REQUIRES APPROACHED STATE TO USE' : (w.ammo !== null ? `Ammo: ${w.ammo}` : (isPhys ? (w.physType === 'kick' ? 'Brawling Kick • Trip Chance' : 'Close Combat Punch') : (isMelee ? 'Equipped Melee Weapon' : 'Energy')))}
                         </div>
                       </div>
-                      <span class="badge ${hit >= 70 ? 'green' : (hit >= 50 ? 'amber' : 'red')} mono" style="font-size:11px;">
-                        ${hit}%
+                      <span class="badge ${isMeleeBlocked ? 'red' : (hit >= 70 ? 'green' : (hit >= 50 ? 'amber' : 'red'))} mono" style="font-size:11px;">
+                        ${isMeleeBlocked ? 'APPROACH REQ' : `${hit}%`}
                       </span>
                     </button>
                   `;
