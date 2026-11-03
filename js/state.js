@@ -67,7 +67,8 @@ function createDefaultState() {
           'Energy Weapons': 68, 'Cannons / Ballistic': 42, 'Guided Missiles': 48, 'Close Combat': 35,
           'Recon / Scanner': 58, 'Damage Control': 54, 'Leadership': 40, 'Survival': 48,
           'Mechanic (Repair)': 45, 'Medical (First Aid)': 40
-        }
+        },
+        affinity: { Recon: 45, Light: 65, Medium: 40, Heavy: 20, Assault: 10 }
       },
       {
         id: 'merc-2',
@@ -87,7 +88,8 @@ function createDefaultState() {
           'Energy Weapons': 48, 'Cannons / Ballistic': 72, 'Guided Missiles': 70, 'Close Combat': 52,
           'Recon / Scanner': 50, 'Damage Control': 64, 'Leadership': 55, 'Survival': 60,
           'Mechanic (Repair)': 55, 'Medical (First Aid)': 35
-        }
+        },
+        affinity: { Recon: 15, Light: 25, Medium: 45, Heavy: 70, Assault: 55 }
       },
       {
         id: 'merc-3',
@@ -107,7 +109,8 @@ function createDefaultState() {
           'Energy Weapons': 78, 'Cannons / Ballistic': 74, 'Guided Missiles': 55, 'Close Combat': 40,
           'Recon / Scanner': 72, 'Damage Control': 60, 'Leadership': 45, 'Survival': 62,
           'Mechanic (Repair)': 40, 'Medical (First Aid)': 45
-        }
+        },
+        affinity: { Recon: 35, Light: 55, Medium: 70, Heavy: 50, Assault: 25 }
       }
     ]
   };
@@ -163,6 +166,10 @@ window.GameState = {
             }
           }
           this.ensureJockContract(j);
+          this.ensureJockAffinity(j);
+        });
+        (this.data.recruits || []).forEach(r => {
+          this.ensureJockAffinity(r);
         });
       } catch (e) {
         this.data = createDefaultState();
@@ -201,6 +208,7 @@ window.GameState = {
     }
     j.contract.expired = (j.contract.fightsRemaining <= 0 || j.contract.monthsRemaining <= 0);
     this.ensureJockPersonalityTraits(j);
+    this.ensureJockAffinity(j);
   },
 
   // Ensure a Jockey has 5 personality trait slots (revealed after battles 1, 4, 10, 15, 25)
@@ -343,6 +351,120 @@ window.GameState = {
       effects,
       revealedEffects,
       traits
+    };
+  },
+
+  // Ensure a Jockey has affinity ratings (0–100) for all 5 Titan chassis weight classes
+  ensureJockAffinity(jock) {
+    if (!jock) return;
+    const classes = ['Recon', 'Light', 'Medium', 'Heavy', 'Assault'];
+    if (!jock.affinity || typeof jock.affinity !== 'object') {
+      jock.affinity = this.generateStartingAffinity(jock);
+      return;
+    }
+    classes.forEach(c => {
+      if (typeof jock.affinity[c] !== 'number' || isNaN(jock.affinity[c])) {
+        jock.affinity[c] = 15;
+      } else {
+        jock.affinity[c] = Math.max(0, Math.min(100, Math.round(jock.affinity[c])));
+      }
+    });
+  },
+
+  // Generates starting affinities across all 5 classes based on pilot attributes/skills
+  generateStartingAffinity(jock = {}) {
+    const stats = jock.stats || {};
+    const skills = jock.skills || {};
+
+    const speedScore = (stats.Reflexes || 24) + (stats.Piloting || 24) + ((skills['Recon / Scanner'] || 35) * 0.5);
+    const balanceScore = (stats.Instinct || 24) + (stats.Intelligence || 24) + ((skills['Energy Weapons'] || 35) * 0.5);
+    const armorScore = (stats.Constitution || 24) + (stats.Bravery || 24) + (((skills['Cannons / Ballistic'] || 30) + (skills['Guided Missiles'] || 30)) * 0.35);
+
+    // Determine primary favored weight class
+    let favored = 'Medium';
+    if (speedScore > armorScore + 10 && speedScore > balanceScore) {
+      favored = (stats.Reflexes || 20) > 30 ? 'Recon' : 'Light';
+    } else if (armorScore > speedScore + 8 && armorScore > balanceScore) {
+      favored = (stats.Constitution || 20) > 30 ? 'Assault' : 'Heavy';
+    } else if (balanceScore > speedScore && balanceScore > armorScore) {
+      favored = 'Medium';
+    } else {
+      const classes = ['Recon', 'Light', 'Medium', 'Heavy', 'Assault'];
+      const hash = ((jock.callsign || 'Pilot').charCodeAt(0) + (jock.firstName || 'A').charCodeAt(0)) % classes.length;
+      favored = classes[hash];
+    }
+
+    const randRange = (min, max) => Math.round(min + Math.random() * (max - min));
+    const classes = ['Recon', 'Light', 'Medium', 'Heavy', 'Assault'];
+    const favoredIdx = classes.indexOf(favored);
+
+    const affinity = {};
+    classes.forEach((c, idx) => {
+      const dist = Math.abs(idx - favoredIdx);
+      if (dist === 0) {
+        // Primary favored class (38% to 54%)
+        affinity[c] = randRange(38, 54);
+      } else if (dist === 1) {
+        // Adjacent chassis class (22% to 34%)
+        affinity[c] = randRange(22, 34);
+      } else if (dist === 2) {
+        // Secondary chassis class (12% to 22%)
+        affinity[c] = randRange(12, 22);
+      } else {
+        // Unfamiliar distant class (6% to 15%)
+        affinity[c] = randRange(6, 15);
+      }
+    });
+
+    return affinity;
+  },
+
+  // Lookup qualitative comfort tier for an affinity rating
+  getAffinityTier(rating) {
+    const val = Math.max(0, Math.min(100, Math.round(Number(rating) || 0)));
+    const tiers = window.TOS_DATA?.chassisAffinityTiers || [
+      { min: 100, max: 100, tier: 'Apex Specialist', badgeClass: 'green', hitBonus: 5, evadeBonus: 5, desc: 'Peak mastery; seamless pilot-chassis synchronization (+5% Hit, +5% Evade).' },
+      { min: 80, max: 99, tier: 'Master', badgeClass: 'green', hitBonus: 4, evadeBonus: 0, desc: 'Elite muscle memory, instinctive recoil handling & actuator precision (+4% Hit).' },
+      { min: 60, max: 79, tier: 'Adept', badgeClass: 'primary', hitBonus: 2, evadeBonus: 0, desc: 'Confident fire timing, responsive vector control, and smooth cycling (+2% Hit).' },
+      { min: 40, max: 59, tier: 'Proficient', badgeClass: 'primary', hitBonus: 1, evadeBonus: 0, desc: 'Solid familiarity with cockpit controls, turn rates, and weapon kick (+1% Hit).' },
+      { min: 20, max: 39, tier: 'Familiar', badgeClass: 'amber', hitBonus: 0, evadeBonus: 0, desc: 'Standard operating competence with chassis mass and mobility envelopes (+0% Hit).' },
+      { min: 0, max: 19, tier: 'Unfamiliar', badgeClass: 'red', hitBonus: -2, evadeBonus: 0, desc: 'Cockpit feels clumsy; unpracticed recoil control and sluggish reaction (-2% Hit).' }
+    ];
+
+    return tiers.find(t => val >= t.min && val <= t.max) || tiers[tiers.length - 1];
+  },
+
+  // Get full affinity info for a jockey and chassis weight class
+  getJockChassisAffinity(jock, weightClass) {
+    if (!jock) return { rating: 0, tier: this.getAffinityTier(0), weightClass: weightClass || 'Medium' };
+    this.ensureJockAffinity(jock);
+    const w = weightClass || 'Medium';
+    const rating = jock.affinity[w] ?? 20;
+    const tier = this.getAffinityTier(rating);
+    return { rating, tier, weightClass: w };
+  },
+
+  // Add affinity after using that size of Mech in battle
+  addJockChassisAffinity(jock, weightClass, gain = 4) {
+    if (!jock) return null;
+    this.ensureJockAffinity(jock);
+    const w = weightClass || 'Medium';
+    const oldRating = jock.affinity[w] || 0;
+    const oldTier = this.getAffinityTier(oldRating);
+    const newRating = Math.max(0, Math.min(100, Math.round(oldRating + gain)));
+    jock.affinity[w] = newRating;
+    const newTier = this.getAffinityTier(newRating);
+    const tierUpgraded = (oldTier.tier !== newTier.tier && newRating > oldRating);
+
+    return {
+      weightClass: w,
+      oldRating,
+      newRating,
+      gain,
+      oldTier: oldTier.tier,
+      newTier: newTier.tier,
+      tier: newTier,
+      tierUpgraded
     };
   },
 

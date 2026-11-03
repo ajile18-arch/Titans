@@ -659,7 +659,66 @@ window.TOS_DATA = {
       target: 'Medical (First Aid)',
       badge: 'SKILL: MEDICAL',
       prompt: 'Do you have trauma triage training to treat wounded squadmates after a rough combat drop?'
+    },
+    {
+      id: 'skill_ChassisAffinity',
+      type: 'skill',
+      target: 'ChassisAffinity',
+      badge: 'CHASSIS PROFILE',
+      prompt: 'What Titan chassis weight classes do you have the most cockpit hours and handling comfort in?'
     }
+  ],
+
+  chassisAffinityClasses: [
+    {
+      key: 'Recon',
+      label: 'Recon (50t)',
+      modelExample: 'TAT-50R "Wasp"',
+      icon: '⚡',
+      desc: 'High-speed vectoring, jump thrusters, and electronic sensor scanning.',
+      playstyle: 'Agile hit-and-run scout'
+    },
+    {
+      key: 'Light',
+      label: 'Light (80t)',
+      modelExample: 'TAT-80L "Lynx"',
+      icon: '🎯',
+      desc: 'Rapid flanking, evasive movement, and sustained light laser harassment.',
+      playstyle: 'Fast skirmisher & flank ambusher'
+    },
+    {
+      key: 'Medium',
+      label: 'Medium (120t)',
+      modelExample: 'TAT-120M "Guillotine"',
+      icon: '⚔️',
+      desc: 'Balanced armor, flexible weapons loadout, and versatile duel brawling.',
+      playstyle: 'Workhorse frontline duelist'
+    },
+    {
+      key: 'Heavy',
+      label: 'Heavy (160t)',
+      modelExample: 'TAT-160H "Marauder"',
+      icon: '🛡️',
+      desc: 'Heavy composite plating, positional anchor, and high ballistic recoil absorption.',
+      playstyle: 'Heavy fire support & anchor'
+    },
+    {
+      key: 'Assault',
+      label: 'Assault (200t)',
+      modelExample: 'TAT-200A "Sovereign"',
+      icon: '💥',
+      desc: 'Superheavy siege frame, impenetrable armor envelope, and overwhelming salvo firepower.',
+      playstyle: 'Unstoppable siege juggernaut'
+    }
+  ],
+
+  chassisAffinityTiers: [
+    { min: 100, max: 100, tier: 'Apex Specialist', badgeClass: 'green', hitBonus: 5, evadeBonus: 5, desc: 'Peak mastery; seamless neuro-link synchronization (+5% Hit, +5% Evade).' },
+    { min: 80, max: 99, tier: 'Master', badgeClass: 'green', hitBonus: 4, evadeBonus: 0, desc: 'Elite muscle memory, instinctive recoil handling & actuator precision (+4% Hit).' },
+    { min: 60, max: 79, tier: 'Adept', badgeClass: 'primary', hitBonus: 2, evadeBonus: 0, desc: 'Confident fire timing, responsive vector control, and smooth cycling (+2% Hit).' },
+    { min: 40, max: 59, tier: 'Proficient', badgeClass: 'primary', hitBonus: 1, evadeBonus: 0, desc: 'Solid familiarity with cockpit controls, turn rates, and weapon kick (+1% Hit).' },
+    { min: 20, max: 39, tier: 'Familiar', badgeClass: 'amber', hitBonus: 0, evadeBonus: 0, desc: 'Standard operating competence with chassis mass and mobility envelopes (+0% Hit).' },
+    { min: 0, max: 19, tier: 'Unfamiliar', badgeClass: 'red', hitBonus: -2, evadeBonus: 0, desc: 'Cockpit feels clumsy; unpracticed recoil control and sluggish reaction (-2% Hit).' }
   ],
 
   chassisTemplates: [

@@ -253,7 +253,13 @@ window.HQModule = {
                           <span class="badge ${isMerc ? 'amber' : 'primary'}">${isMerc ? 'Mercenary' : rk.name}</span>
                         </div>
                         <div class="subtext" style="margin-top:2px;">
-                          Titan: <strong>${mech ? mech.customName : 'Unassigned'}</strong> • <span class="mono">${window.GameState.getContractSummary(j)}</span>
+                          Titan: <strong>${mech ? mech.customName : 'Unassigned'}</strong>
+                          ${mech ? (() => {
+                            const tpl = window.GameState.getMechTemplate(mech);
+                            const aff = window.GameState.getJockChassisAffinity(j, tpl ? tpl.weightClass : 'Medium');
+                            return `<span class="badge ${aff.tier.badgeClass} mono" style="font-size:9px; padding:1px 4px; margin-left:4px;">${aff.rating}% ${aff.tier.tier}</span>`;
+                          })() : ''}
+                          &bull; <span class="mono">${window.GameState.getContractSummary(j)}</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:12px;">
                           <span class="mono" style="color:var(--accent-green); font-weight:700;">${j.xp} XP • ${awardsCount} Award${awardsCount === 1 ? '' : 's'}</span>
@@ -279,7 +285,12 @@ window.HQModule = {
             <div style="display:flex; flex-direction:column; gap:10px;">
               ${(st.recruits || []).length === 0 ? `
                 <div class="panel subtext">No freelance mercenaries currently in sector. Click Refresh above.</div>
-              ` : st.recruits.map((r, idx) => `
+              ` : st.recruits.map((r, idx) => {
+                window.GameState.ensureJockAffinity(r);
+                const affEntries = Object.entries(r.affinity || {}).sort((a,b) => b[1] - a[1]);
+                const topAff = affEntries[0] || ['Medium', 20];
+                const topTier = window.GameState.getAffinityTier(topAff[1]);
+                return `
                 <div class="panel" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
                   <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
                     <div style="flex-shrink:0;">${window.GameState.getPortraitSvg(r.portraitId, 52)}</div>
@@ -287,6 +298,7 @@ window.HQModule = {
                       <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                         <strong>${r.firstName} "${r.callsign}" ${r.lastName}</strong>
                         <span class="badge amber mono">${r.termMonths} Mo${r.termMonths > 1 ? 's' : ''} / ${r.termFights} Fight${r.termFights > 1 ? 's' : ''}</span>
+                        <span class="badge ${topTier.badgeClass} mono" style="font-size:10px;">Favors ${topAff[0]} (${topAff[1]}% ${topTier.tier})</span>
                       </div>
                       <div class="subtext" style="margin-top:2px;">${r.bio}</div>
                       <div class="mono" style="font-size:12px; margin-top:4px; color:var(--accent-green); font-weight:700;">
@@ -298,7 +310,7 @@ window.HQModule = {
                     Hire Merc
                   </button>
                 </div>
-              `).join('')}
+              `;}).join('')}
             </div>
           </div>
 
@@ -467,7 +479,8 @@ window.HQModule = {
       askingWage,
       minWage,
       patience: 3,
-      personalityTraits: []
+      personalityTraits: [],
+      affinity: window.GameState.generateStartingAffinity(cand)
     };
 
     window.GameState.ensureJockPersonalityTraits(cand);
@@ -594,6 +607,20 @@ window.HQModule = {
         reply = `"I'll be honest with you—${attrName} has never been my strong suit. I try to compensate for it with positioning and preparation."`;
         clue = `${attrName} Reading: Raw / Low (Est. ${estLow}–${estHigh} / 100)`;
       }
+    } else if (qObj.target === 'ChassisAffinity') {
+      window.GameState.ensureJockAffinity(c);
+      const classes = ['Recon', 'Light', 'Medium', 'Heavy', 'Assault'];
+      const affinities = classes.map(cls => ({
+        cls,
+        rating: c.affinity[cls] || 15,
+        tier: window.GameState.getAffinityTier(c.affinity[cls] || 15)
+      }));
+      affinities.sort((a, b) => b.rating - a.rating);
+      const top = affinities[0];
+      const second = affinities[1];
+      const lowest = affinities[affinities.length - 1];
+      reply = `"I'm most dialed in piloting ${top.cls} Titans (${top.rating}% [${top.tier.tier}]), with comfortable hours on ${second.cls} frames (${second.rating}%). On the other hand, superheavy ${lowest.cls} hulls feel sluggish to me (${lowest.rating}% [${lowest.tier.tier}])."`;
+      clue = `Chassis Comfort Profile: Top: ${top.cls} (${top.rating}% [${top.tier.tier}]) • Second: ${second.cls} (${second.rating}%) • Unfamiliar: ${lowest.cls} (${lowest.rating}%)`;
     } else {
       const skillName = qObj.target;
       const val = c.skills[skillName] || 35;
@@ -827,7 +854,7 @@ window.HQModule = {
     const filteredQuestions = questions.filter(q => {
       if (cat === 'attribute') return q.type === 'attribute';
       if (cat === 'weapon') return q.badge.includes('ENERGY') || q.badge.includes('CANNON') || q.badge.includes('MISSILE') || q.badge.includes('MELEE');
-      if (cat === 'support') return q.badge.includes('RECON') || q.badge.includes('DAMAGE') || q.badge.includes('LEADERSHIP') || q.badge.includes('SURVIVAL') || q.badge.includes('MECHANIC') || q.badge.includes('MEDICAL');
+      if (cat === 'support') return q.badge.includes('RECON') || q.badge.includes('DAMAGE') || q.badge.includes('LEADERSHIP') || q.badge.includes('SURVIVAL') || q.badge.includes('MECHANIC') || q.badge.includes('MEDICAL') || q.badge.includes('CHASSIS');
       return true;
     });
 
@@ -1537,6 +1564,101 @@ window.HQModule = {
     `;
   },
 
+  renderAffinitySection(jock) {
+    const gs = window.GameState;
+    gs.ensureJockAffinity(jock);
+    const classes = window.TOS_DATA?.chassisAffinityClasses || [];
+    const st = gs.data;
+    const assignedMech = st.mechs?.find(m => m.id === jock.assignedMechId);
+    const assignedTpl = assignedMech ? gs.getMechTemplate(assignedMech) : null;
+    const assignedClass = assignedTpl ? assignedTpl.weightClass : '';
+
+    return `
+      <div class="card">
+        <div class="section-header" style="flex-wrap:wrap; gap:8px;">
+          <div>
+            <div class="section-title" style="display:flex; align-items:center; gap:8px;">
+              <span>🤖 Titan Chassis Affinity &amp; Cockpit Comfort</span>
+            </div>
+            <div class="subtext">
+              Gauges pilot muscle memory, recoil control, and handling comfort per Titan size. Increases after deploying that chassis in battle.
+            </div>
+          </div>
+          ${assignedMech ? `
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span class="subtext mono">Assigned:</span>
+              <span class="badge primary mono" style="font-weight:700;">
+                ${assignedMech.customName} (${assignedClass})
+              </span>
+              ${(() => {
+                const info = gs.getJockChassisAffinity(jock, assignedClass);
+                return `<span class="badge ${info.tier.badgeClass} mono">${info.tier.tier} (${info.rating}%)</span>`;
+              })()}
+            </div>
+          ` : `
+            <span class="badge amber mono">No Titan Assigned</span>
+          `}
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-top:8px;">
+          ${classes.map(c => {
+            const info = gs.getJockChassisAffinity(jock, c.key);
+            const isAssigned = (assignedClass === c.key);
+            const barFillClass = info.rating >= 80 ? 'green' : (info.rating >= 40 ? '' : (info.rating >= 20 ? 'amber' : 'red'));
+
+            return `
+              <div class="panel" style="display:flex; flex-direction:column; justify-content:space-between; gap:10px; padding:12px; position:relative; ${isAssigned ? 'border:1.5px solid var(--accent-cyan); background:rgba(56,189,248,0.06); box-shadow:0 0 14px rgba(56,189,248,0.18);' : ''}">
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">
+                    <div>
+                      <div style="font-weight:800; font-size:13px; display:flex; align-items:center; gap:6px;">
+                        <span>${c.icon}</span> <span>${c.label}</span>
+                      </div>
+                      <div class="subtext mono" style="font-size:11px; margin-top:1px; color:#94a3b8;">
+                        ${c.modelExample}
+                      </div>
+                    </div>
+                    ${isAssigned ? `
+                      <span class="badge primary mono" style="font-size:9px; font-weight:900; letter-spacing:0.04em;">★ ACTIVE</span>
+                    ` : ''}
+                  </div>
+
+                  <!-- Rating & Tier Gauge -->
+                  <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:10px;">
+                    <span class="badge ${info.tier.badgeClass} mono" style="font-size:11px; font-weight:800;">
+                      ${info.tier.tier}
+                    </span>
+                    <span class="mono" style="font-size:16px; font-weight:900; color:${info.rating >= 60 ? 'var(--accent-green)' : (info.rating >= 30 ? 'var(--accent-amber)' : 'var(--accent-red)')};">
+                      ${info.rating}%
+                    </span>
+                  </div>
+
+                  <!-- Progress Bar -->
+                  <div class="bar-bg" style="margin-top:4px; height:8px;">
+                    <div class="bar-fill ${barFillClass}" style="width:${info.rating}%;"></div>
+                  </div>
+
+                  <!-- Combat Effect -->
+                  <div style="margin-top:8px; font-size:11px; display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                    <span class="subtext">Combat Effect:</span>
+                    <strong class="mono" style="color:${info.tier.hitBonus > 0 ? 'var(--accent-green)' : (info.tier.hitBonus < 0 ? 'var(--accent-red)' : 'var(--text-muted)')};">
+                      ${info.tier.hitBonus > 0 ? `+${info.tier.hitBonus}% Hit` : (info.tier.hitBonus < 0 ? `${info.tier.hitBonus}% Hit` : 'Baseline (0%)')}
+                      ${info.tier.evadeBonus ? ` • +${info.tier.evadeBonus}% Evade` : ''}
+                    </strong>
+                  </div>
+                </div>
+
+                <div class="subtext" style="font-size:11px; line-height:1.3; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">
+                  ${info.tier.desc}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  },
+
   renderDossier(jock) {
     const st = window.GameState.data;
     const rank = window.GameState.getJockRank(jock);
@@ -1622,6 +1744,8 @@ window.HQModule = {
       </div>
 
       ${this.renderContractAndPersonality(jock)}
+
+      ${this.renderAffinitySection(jock)}
 
       <!-- Classic 6 Attributes & 0-100% Granular Skills Grid -->
       <div class="grid-12">

@@ -225,12 +225,18 @@ window.BattleModule = {
       }
     }
 
+    const tpl = mech ? window.GameState.getMechTemplate(mech) : null;
+    const wClass = tpl ? tpl.weightClass : 'Medium';
+    const pilotAffinity = (jock && jock.affinity) ? (jock.affinity[wClass] || 0) : 0;
+
     jock.fightHistory.unshift({
       fightNumber,
       campaignDate: window.GameState.getCalendarText(),
       enemyName,
       enemyWeight: this.enemy?.weight || '',
       mechName: mech ? mech.customName : 'Titan-AT',
+      mechWeightClass: wClass,
+      chassisAffinity: pilotAffinity,
       outcome,
       durationSec: (this.battleStats.rounds || this.round || 1) * 15, // each duel round is ~15s of combat
       shotsFired: this.battleStats.shotsFired,
@@ -322,6 +328,17 @@ window.BattleModule = {
       hit += Math.round((gunnery - 50) * 0.4);
       hit += (weapon.accMod || 0);
 
+      // Chassis Affinity Comfort Modifier
+      const mech = jock ? st.mechs?.find(m => m.id === jock.assignedMechId) : st.mechs?.[0];
+      if (mech && jock) {
+        const tpl = window.GameState.getMechTemplate(mech);
+        const wClass = tpl ? tpl.weightClass : 'Medium';
+        window.GameState.ensureJockAffinity(jock);
+        const rating = jock.affinity?.[wClass] ?? 20;
+        const affTier = window.GameState.getAffinityTier(rating);
+        hit += (affTier.hitBonus || 0);
+      }
+
       // Aimed Shot Modifiers
       hit += this.getAimModifier(aimLoc);
 
@@ -332,6 +349,18 @@ window.BattleModule = {
       if (this.sensorLockTurns > 0) hit += 15;
     } else {
       hit = this.enemy?.hit || 68;
+
+      // Pilot Chassis Mastery Evasion Bonus (e.g. Apex Specialist)
+      const mech = jock ? st.mechs?.find(m => m.id === jock.assignedMechId) : st.mechs?.[0];
+      if (mech && jock) {
+        const tpl = window.GameState.getMechTemplate(mech);
+        const wClass = tpl ? tpl.weightClass : 'Medium';
+        window.GameState.ensureJockAffinity(jock);
+        const rating = jock.affinity?.[wClass] ?? 20;
+        const affTier = window.GameState.getAffinityTier(rating);
+        if (affTier.evadeBonus) hit -= affTier.evadeBonus;
+      }
+
       if (this.enemyFallen) hit -= 20;
       if (this.playerFallen) hit += 20;
       if (this.playerStance === 'evasive') hit -= 25;
@@ -1030,6 +1059,30 @@ window.BattleModule = {
           jock.status = 'Active';
         }
       }
+
+      // Calculate Chassis Affinity Gain after using this size of Mech in battle
+      let affinityProgress = null;
+      if (jock && mech) {
+        window.GameState.ensureJockAffinity(jock);
+        const tpl = window.GameState.getMechTemplate(mech);
+        const weightClass = tpl ? tpl.weightClass : 'Medium';
+        let affinityGain = 0;
+        if (outcome === 'VICTORY') {
+          affinityGain = 4;
+          if (killCode === 'HD' || (this.battleStats.shotsFired >= 3 && (this.battleStats.shotsHit / this.battleStats.shotsFired) >= 0.75)) {
+            affinityGain += 1;
+          }
+        } else if (outcome === 'DEFEAT') {
+          affinityGain = 2;
+        } else {
+          affinityGain = 1;
+        }
+        affinityProgress = window.GameState.addJockChassisAffinity(jock, weightClass, affinityGain);
+        if (affinityProgress) {
+          affinityProgress.mechModel = tpl ? tpl.model : 'Titan';
+          affinityProgress.mechName = mech ? mech.customName : 'Titan';
+        }
+      }
     }
 
     // Salvage Component Recovery
@@ -1133,7 +1186,8 @@ window.BattleModule = {
         status: jock ? (jock.status || (jock.isDead ? 'KIA' : 'Active')) : 'Unknown',
         weeklyHealRate: jock ? window.GameState.calcJockWeeklyHealRate(jock) : 0,
         cmoCallsign: window.GameState.getChiefMedicalOfficer()?.callsign || 'Staff Medic',
-        newlyRevealedTrait
+        newlyRevealedTrait,
+        affinityProgress
       },
       companyProgression: {
         name: st.company?.name || 'Mercenary Company',
@@ -1516,6 +1570,33 @@ window.BattleModule = {
                   <span class="subtext">Contract Status:</span>
                   <span>${s.jockProgression.isDead ? 'TERMINATED (DECEASED)' : `${s.jockProgression.fightsRemaining} Fights Remaining`}</span>
                 </div>
+
+                ${s.jockProgression.affinityProgress ? `
+                  <div style="background:rgba(56, 189, 248, 0.08); border:1px solid rgba(56, 189, 248, 0.3); border-radius:6px; padding:10px; margin-top:4px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+                      <div>
+                        <strong style="color:#f8fafc; font-size:13px;">🤖 Chassis Affinity: ${s.jockProgression.affinityProgress.weightClass} Class</strong>
+                        <div class="subtext mono" style="font-size:11px; color:#94a3b8;">${s.jockProgression.affinityProgress.mechModel} (${s.jockProgression.affinityProgress.mechName})</div>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <span class="badge ${s.jockProgression.affinityProgress.tier.badgeClass} mono" style="font-size:11px;">
+                          ${s.jockProgression.affinityProgress.newTier}
+                        </span>
+                        <span class="mono" style="font-size:13px; font-weight:800; color:var(--accent-cyan);">
+                          +${s.jockProgression.affinityProgress.gain}% &rarr; ${s.jockProgression.affinityProgress.newRating}%
+                        </span>
+                      </div>
+                    </div>
+                    <div class="bar-bg" style="margin-top:6px; height:7px;">
+                      <div class="bar-fill ${s.jockProgression.affinityProgress.newRating >= 80 ? 'green' : (s.jockProgression.affinityProgress.newRating >= 40 ? '' : 'amber')}" style="width:${s.jockProgression.affinityProgress.newRating}%;"></div>
+                    </div>
+                    ${s.jockProgression.affinityProgress.tierUpgraded ? `
+                      <div style="margin-top:6px; padding:5px 8px; background:rgba(16,185,129,0.18); border:1px solid #10b981; border-radius:4px; color:#6ee7b7; font-size:11px; font-weight:800;">
+                        ★ COMFORT LEVEL ADVANCEMENT: Reached [${s.jockProgression.affinityProgress.newTier}] rating in ${s.jockProgression.affinityProgress.weightClass} Titans (+${s.jockProgression.affinityProgress.tier.hitBonus}% Hit bonus)!
+                      </div>
+                    ` : ''}
+                  </div>
+                ` : ''}
 
                 ${s.jockProgression.newlyRevealedTrait ? `
                   <div style="background:linear-gradient(135deg, rgba(168,85,247,0.22), rgba(59,130,246,0.22)); border:2px solid #a855f7; border-radius:8px; padding:12px; margin-top:6px;">
@@ -2216,8 +2297,14 @@ window.BattleModule = {
                     <span>${jock?.callsign || 'Pilot'} <small style="color:#94a3b8; font-weight:600;">(${window.GameState.getJockRank(jock).name})</small></span>
                     <span class="badge ${jock?.health < 25 ? 'red' : 'green'} mono" style="font-size:10px;">${jock?.health || 100}% HP</span>
                   </div>
-                  <div style="font-size:11px; color:#cbd5e1; font-weight:600;">
-                    ${mech?.customName || 'Titan Mech'}
+                  <div style="font-size:11px; color:#cbd5e1; font-weight:600; display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                    <span>${mech?.customName || 'Titan Mech'}</span>
+                    ${(() => {
+                      const tpl = window.GameState.getMechTemplate(mech);
+                      const wClass = tpl ? tpl.weightClass : 'Medium';
+                      const affInfo = window.GameState.getJockChassisAffinity(jock, wClass);
+                      return `<span class="badge ${affInfo.tier.badgeClass} mono" style="font-size:9px; padding:1px 6px;" title="${affInfo.tier.desc}">Comfort: ${affInfo.rating}% (${affInfo.tier.tier})</span>`;
+                    })()}
                   </div>
                 </div>
               </div>

@@ -315,6 +315,12 @@ window.GarageModule = {
             <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; font-size:13px;">
               <div>
                 Assigned Jock: <strong>${assignedJock ? `${assignedJock.firstName} "${assignedJock.callsign}" ${assignedJock.lastName}` : 'Unassigned (Assign in HQ)'}</strong>
+                ${assignedJock ? (() => {
+                  const tpl = window.GameState.getMechTemplate(mech);
+                  const wClass = tpl ? tpl.weightClass : 'Medium';
+                  const affInfo = window.GameState.getJockChassisAffinity(assignedJock, wClass);
+                  return `<span class="badge ${affInfo.tier.badgeClass} mono" style="margin-left:6px; font-size:11px;" title="${affInfo.tier.desc}">Chassis Comfort: ${affInfo.rating}% (${affInfo.tier.tier} &bull; ${affInfo.tier.hitBonus >= 0 ? '+' : ''}${affInfo.tier.hitBonus}% Hit)</span>`;
+                })() : ''}
                 <div class="subtext" style="margin-top:2px;">
                   Resale Rule: <strong>50% Base Value</strong> at 100% Condition, reduced proportionally if damaged (${resaleInfo.conditionPct}% Cond = ${resaleInfo.chassisResale.toLocaleString()} Cr for Chassis).
                 </div>
