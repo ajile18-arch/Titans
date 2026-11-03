@@ -2049,6 +2049,20 @@ window.BattleModule = {
       </div>
     `;
   },
+  getArenaBackground(contract) {
+    const tId = contract?.terrain?.id || '';
+    const cId = contract?.client?.id || '';
+    if (cId === 'solaris') return 'assets/arenas/arena_solaris.jpg';
+    if (tId === 'rubble') return 'assets/arenas/arena_industrial.jpg';
+    if (tId === 'hill' || tId === 'woods' || tId === 'water') return 'assets/arenas/arena_canyon.jpg';
+    if (tId === 'clear') return 'assets/arenas/arena_wasteland.jpg';
+    // Dynamic fallback based on hostile weight
+    const eWeight = (contract?.enemy?.weight || this.enemy?.weight || '').toLowerCase();
+    if (eWeight.includes('assault')) return 'assets/arenas/arena_solaris.jpg';
+    if (eWeight.includes('heavy')) return 'assets/arenas/arena_industrial.jpg';
+    if (eWeight.includes('medium')) return 'assets/arenas/arena_canyon.jpg';
+    return 'assets/arenas/arena_wasteland.jpg';
+  },
   renderCombatArena(jock, mech, metrics) {
     if (!this.enemy) {
       this.initEncounter();
@@ -2074,6 +2088,7 @@ window.BattleModule = {
 
     const weapons = this.getPlayerWeapons(mech);
     const isPlayerTurn = (this.turn === 'player' && !this.battleOver);
+    const bgUrl = this.getArenaBackground(this.currentContract);
 
     return `
       <div class="jrpg-battle-container">
@@ -2118,7 +2133,11 @@ window.BattleModule = {
         <div class="jrpg-3d-viewport ${this.shaking ? 'jrpg-shake-screen' : ''}">
           <div class="jrpg-3d-stage">
             
-            <!-- Tilted 3D Holographic Ground Grid -->
+            <!-- Realistic Matte-Painted Arena Backdrop & Vignette -->
+          <div class="jrpg-arena-bg" style="background-image: url('${bgUrl}');"></div>
+          <div class="jrpg-arena-vignette"></div>
+
+            <!-- Tilted 3D Holographic Ground Grid (Tactical AR Overlay) -->
             <div class="jrpg-3d-ground"></div>
 
             <!-- Player Titan (Bottom-Left Foreground, Angled Northeast) -->
