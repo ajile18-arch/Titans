@@ -1,4 +1,4 @@
-﻿// Tactical Battle Arena Module (Stylized Turn-Based JRPG 3D Side-Angle Duel System)
+// Tactical Battle Arena Module (Stylized Turn-Based JRPG 3D Side-Angle Duel System)
 
 window.BattleModule = {
   active: false,
@@ -678,7 +678,7 @@ window.BattleModule = {
                 return;
               } else {
                 this.log(`EMERGENCY EJECTION: Titan head decapitated, but ${jock.callsign} successfully triggered the ejection pod and survived!`, 'system');
-                this.finishBattle('DEFEAT', 'Cockpit Decapitated â€” Emergency Ejection Pod Cleared', 'HEAD_EJECT', weapon.name);
+                this.finishBattle('DEFEAT', 'Cockpit Decapitated — Emergency Ejection Pod Cleared', 'HEAD_EJECT', weapon.name);
                 return;
               }
             }
@@ -1249,7 +1249,7 @@ window.BattleModule = {
                 Operation: <strong>${s.title}</strong> &bull; ${s.killMethod}
               </div>
               <div class="subtext" style="font-size:12px; margin-top:3px; color:${s.jockProgression.isDead ? '#fca5a5' : 'inherit'};">
-                ${s.jockProgression.isDead ? `Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; â˜ ï¸ Pilot <strong>${s.jockProgression.callsign}</strong> lost in combat` : `Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; Pilot ${s.jockProgression.callsign} survived emergency ejection (${s.jockProgression.health}% HP)`}
+                ${s.jockProgression.isDead ? `Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; ☠️ Pilot <strong>${s.jockProgression.callsign}</strong> lost in combat` : `Employer: <strong>${s.client.name}</strong> &bull; Campaign Date: <strong>${s.date}</strong> &bull; Pilot ${s.jockProgression.callsign} survived emergency ejection (${s.jockProgression.health}% HP)`}
               </div>
             </div>
           </div>
@@ -1309,7 +1309,7 @@ window.BattleModule = {
                 <span class="badge green" style="font-size:11px;">${p.condition}% Condition</span>
               </div>
               <div class="subtext" style="margin-top:2px; font-size:12px;">
-                Weight: ${p.tons}t â€¢ ${p.desc || 'Salvaged component'} â€¢ Est. Market Value: ~${(p.cost || 12000).toLocaleString()} Cr
+                Weight: ${p.tons}t • ${p.desc || 'Salvaged component'} • Est. Market Value: ~${(p.cost || 12000).toLocaleString()} Cr
               </div>
             </div>
             <div style="text-align:right;">
@@ -1392,7 +1392,7 @@ window.BattleModule = {
               +${s.jockProgression.xpEarned} XP
             </div>
             <div class="subtext" style="font-size:12px;">
-              Pilot: <strong>${s.jockProgression.callsign}</strong> â€¢ Available XP: <strong>${s.jockProgression.newTotalXp} XP</strong>
+              Pilot: <strong>${s.jockProgression.callsign}</strong> • Available XP: <strong>${s.jockProgression.newTotalXp} XP</strong>
             </div>
             <div style="margin-top:6px; font-size:11px; color:var(--accent-cyan);" class="mono">
               ${s.jockProgression.fightsRemaining} Fights Remaining on Contract
@@ -1408,7 +1408,7 @@ window.BattleModule = {
               +${s.companyProgression.xpEarned} XP
             </div>
             <div class="subtext" style="font-size:12px;">
-              Unit: <strong>${s.companyProgression.name}</strong> â€¢ Guild Rep: <strong>Level ${s.companyProgression.reputationLevel}</strong>
+              Unit: <strong>${s.companyProgression.name}</strong> • Guild Rep: <strong>Level ${s.companyProgression.reputationLevel}</strong>
             </div>
             <div style="margin-top:6px; font-size:11px; color:var(--text-bright);" class="mono">
               ${s.companyProgression.missionsCompleted} Total Operations Logged
@@ -1650,7 +1650,7 @@ window.BattleModule = {
                     <strong style="font-size:16px; color:var(--text-bright);">${b.title}</strong>
                   </div>
                   <div class="subtext" style="margin-top:3px;">
-                    Sponsor: <strong>${b.client?.name || 'Mercenary Guild'}</strong> â€¢ Signed: ${b.dateSigned || 'Earlier'}
+                    Sponsor: <strong>${b.client?.name || 'Mercenary Guild'}</strong> • Signed: ${b.dateSigned || 'Earlier'}
                   </div>
                 </div>
                 <div style="text-align:right;">
@@ -1709,7 +1709,7 @@ window.BattleModule = {
     `;
 
     const offersHtml = st.battleOffers.map(o => {
-      const terrainDesc = o.terrain ? `${o.terrain.name} â€¢ ${o.terrain.desc}` : 'Standard Terrain';
+      const terrainDesc = o.terrain ? `${o.terrain.name} • ${o.terrain.desc}` : 'Standard Terrain';
       const enemyThreat = o.enemy?.threat || 'Standard Threat';
       return `
         <div class="panel" style="display:flex; flex-direction:column; justify-content:space-between; gap:12px; padding:16px;">
@@ -1770,7 +1770,7 @@ window.BattleModule = {
               <strong style="color:var(--text-bright); margin-left:6px;">${cb.title || 'Tactical Drop'}</strong> vs. ${cb.enemyName} (${cb.client})
             </div>
             <div style="text-align:right;">
-              <span style="color:var(--accent-green); font-weight:700;">+${(cb.payout || 0).toLocaleString()} Cr</span> â€¢ <span class="subtext">${cb.date}</span>
+              <span style="color:var(--accent-green); font-weight:700;">+${(cb.payout || 0).toLocaleString()} Cr</span> • <span class="subtext">${cb.date}</span>
             </div>
           </div>
         `).join('')}
@@ -1890,7 +1890,7 @@ window.BattleModule = {
                 Contract Negotiation: ${offer.title}
               </h2>
               <div class="subtext">
-                Client Liaison: <strong>${offer.client?.name}</strong> â€¢ Current Date: ${window.GameState.getCalendarText()}
+                Client Liaison: <strong>${offer.client?.name}</strong> • Current Date: ${window.GameState.getCalendarText()}
               </div>
             </div>
             <div style="text-align:right;">
@@ -2110,7 +2110,7 @@ window.BattleModule = {
           <div style="display:flex; align-items:center; gap:12px;">
             ${this.battleOver ? `
               <span class="badge ${this.contractWon ? 'green' : 'red'}" style="font-size:13px; font-weight:900; letter-spacing:0.5px; padding:6px 12px;">
-                ${this.contractWon ? 'ðŸ† ENGAGEMENT RESOLVED: VICTORY!' : 'â˜ ï¸ ENGAGEMENT RESOLVED: DEFEAT'}
+                ${this.contractWon ? '🏆 ENGAGEMENT RESOLVED: VICTORY!' : '☠️ ENGAGEMENT RESOLVED: DEFEAT'}
               </span>
             ` : `
               <span class="badge ${isPlayerTurn ? 'green' : 'amber'}" style="font-size:12px; font-weight:900; letter-spacing:0.5px;">
@@ -2125,11 +2125,11 @@ window.BattleModule = {
           <div style="display:flex; gap:8px;">
             ${this.battleOver ? `
               <button class="btn btn-primary" style="background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; font-weight:900; font-size:13px; padding:8px 18px; box-shadow:0 0 16px ${this.contractWon ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)'}; cursor:pointer;" onclick="BattleModule.proceedToDebriefing()">
-                ${this.contractWon ? 'ðŸ† Continue to Debriefing & Salvage &rarr;' : 'ðŸ“‹ Continue to Debriefing &rarr;'}
+                ${this.contractWon ? '🏆 Continue to Debriefing & Salvage &rarr;' : '📋 Continue to Debriefing &rarr;'}
               </button>
             ` : `
               <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; color:var(--accent-red);" onclick="BattleModule.executePlayerRetreat()">
-                ðŸƒ Retreat &larr;
+                🏃 Retreat &larr;
               </button>
             `}
           </div>
@@ -2144,13 +2144,13 @@ window.BattleModule = {
 
             <!-- Player Titan (Bottom-Left Foreground, Angled Northeast) -->
             <div class="jrpg-combatant player-side ${this.playerFallen ? 'prone' : ''}">
-              ${this.renderIsometricTitanSvg('player', this.playerFallen, playerArmorPct, '#38bdf8')}
+              ${this.renderIsometricTitanSvg('player', this.playerFallen, playerArmorPct, '#38bdf8', mech, this.playerHeat)}
               <div class="jrpg-shadow"></div>
             </div>
 
             <!-- Enemy Titan (Top-Right Background, Angled Southwest) -->
             <div class="jrpg-combatant enemy-side ${this.enemyFallen ? 'prone' : ''}">
-              ${this.renderIsometricTitanSvg('enemy', this.enemyFallen, enemyArmorPct, '#f43f5e')}
+              ${this.renderIsometricTitanSvg('enemy', this.enemyFallen, enemyArmorPct, '#f43f5e', this.enemy, this.enemyHeat)}
               <div class="jrpg-shadow"></div>
             </div>
 
@@ -2187,7 +2187,7 @@ window.BattleModule = {
             ${this.battleOver ? `
               <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(2, 6, 23, 0.72); backdrop-filter:blur(5px); z-index:70;">
                 <div class="card" style="padding:26px 36px; text-align:center; max-width:480px; border:2px solid ${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; box-shadow:0 0 36px ${this.contractWon ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)'}; background:#0f172a;">
-                  <div style="font-size:44px; line-height:1; margin-bottom:10px;">${this.contractWon ? 'ðŸ†' : (this.pendingDebriefing?.outcome === 'RETREAT' ? 'ðŸƒ' : 'â˜ ï¸')}</div>
+                  <div style="font-size:44px; line-height:1; margin-bottom:10px;">${this.contractWon ? '🏆' : (this.pendingDebriefing?.outcome === 'RETREAT' ? '🏃' : '☠️')}</div>
                   <h2 style="font-size:24px; font-weight:900; color:${this.contractWon ? '#10b981' : '#ef4444'}; margin:0 0 6px 0; text-transform:uppercase; letter-spacing:0.04em;">
                     ${this.contractWon ? 'COMBAT VICTORY!' : (this.pendingDebriefing?.outcome === 'RETREAT' ? 'TACTICAL WITHDRAWAL' : 'BATTLE DEFEAT')}
                   </h2>
@@ -2198,7 +2198,7 @@ window.BattleModule = {
                     Hostile: <strong>${this.enemy.name}</strong> (${this.enemy.weight}) &bull; Pilot: <strong>${jock ? jock.callsign : 'Pilot'}</strong>
                   </div>
                   <button class="btn btn-primary" style="font-size:15px; font-weight:900; padding:12px 28px; width:100%; background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; box-shadow:0 0 20px ${this.contractWon ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)'}; cursor:pointer;" onclick="BattleModule.proceedToDebriefing()">
-                    ${this.contractWon ? 'ðŸ† Continue to Debriefing & Salvage &rarr;' : 'ðŸ“‹ Continue to Debriefing &rarr;'}
+                    ${this.contractWon ? '🏆 Continue to Debriefing & Salvage &rarr;' : '📋 Continue to Debriefing &rarr;'}
                   </button>
                 </div>
               </div>
@@ -2247,7 +2247,7 @@ window.BattleModule = {
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:11px;">
                 <div style="display:flex; gap:4px; flex-wrap:wrap;">
                   <span class="badge ${this.playerFallen ? 'red' : 'green'} mono" style="font-size:10px;">
-                    ${this.playerFallen ? 'âš ï¸ PRONE (DOWNED)' : 'UPRIGHT'}
+                    ${this.playerFallen ? '⚠️ PRONE (DOWNED)' : 'UPRIGHT'}
                   </span>
                   ${this.playerStance !== 'normal' ? `<span class="badge primary mono" style="font-size:10px;">${this.playerStance.toUpperCase()}</span>` : ''}
                 </div>
@@ -2292,7 +2292,7 @@ window.BattleModule = {
               <!-- Enemy Posture & Telemetry -->
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:11px;">
                 <span class="badge ${this.enemyFallen ? 'red' : 'red'} mono" style="font-size:10px;">
-                  ${this.enemyFallen ? 'âš ï¸ PRONE (+20% HIT)' : 'COMBAT READY'}
+                  ${this.enemyFallen ? '⚠️ PRONE (+20% HIT)' : 'COMBAT READY'}
                 </span>
                 <span class="subtext mono" style="font-size:10px;">
                   HD:${this.enemy.armor?.HD || 0} CT:${this.enemy.armor?.CT || 0} LL:${this.enemy.armor?.LL || 0} RL:${this.enemy.armor?.RL || 0}
@@ -2312,24 +2312,24 @@ window.BattleModule = {
             ${this.battleOver ? `
               <div style="display:flex; flex-direction:column; gap:8px; height:100%; justify-content:center;">
                 <button class="btn btn-primary" style="padding:14px; font-size:13px; font-weight:900; background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; box-shadow:0 0 16px ${this.contractWon ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)'};" onclick="BattleModule.proceedToDebriefing()">
-                  ${this.contractWon ? 'ðŸ† Debriefing &rarr;' : 'ðŸ“‹ Debriefing &rarr;'}
+                  ${this.contractWon ? '🏆 Debriefing &rarr;' : '📋 Debriefing &rarr;'}
                 </button>
               </div>
             ` : `
               <button class="jrpg-menu-btn ${this.commandTab === 'attack' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('attack')">
-                <span>âš”ï¸ ATTACK</span>
+                <span>⚔️ ATTACK</span>
                 <span class="mono" style="font-size:11px;">&rarr;</span>
               </button>
               <button class="jrpg-menu-btn ${this.commandTab === 'defend' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('defend')">
-                <span>ðŸ›¡ï¸ DEFEND</span>
+                <span>🛡️ DEFEND</span>
                 <span class="mono" style="font-size:11px;">&rarr;</span>
               </button>
               <button class="jrpg-menu-btn ${this.commandTab === 'tactics' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('tactics')">
-                <span>âš¡ TACTICS</span>
+                <span>⚡ TACTICS</span>
                 <span class="mono" style="font-size:11px;">&rarr;</span>
               </button>
               <button class="jrpg-menu-btn ${this.commandTab === 'cooling' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('cooling')">
-                <span>â„ï¸ COOLING</span>
+                <span>❄️ COOLING</span>
                 <span class="mono" style="font-size:11px;">&rarr;</span>
               </button>
             `}
@@ -2351,7 +2351,7 @@ window.BattleModule = {
                   ${this.pendingDebriefing?.killMethod || 'Combat has concluded.'} Click below to collect contract bounty, salvage components, and pilot XP.
                 </div>
                 <button class="btn btn-primary" style="margin-top:6px; width:100%; padding:10px; font-weight:800; font-size:13px; background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; box-shadow:0 0 16px ${this.contractWon ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}; cursor:pointer;" onclick="BattleModule.proceedToDebriefing()">
-                  ${this.contractWon ? 'ðŸ† Continue to Debriefing & Salvage &rarr;' : 'ðŸ“‹ Continue to Debriefing &rarr;'}
+                  ${this.contractWon ? '🏆 Continue to Debriefing & Salvage &rarr;' : '📋 Continue to Debriefing &rarr;'}
                 </button>
               </div>
             ` : this.commandTab === 'attack' ? `
@@ -2373,20 +2373,20 @@ window.BattleModule = {
                   `;
                 }).join('')}
                 <button class="btn btn-primary" ${!isPlayerTurn ? 'disabled' : ''} style="margin-top:4px; padding:8px; font-weight:800; font-size:12px; background:linear-gradient(90deg, #dc2626, #ea580c); color:#fff;" onclick="BattleModule.executePlayerAlphaStrike()">
-                  âš¡ UNLEASH ALPHA STRIKE (ALL WEAPONS)
+                  ⚡ UNLEASH ALPHA STRIKE (ALL WEAPONS)
                 </button>
               </div>
             ` : this.commandTab === 'defend' ? `
               <div style="display:flex; flex-direction:column; gap:6px;">
                 <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerDefend('brace')">
                   <div>
-                    <div><strong>ðŸ›¡ï¸ Defensive Brace</strong></div>
+                    <div><strong>🛡️ Defensive Brace</strong></div>
                     <div class="subtext" style="font-size:11px;">Lock actuators: -40% damage &amp; +50% Gyro stability vs falling</div>
                   </div>
                 </button>
                 <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerDefend('twist')">
                   <div>
-                    <div><strong>ðŸ”„ Torso Twist</strong></div>
+                    <div><strong>🔄 Torso Twist</strong></div>
                     <div class="subtext" style="font-size:11px;">Re-angle torso to deflect incoming shots to shielded arms</div>
                   </div>
                 </button>
@@ -2395,25 +2395,25 @@ window.BattleModule = {
               <div style="display:flex; flex-direction:column; gap:6px;">
                 <button class="jrpg-menu-btn ${this.playerFallen ? 'active' : ''}" ${!isPlayerTurn || !this.playerFallen ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('stand_up')" style="${this.playerFallen ? 'border-color:#ef4444; background:rgba(239,68,68,0.2);' : ''}">
                   <div>
-                    <div><strong>ðŸ¦¾ Stand Up (Piloting Recovery)</strong></div>
+                    <div><strong>🦾 Stand Up (Piloting Recovery)</strong></div>
                     <div class="subtext" style="font-size:11px;">Restore upright posture from prone position</div>
                   </div>
                 </button>
                 <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('evasion')">
                   <div>
-                    <div><strong>ðŸ’¨ Evasive Jink Sprint</strong></div>
+                    <div><strong>💨 Evasive Jink Sprint</strong></div>
                     <div class="subtext" style="font-size:11px;">+30% Evasion against hostile attacks next turn (+8 Heat)</div>
                   </div>
                 </button>
                 <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('sensor_lock')">
                   <div>
-                    <div><strong>ðŸ“¡ Sensor Lock &amp; Scan</strong></div>
+                    <div><strong>📡 Sensor Lock &amp; Scan</strong></div>
                     <div class="subtext" style="font-size:11px;">Highlight structural flaws: +15% Hit Chance for 2 turns</div>
                   </div>
                 </button>
                 <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('snipe')">
                   <div>
-                    <div><strong>ðŸŽ¯ Headhunter Snipe Stance</strong></div>
+                    <div><strong>🎯 Headhunter Snipe Stance</strong></div>
                     <div class="subtext" style="font-size:11px;">Locks targeting reticle directly onto cockpit canopy (HD)</div>
                   </div>
                 </button>
@@ -2422,13 +2422,13 @@ window.BattleModule = {
               <div style="display:flex; flex-direction:column; gap:6px;">
                 <button class="jrpg-menu-btn" ${!isPlayerTurn || this.ventCoolantUses <= 0 ? 'disabled' : ''} onclick="BattleModule.executePlayerCooling('vent')">
                   <div>
-                    <div><strong>â„ï¸ Vent Emergency Coolant</strong></div>
+                    <div><strong>❄️ Vent Emergency Coolant</strong></div>
                     <div class="subtext" style="font-size:11px;">Instantly drops -35 C heat (${this.ventCoolantUses} charges left)</div>
                   </div>
                 </button>
                 <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerCooling('safe_mode')">
                   <div>
-                    <div><strong>â¸ï¸ Thermal Flush / Hold Fire</strong></div>
+                    <div><strong>⏸️ Thermal Flush / Hold Fire</strong></div>
                     <div class="subtext" style="font-size:11px;">Hold attacks to double heat sink dissipation (-28 C)</div>
                   </div>
                 </button>
@@ -2507,79 +2507,103 @@ window.BattleModule = {
     `;
   },
 
-  renderIsometricTitanSvg(side, isProne = false, healthPct = 100, themeColor = '#38bdf8') {
+  getMechArtworkSpec(side, mechOrEnemy) {
     const isPlayer = (side === 'player');
-    const hpColor = healthPct > 60 ? '#10b981' : healthPct > 30 ? '#f59e0b' : '#ef4444';
+    if (isPlayer) {
+      const cid = (mechOrEnemy?.chassisId || '').toLowerCase();
+      const name = (mechOrEnemy?.customName || '').toLowerCase();
+      if (cid.includes('recon') || cid.includes('50') || name.includes('wasp')) {
+        return { src: 'assets/mechs/mech_wasp.png', flip: false, size: 175, tint: '' };
+      }
+      if (cid.includes('light') || cid.includes('80') || name.includes('lynx')) {
+        return { src: 'assets/mechs/mech_lynx.png', flip: false, size: 185, tint: '' };
+      }
+      if (cid.includes('heavy') || cid.includes('160') || name.includes('marauder')) {
+        return { src: 'assets/mechs/mech_marauder.png', flip: false, size: 205, tint: '' };
+      }
+      if (cid.includes('assault') || cid.includes('200') || name.includes('sovereign')) {
+        return { src: 'assets/mechs/mech_sovereign.png', flip: false, size: 220, tint: '' };
+      }
+      return { src: 'assets/mechs/mech_guillotine.png', flip: false, size: 195, tint: '' };
+    } else {
+      const eName = (mechOrEnemy?.name || this.enemy?.name || '').toLowerCase();
+      const eWeight = (mechOrEnemy?.weight || this.enemy?.weight || '').toLowerCase();
+      if (eName.includes('colossus') || eName.includes('sovereign') || eWeight.includes('190') || eWeight.includes('200') || eWeight.includes('assault')) {
+        return { src: 'assets/mechs/mech_enemy_colossus.png', flip: false, size: 215, tint: 'drop-shadow(0 0 14px rgba(244,63,94,0.38))' };
+      }
+      if (eName.includes('warhammer') || eName.includes('marauder') || eWeight.includes('155') || eWeight.includes('160') || eWeight.includes('heavy')) {
+        return { src: 'assets/mechs/mech_marauder.png', flip: true, size: 200, tint: 'hue-rotate(155deg) saturate(1.3) drop-shadow(0 0 12px rgba(244,63,94,0.35))' };
+      }
+      if (eName.includes('enforcer') || eName.includes('guillotine') || eWeight.includes('110') || eWeight.includes('120') || eWeight.includes('medium')) {
+        return { src: 'assets/mechs/mech_guillotine.png', flip: true, size: 190, tint: 'hue-rotate(140deg) saturate(1.25) drop-shadow(0 0 12px rgba(244,63,94,0.32))' };
+      }
+      if (eName.includes('jackal') || eName.includes('lynx') || eWeight.includes('80') || eWeight.includes('light')) {
+        return { src: 'assets/mechs/mech_lynx.png', flip: true, size: 178, tint: 'hue-rotate(145deg) saturate(1.3) drop-shadow(0 0 10px rgba(244,63,94,0.3))' };
+      }
+      if (eName.includes('stinger') || eName.includes('wasp') || eWeight.includes('50') || eWeight.includes('recon')) {
+        return { src: 'assets/mechs/mech_wasp.png', flip: true, size: 168, tint: 'hue-rotate(250deg) saturate(1.35) drop-shadow(0 0 10px rgba(244,63,94,0.3))' };
+      }
+      return { src: 'assets/mechs/mech_enemy_colossus.png', flip: false, size: 205, tint: 'drop-shadow(0 0 14px rgba(244,63,94,0.38))' };
+    }
+  },
 
-    // Isometric 3D Silhouette of Heavy Battle Titan
+  renderIsometricTitanSvg(side, isProne = false, healthPct = 100, themeColor = '#38bdf8', mechOrEnemy = null, heatLevel = 0) {
+    const isPlayer = (side === 'player');
+    const spec = this.getMechArtworkSpec(side, mechOrEnemy);
+    const sz = spec.size || 195;
+    const isDamaged = healthPct < 55;
+    const isCritical = healthPct < 28;
+    const isOverheating = heatLevel >= 65;
+
+    const baseShadow = isPlayer
+      ? 'drop-shadow(0 12px 20px rgba(0,0,0,0.92)) drop-shadow(0 0 12px rgba(56,189,248,0.25))'
+      : 'drop-shadow(0 12px 20px rgba(0,0,0,0.92))';
+    const heatGlow = isOverheating ? 'drop-shadow(0 0 16px rgba(249,115,22,0.8)) brightness(1.08)' : '';
+    const filterChain = [baseShadow, spec.tint, heatGlow].filter(Boolean).join(' ');
+
     return `
-      <svg viewBox="0 0 160 170" width="160" height="170" style="filter:drop-shadow(0 8px 18px rgba(0,0,0,0.85));">
-        <defs>
-          <linearGradient id="armor-grad-${side}" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="${isPlayer ? '#1e293b' : '#3f1118'}" />
-            <stop offset="60%" stop-color="${isPlayer ? '#0f172a' : '#1c080d'}" />
-            <stop offset="100%" stop-color="#020617" />
-          </linearGradient>
-          <linearGradient id="plate-grad-${side}" x1="0%" y1="0%" x2="100%" y2="50%">
-            <stop offset="0%" stop-color="${themeColor}" />
-            <stop offset="100%" stop-color="${isPlayer ? '#0369a1' : '#9f1239'}" />
-          </linearGradient>
-          <filter id="neon-glow-${side}">
-            <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
-            <feMerge>
-              <feMergeNode in="coloredBlur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-        </defs>
-
-        <g transform="${isPlayer ? 'translate(0, 0)' : 'scale(-1, 1) translate(-160, 0)'}">
-          
-          <!-- Heavy Leg Actuators & Hydraulics (Isometric 3D) -->
-          <!-- Rear Leg -->
-          <polygon points="52,105 64,103 66,135 52,142" fill="#0f172a" stroke="#334155" stroke-width="1.2"/>
-          <polygon points="46,142 66,142 70,154 44,154" fill="#1e293b" stroke="#000" stroke-width="1"/>
-          
-          <!-- Forward Leg -->
-          <polygon points="76,104 90,102 96,136 78,144" fill="#1e293b" stroke="#475569" stroke-width="1.4"/>
-          <polygon points="72,144 98,144 104,158 68,158" fill="#334155" stroke="#000" stroke-width="1.2"/>
-          <line x1="84" y1="112" x2="88" y2="134" stroke="${themeColor}" stroke-width="1.5" opacity="0.8"/>
-
-          <!-- Pelvis / Hip Rotator Gyro -->
-          <polygon points="58,98 94,96 88,110 64,110" fill="#090d16" stroke="#475569" stroke-width="1.2"/>
-
-          <!-- Main Torso & Engine Core -->
-          <polygon points="48,52 108,50 116,98 42,100" fill="url(#armor-grad-${side})" stroke="#334155" stroke-width="1.5"/>
-          
-          <!-- Center Torso Reactor Armor Plate -->
-          <polygon points="62,60 94,58 98,92 58,94" fill="url(#plate-grad-${side})" stroke="#0f172a" stroke-width="1.2"/>
-          <circle cx="78" cy="76" r="6" fill="#020617" stroke="${hpColor}" stroke-width="1.4"/>
-          <circle cx="78" cy="76" r="3" fill="${hpColor}" filter="url(#neon-glow-${side})"/>
-
-          <!-- Shoulder Armor (Left/Rear) -->
-          <polygon points="34,42 56,40 52,68 30,66" fill="#1e293b" stroke="#475569" stroke-width="1.2"/>
-          <!-- Arm Cannon (Left/Rear) -->
-          <rect x="22" y="58" width="16" height="34" rx="2" fill="#090d16" stroke="#334155" stroke-width="1.2"/>
-          <rect x="25" y="92" width="10" height="20" rx="1.5" fill="#1e293b" stroke="#000" stroke-width="1"/>
-
-          <!-- Shoulder Armor (Right/Forward - Dominant) -->
-          <polygon points="98,38 126,36 122,70 94,72" fill="url(#plate-grad-${side})" stroke="#0f172a" stroke-width="1.5"/>
-          <!-- Arm Cannon (Right/Forward - Heavy Weapon Barrel) -->
-          <rect x="110" y="56" width="22" height="42" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1.4"/>
-          <rect x="115" y="98" width="12" height="28" rx="2" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
-          <circle cx="121" cy="126" r="4" fill="${themeColor}" filter="url(#neon-glow-${side})"/>
-
-          <!-- Cockpit Canopy / Eye Optics -->
-          <polygon points="66,42 90,40 86,54 70,55" fill="${isPlayer ? '#0284c7' : '#dc2626'}" stroke="#0f172a" stroke-width="1.4"/>
-          <line x1="72" y1="47" x2="84" y2="46" stroke="#ffffff" stroke-width="1.2" opacity="0.85"/>
-
-          <!-- Missile Pod or Sensor Array on Left Shoulder -->
-          <rect x="42" y="32" width="18" height="10" rx="1.5" fill="#090d16" stroke="${themeColor}" stroke-width="1"/>
-          <circle cx="47" cy="37" r="1.5" fill="#f59e0b"/>
-          <circle cx="51" cy="37" r="1.5" fill="#f59e0b"/>
-          <circle cx="55" cy="37" r="1.5" fill="#f59e0b"/>
-        </g>
-      </svg>
+      <div class="jrpg-mech-sprite-wrap" style="position:relative; width:${sz}px; height:${sz}px; display:flex; align-items:center; justify-content:center;">
+        <img
+          src="${spec.src}"
+          alt="${isPlayer ? 'Player BattleMech' : 'Hostile BattleMech'}"
+          class="jrpg-mech-img"
+          style="width:100%; height:100%; object-fit:contain; ${spec.flip ? 'transform:scaleX(-1);' : ''} filter:${filterChain}; pointer-events:none;"
+        />
+        ${(isDamaged || isOverheating) ? `
+          <svg viewBox="0 0 160 160" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible;">
+            ${isDamaged ? `
+              <!-- Battle Damage Smoke & Electrical Arcs -->
+              <circle cx="68" cy="58" r="10" fill="rgba(15,23,42,0.65)">
+                <animate attributeName="cy" values="58;32;12" dur="2.1s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="6;14;20" dur="2.1s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.7;0.35;0" dur="2.1s" repeatCount="indefinite"/>
+              </circle>
+              <path d="M88,68 L96,62 L91,74 L100,70" stroke="#fbbf24" stroke-width="2" fill="none">
+                <animate attributeName="opacity" values="1;0;1;0;0" dur="1.4s" repeatCount="indefinite"/>
+              </path>
+            ` : ''}
+            ${isCritical ? `
+              <!-- Critical Internal Fire & Sparks -->
+              <circle cx="82" cy="74" r="7" fill="rgba(239,68,68,0.8)">
+                <animate attributeName="r" values="5;11;6" dur="0.8s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.9;0.4;0.9" dur="0.8s" repeatCount="indefinite"/>
+              </circle>
+              <circle cx="82" cy="70" r="13" fill="rgba(30,41,59,0.75)">
+                <animate attributeName="cy" values="70;36;8" dur="1.6s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="8;18;25" dur="1.6s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.85;0.4;0" dur="1.6s" repeatCount="indefinite"/>
+              </circle>
+            ` : ''}
+            ${isOverheating ? `
+              <!-- Reactor Heat Vent Plume -->
+              <ellipse cx="78" cy="48" rx="18" ry="8" fill="rgba(249,115,22,0.45)">
+                <animate attributeName="cy" values="48;22;4" dur="1.3s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.65;0.25;0" dur="1.3s" repeatCount="indefinite"/>
+              </ellipse>
+            ` : ''}
+          </svg>
+        ` : ''}
+      </div>
     `;
   },
 

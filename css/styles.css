@@ -812,27 +812,27 @@ body {
 }
 
 .jrpg-combatant.player-side {
-  left: 9%;
-  bottom: 12%;
+  left: 8%;
+  bottom: 8%;
   z-index: 20;
   animation: jrpg-idle-player 3.2s ease-in-out infinite;
 }
 
 .jrpg-combatant.enemy-side {
-  right: 14%;
-  top: 14%;
+  right: 11%;
+  top: 9%;
   z-index: 15;
   animation: jrpg-idle-enemy 3.2s ease-in-out infinite;
 }
 
 @keyframes jrpg-idle-player {
-  0%, 100% { transform: translateY(0px) scale(1.08); }
-  50% { transform: translateY(-5px) scale(1.08); }
+  0%, 100% { transform: translateY(0px) scale(1.06); }
+  50% { transform: translateY(-4px) scale(1.06); }
 }
 
 @keyframes jrpg-idle-enemy {
-  0%, 100% { transform: translateY(0px) scale(0.92); }
-  50% { transform: translateY(-4px) scale(0.92); }
+  0%, 100% { transform: translateY(0px) scale(0.95); }
+  50% { transform: translateY(-4px) scale(0.95); }
 }
 
 .jrpg-combatant.prone {
@@ -852,11 +852,11 @@ body {
 }
 
 .jrpg-shadow {
-  width: 140px;
-  height: 38px;
-  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.85) 0%, rgba(0,0,0,0) 70%);
+  width: 170px;
+  height: 44px;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.9) 0%, rgba(14, 165, 233, 0.16) 50%, rgba(0,0,0,0) 74%);
   border-radius: 50%;
-  margin-top: -16px;
+  margin-top: -22px;
   transform: rotateX(60deg);
   z-index: -1;
 }

@@ -264,10 +264,10 @@ window.GarageModule = {
               ${this.renderPartBox(mech, tpl, 'RA', activeLoc)}
 
               ${this.renderPartBox(mech, tpl, 'LT', activeLoc)}
-              <div class="panel" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px;">
-                <span class="subtext">Armor / Cond</span>
-                <strong class="mono" style="font-size:14px;">${metrics.totalCurrentArmor}/${metrics.totalMaxArmor} (${resaleInfo.conditionPct}%)</strong>
-                <span class="subtext mono">${(metrics.totalMaxArmor * 0.08).toFixed(1)} Tons</span>
+              <div class="panel" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px; padding:6px;">
+                <img src="${tpl.sprite || 'assets/mechs/mech_guillotine.png'}" alt="${tpl.model}" style="width:76px; height:76px; object-fit:contain; filter:drop-shadow(0 4px 8px rgba(0,0,0,0.85));" />
+                <strong class="mono" style="font-size:12px;">${metrics.totalCurrentArmor}/${metrics.totalMaxArmor} (${resaleInfo.conditionPct}%)</strong>
+                <span class="subtext mono" style="font-size:10px;">${(metrics.totalMaxArmor * 0.08).toFixed(1)} Tons Armor</span>
               </div>
               ${this.renderPartBox(mech, tpl, 'RT', activeLoc)}
 
