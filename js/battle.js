@@ -2520,6 +2520,9 @@ window.BattleModule = {
               </div>
             </div>
 
+            <!-- Hostile Titan Damage Silhouette HUD (Lower-Right) -->
+            ${this.renderHostileSilhouetteHud()}
+
           </div>
         </div>
 
@@ -2868,6 +2871,206 @@ window.BattleModule = {
           ${comps || '<div class="subtext" style="font-size:11px;">No components installed in this section.</div>'}
         </div>
         ${cur <= 0 ? '<div style="margin-top:8px; font-size:11px; color:#fca5a5;">Section structure breached \u2014 internal systems exposed to direct damage.</div>' : ''}
+      </div>
+    `;
+  },
+
+  // Tactical damage silhouette HUD for the hostile Titan (Lower-Right of Combat Arena)
+  renderHostileSilhouetteHud() {
+    if (!this.enemy) return '';
+    const fullNames = {
+      HD: 'Head (Cockpit)',
+      CT: 'Center Torso (Core)',
+      LT: 'Left Torso',
+      RT: 'Right Torso',
+      LA: 'Left Arm',
+      RA: 'Right Arm',
+      LL: 'Left Leg',
+      RL: 'Right Leg'
+    };
+
+    const getPartColor = (loc) => {
+      const cur = Math.max(0, Math.round(this.enemy.armor?.[loc] ?? 0));
+      const max = Math.max(1, Math.round(this.enemy.maxArmor?.[loc] ?? 30));
+      const pct = Math.round((cur / max) * 100);
+      if (cur <= 0) {
+        return { fill: '#1c1917', stroke: '#ef4444', pct: 0, status: 'BREACHED', strokeDash: '3 2' };
+      }
+      if (pct >= 99) {
+        return { fill: '#10b981', stroke: '#047857', pct, status: 'INTACT', strokeDash: 'none' };
+      }
+      if (pct >= 75) {
+        return { fill: '#84cc16', stroke: '#4d7c0f', pct, status: 'LIGHT', strokeDash: 'none' };
+      }
+      if (pct >= 40) {
+        return { fill: '#f59e0b', stroke: '#b45309', pct, status: 'MODERATE', strokeDash: 'none' };
+      }
+      return { fill: '#ef4444', stroke: '#991b1b', pct, status: 'CRITICAL', strokeDash: 'none' };
+    };
+
+    const parts = ['HD', 'CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL'];
+    const colors = {};
+    parts.forEach(p => { colors[p] = getPartColor(p); });
+
+    // Calculate total hostile structure %
+    let curTotal = 0;
+    let maxTotal = 0;
+    parts.forEach(p => {
+      curTotal += Math.max(0, this.enemy.armor?.[p] ?? 0);
+      maxTotal += Math.max(1, this.enemy.maxArmor?.[p] ?? 30);
+    });
+    const totalPct = Math.round((curTotal / maxTotal) * 100);
+
+    return `
+      <div class="hostile-silhouette-hud">
+        <div class="hostile-silhouette-title">
+          <span>HOSTILE DAMAGE SCAN</span>
+          <span class="mono" style="color:${this.enemyFallen ? '#ef4444' : '#f87171'}; font-size:9px;">
+            ${this.enemyFallen ? '⚠️ PRONE' : `${totalPct}% HULL`}
+          </span>
+        </div>
+        <div class="hostile-silhouette-target" title="${this.enemy.name} (${this.enemy.weight})">
+          ${this.enemy.name}
+        </div>
+
+        <!-- Tactical SVG Silhouette of Hostile Titan -->
+        <svg class="hostile-silhouette-svg" viewBox="0 0 120 148">
+          <defs>
+            <pattern id="breach-hatch" width="4" height="4" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="4" stroke="#ef4444" stroke-width="1.2" />
+            </pattern>
+            <filter id="part-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.8"/>
+            </filter>
+          </defs>
+
+          <!-- Background Silhouette Grid / Hologram Frame -->
+          <rect x="2" y="2" width="116" height="144" rx="4" fill="rgba(2, 6, 23, 0.55)" stroke="rgba(244, 63, 94, 0.2)" stroke-width="1"/>
+          <line x1="60" y1="6" x2="60" y2="142" stroke="rgba(244, 63, 94, 0.12)" stroke-width="1" stroke-dasharray="2 2"/>
+          <line x1="6" y1="74" x2="114" y2="74" stroke="rgba(244, 63, 94, 0.12)" stroke-width="1" stroke-dasharray="2 2"/>
+
+          <!-- Hips / Skeletal Core Joint -->
+          <polygon points="49,70 71,70 67,82 53,82" fill="#334155" stroke="#1e293b" stroke-width="1.2"/>
+
+          <!-- LEFT LEG (LL) -->
+          <g class="hostile-part-node ${this.aimTarget === 'LL' ? 'aim-target' : ''}" onclick="BattleModule.setAimTarget('LL')">
+            <title>${fullNames.LL}: ${this.enemy.armor?.LL ?? 0}/${this.enemy.maxArmor?.LL ?? 38} HP (${colors.LL.pct}%) - ${colors.LL.status}</title>
+            <polygon points="33,78 51,78 47,104 49,134 29,134 31,104"
+                     fill="${colors.LL.fill}" stroke="${colors.LL.stroke}" stroke-width="1.5" stroke-dasharray="${colors.LL.strokeDash}" filter="url(#part-glow)"/>
+            ${colors.LL.pct <= 0 ? '<polygon points="33,78 51,78 47,104 49,134 29,134 31,104" fill="url(#breach-hatch)" opacity="0.65"/>' : ''}
+            <polygon points="25,134 53,134 53,142 25,142" fill="${colors.LL.fill}" stroke="${colors.LL.stroke}" stroke-width="1.2"/>
+            <text x="39" y="112" fill="#ffffff" font-size="8" font-weight="900" text-anchor="middle" font-family="monospace">LL</text>
+          </g>
+
+          <!-- RIGHT LEG (RL) -->
+          <g class="hostile-part-node ${this.aimTarget === 'RL' ? 'aim-target' : ''}" onclick="BattleModule.setAimTarget('RL')">
+            <title>${fullNames.RL}: ${this.enemy.armor?.RL ?? 0}/${this.enemy.maxArmor?.RL ?? 38} HP (${colors.RL.pct}%) - ${colors.RL.status}</title>
+            <polygon points="69,78 87,78 89,104 91,134 71,134 73,104"
+                     fill="${colors.RL.fill}" stroke="${colors.RL.stroke}" stroke-width="1.5" stroke-dasharray="${colors.RL.strokeDash}" filter="url(#part-glow)"/>
+            ${colors.RL.pct <= 0 ? '<polygon points="69,78 87,78 89,104 91,134 71,134 73,104" fill="url(#breach-hatch)" opacity="0.65"/>' : ''}
+            <polygon points="67,134 95,134 95,142 67,142" fill="${colors.RL.fill}" stroke="${colors.RL.stroke}" stroke-width="1.2"/>
+            <text x="81" y="112" fill="#ffffff" font-size="8" font-weight="900" text-anchor="middle" font-family="monospace">RL</text>
+          </g>
+
+          <!-- LEFT TORSO (LT) -->
+          <g class="hostile-part-node ${this.aimTarget === 'LT' ? 'aim-target' : ''}" onclick="BattleModule.setAimTarget('LT')">
+            <title>${fullNames.LT}: ${this.enemy.armor?.LT ?? 0}/${this.enemy.maxArmor?.LT ?? 40} HP (${colors.LT.pct}%) - ${colors.LT.status}</title>
+            <polygon points="22,28 45,28 45,71 27,69 22,46"
+                     fill="${colors.LT.fill}" stroke="${colors.LT.stroke}" stroke-width="1.5" stroke-dasharray="${colors.LT.strokeDash}" filter="url(#part-glow)"/>
+            ${colors.LT.pct <= 0 ? '<polygon points="22,28 45,28 45,71 27,69 22,46" fill="url(#breach-hatch)" opacity="0.65"/>' : ''}
+            <text x="34" y="52" fill="#ffffff" font-size="8" font-weight="900" text-anchor="middle" font-family="monospace">LT</text>
+          </g>
+
+          <!-- RIGHT TORSO (RT) -->
+          <g class="hostile-part-node ${this.aimTarget === 'RT' ? 'aim-target' : ''}" onclick="BattleModule.setAimTarget('RT')">
+            <title>${fullNames.RT}: ${this.enemy.armor?.RT ?? 0}/${this.enemy.maxArmor?.RT ?? 40} HP (${colors.RT.pct}%) - ${colors.RT.status}</title>
+            <polygon points="75,28 98,28 98,46 93,69 75,71"
+                     fill="${colors.RT.fill}" stroke="${colors.RT.stroke}" stroke-width="1.5" stroke-dasharray="${colors.RT.strokeDash}" filter="url(#part-glow)"/>
+            ${colors.RT.pct <= 0 ? '<polygon points="75,28 98,28 98,46 93,69 75,71" fill="url(#breach-hatch)" opacity="0.65"/>' : ''}
+            <text x="86" y="52" fill="#ffffff" font-size="8" font-weight="900" text-anchor="middle" font-family="monospace">RT</text>
+          </g>
+
+          <!-- CENTER TORSO (CT) -->
+          <g class="hostile-part-node ${this.aimTarget === 'CT' ? 'aim-target' : ''}" onclick="BattleModule.setAimTarget('CT')">
+            <title>${fullNames.CT}: ${this.enemy.armor?.CT ?? 0}/${this.enemy.maxArmor?.CT ?? 56} HP (${colors.CT.pct}%) - ${colors.CT.status}</title>
+            <polygon points="46,28 74,28 73,71 47,71"
+                     fill="${colors.CT.fill}" stroke="${colors.CT.stroke}" stroke-width="1.6" stroke-dasharray="${colors.CT.strokeDash}" filter="url(#part-glow)"/>
+            ${colors.CT.pct <= 0 ? '<polygon points="46,28 74,28 73,71 47,71" fill="url(#breach-hatch)" opacity="0.65"/>' : ''}
+            <polygon points="50,35 70,35 66,56 54,56" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.3)" stroke-width="0.8"/>
+            <text x="60" y="49" fill="#ffffff" font-size="9" font-weight="900" text-anchor="middle" font-family="monospace">CT</text>
+          </g>
+
+          <!-- LEFT ARM (LA) -->
+          <g class="hostile-part-node ${this.aimTarget === 'LA' ? 'aim-target' : ''}" onclick="BattleModule.setAimTarget('LA')">
+            <title>${fullNames.LA}: ${this.enemy.armor?.LA ?? 0}/${this.enemy.maxArmor?.LA ?? 34} HP (${colors.LA.pct}%) - ${colors.LA.status}</title>
+            <polygon points="9,38 21,38 23,66 17,92 9,92 11,66"
+                     fill="${colors.LA.fill}" stroke="${colors.LA.stroke}" stroke-width="1.5" stroke-dasharray="${colors.LA.strokeDash}" filter="url(#part-glow)"/>
+            ${colors.LA.pct <= 0 ? '<polygon points="9,38 21,38 23,66 17,92 9,92 11,66" fill="url(#breach-hatch)" opacity="0.65"/>' : ''}
+            <rect x="7" y="90" width="10" height="6" fill="${colors.LA.fill}" stroke="${colors.LA.stroke}" stroke-width="1"/>
+            <text x="15" y="68" fill="#ffffff" font-size="8" font-weight="900" text-anchor="middle" font-family="monospace">LA</text>
+          </g>
+
+          <!-- RIGHT ARM (RA) -->
+          <g class="hostile-part-node ${this.aimTarget === 'RA' ? 'aim-target' : ''}" onclick="BattleModule.setAimTarget('RA')">
+            <title>${fullNames.RA}: ${this.enemy.armor?.RA ?? 0}/${this.enemy.maxArmor?.RA ?? 34} HP (${colors.RA.pct}%) - ${colors.RA.status}</title>
+            <polygon points="99,38 111,38 109,66 111,92 103,92 97,66"
+                     fill="${colors.RA.fill}" stroke="${colors.RA.stroke}" stroke-width="1.5" stroke-dasharray="${colors.RA.strokeDash}" filter="url(#part-glow)"/>
+            ${colors.RA.pct <= 0 ? '<polygon points="99,38 111,38 109,66 111,92 103,92 97,66" fill="url(#breach-hatch)" opacity="0.65"/>' : ''}
+            <rect x="103" y="90" width="10" height="6" fill="${colors.RA.fill}" stroke="${colors.RA.stroke}" stroke-width="1"/>
+            <text x="105" y="68" fill="#ffffff" font-size="8" font-weight="900" text-anchor="middle" font-family="monospace">RA</text>
+          </g>
+
+          <!-- HEAD / COCKPIT (HD) -->
+          <g class="hostile-part-node ${this.aimTarget === 'HD' ? 'aim-target' : ''}" onclick="BattleModule.setAimTarget('HD')">
+            <title>${fullNames.HD}: ${this.enemy.armor?.HD ?? 0}/${this.enemy.maxArmor?.HD ?? 20} HP (${colors.HD.pct}%) - ${colors.HD.status}</title>
+            <polygon points="52,12 68,12 71,27 49,27"
+                     fill="${colors.HD.fill}" stroke="${colors.HD.stroke}" stroke-width="1.5" stroke-dasharray="${colors.HD.strokeDash}" filter="url(#part-glow)"/>
+            ${colors.HD.pct <= 0 ? '<polygon points="52,12 68,12 71,27 49,27" fill="url(#breach-hatch)" opacity="0.65"/>' : ''}
+            <line x1="54" y1="18" x2="66" y2="18" stroke="#38bdf8" stroke-width="1.5"/>
+            <text x="60" y="24" fill="#ffffff" font-size="8" font-weight="900" text-anchor="middle" font-family="monospace">HD</text>
+          </g>
+
+          <!-- Crosshair Reticle on Currently Selected Aim Target -->
+          ${this.aimTarget !== 'General' ? (() => {
+            const centers = {
+              HD: { x: 60, y: 19 },
+              CT: { x: 60, y: 49 },
+              LT: { x: 34, y: 49 },
+              RT: { x: 86, y: 49 },
+              LA: { x: 15, y: 65 },
+              RA: { x: 105, y: 65 },
+              LL: { x: 40, y: 106 },
+              RL: { x: 80, y: 106 }
+            };
+            const c = centers[this.aimTarget];
+            if (!c) return '';
+            return `
+              <circle cx="${c.x}" cy="${c.y}" r="9" fill="none" stroke="#38bdf8" stroke-width="1.6" stroke-dasharray="3 2">
+                <animateTransform attributeName="transform" type="rotate" from="0 ${c.x} ${c.y}" to="360 ${c.x} ${c.y}" dur="4s" repeatCount="indefinite"/>
+              </circle>
+              <circle cx="${c.x}" cy="${c.y}" r="2" fill="#38bdf8"/>
+            `;
+          })() : ''}
+        </svg>
+
+        <!-- Mini Color Legend & Aim Lock Info -->
+        <div class="hostile-silhouette-legend">
+          <span style="color:#10b981;" title="100% Intact">● Intact</span>
+          <span style="color:#84cc16;" title="75-99% Light Damage">● Light</span>
+          <span style="color:#f59e0b;" title="40-74% Moderate Damage">● Med</span>
+          <span style="color:#ef4444;" title="1-39% Critical Damage">● Crit</span>
+          <span style="color:#ef4444; font-weight:700;" title="0% Breached">✕ Out</span>
+        </div>
+
+        <!-- Quick Reset / Aim Modifier Pill -->
+        <div style="margin-top:4px; display:flex; justify-content:space-between; align-items:center; font-size:10px;">
+          <span class="mono" style="color:var(--accent-amber); font-weight:700;">
+            AIM: ${this.aimTarget === 'General' ? 'GENERAL' : `[${this.aimTarget}] ${this.getAimModifier(this.aimTarget) > 0 ? '+' : ''}${this.getAimModifier(this.aimTarget)}%`}
+          </span>
+          ${this.aimTarget !== 'General' ? `
+            <button class="btn" style="padding:1px 5px; font-size:9px;" onclick="BattleModule.setAimTarget('General')">Reset</button>
+          ` : '<span class="subtext mono" style="font-size:9px;">Click part to aim</span>'}
+        </div>
       </div>
     `;
   },
