@@ -9,6 +9,7 @@ window.BattleModule = {
   turn: 'player', // 'player' | 'enemy' | 'animating' | 'ended'
   commandTab: 'attack', // 'attack' | 'defend' | 'tactics' | 'cooling' | 'retreat'
   aimTarget: 'General', // 'General' | 'HD' | 'CT' | 'LT' | 'RT' | 'LA' | 'RA' | 'LL' | 'RL'
+  selectedPlayerPart: null, // Player mech region highlighted for the condition readout
   playerStance: 'normal', // 'normal' | 'braced' | 'evasive' | 'twisted'
   enemyStance: 'normal',
   playerFallen: false,
@@ -78,6 +79,7 @@ window.BattleModule = {
     this.turn = 'player';
     this.commandTab = 'attack';
     this.aimTarget = 'General';
+    this.selectedPlayerPart = null;
     this.playerStance = 'normal';
     this.enemyStance = 'normal';
     this.playerFallen = false;
@@ -196,6 +198,31 @@ window.BattleModule = {
     this.render();
   },
 
+  // Hit-chance modifier (percentage points) applied when aiming at a specific hostile region
+  getAimModifier(loc) {
+    if (loc === 'HD') return -24;
+    if (loc === 'CT') return 6;
+    if (loc === 'LL' || loc === 'RL') return -8;
+    if (loc === 'LA' || loc === 'RA') return -5;
+    return 0;
+  },
+
+  // Click handler for the clickable regions on the 3D BattleMech sprites
+  onRegionClick(side, loc) {
+    if (side === 'enemy') {
+      if (this.turn !== 'player' || this.battleOver) return;
+      this.aimTarget = (this.aimTarget === loc) ? 'General' : loc;
+    } else {
+      this.selectedPlayerPart = (this.selectedPlayerPart === loc) ? null : loc;
+    }
+    this.render();
+  },
+
+  closePartReadout() {
+    this.selectedPlayerPart = null;
+    this.render();
+  },
+
   getPlayerWeapons(mech) {
     const weapons = [];
     if (mech && mech.locations) {
@@ -240,10 +267,7 @@ window.BattleModule = {
       hit += (weapon.accMod || 0);
 
       // Aimed Shot Modifiers
-      if (aimLoc === 'HD') hit -= 24;
-      else if (aimLoc === 'CT') hit += 6;
-      else if (aimLoc === 'LL' || aimLoc === 'RL') hit -= 8;
-      else if (aimLoc === 'LA' || aimLoc === 'RA') hit -= 5;
+      hit += this.getAimModifier(aimLoc);
 
       // Enemy Posture & Stance
       if (this.enemyFallen) hit += 20;
@@ -263,8 +287,8 @@ window.BattleModule = {
 
   spawnDamagePopup(text, isPlayer = false, isCrit = false) {
     const id = 'pop-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
-    const x = isPlayer ? (16 + Math.random() * 8) : (68 + Math.random() * 8);
-    const y = isPlayer ? (56 + Math.random() * 8) : (22 + Math.random() * 8);
+    const x = isPlayer ? (20 + Math.random() * 12) : (72 + Math.random() * 10);
+    const y = isPlayer ? (38 + Math.random() * 12) : (22 + Math.random() * 12);
     const color = isCrit ? '#facc15' : (isPlayer ? '#f87171' : '#38bdf8');
     this.damagePopups.push({ id, text, x, y, color });
     setTimeout(() => {
@@ -303,8 +327,8 @@ window.BattleModule = {
     // Trigger Firing Beam Animation
     this.activeBeam = {
       type: (window.SoundFX?.classifyWeapon(weapon) || 'energy'),
-      from: { x: 25, y: 72 },
-      to: { x: 74, y: 32 }
+      from: { x: 36, y: 50 },
+      to: { x: 80, y: 36 }
     };
     this.render();
 
@@ -430,7 +454,7 @@ window.BattleModule = {
       window.SoundFX.playIncomingShot(true);
     }
 
-    this.activeBeam = { type: 'laser', from: { x: 25, y: 72 }, to: { x: 74, y: 32 } };
+    this.activeBeam = { type: 'laser', from: { x: 36, y: 50 }, to: { x: 80, y: 36 } };
     this.spawnDamagePopup(`ALPHA STRIKE: -${totalDmg} DMG!`, false, true);
     this.render();
 
@@ -619,8 +643,8 @@ window.BattleModule = {
       }
       this.activeBeam = {
         type: (window.SoundFX?.classifyWeapon(weapon) || 'ballistic'),
-        from: { x: 74, y: 32 },
-        to: { x: 25, y: 72 }
+        from: { x: 80, y: 36 },
+        to: { x: 30, y: 52 }
       };
       this.render();
 
@@ -2107,7 +2131,7 @@ window.BattleModule = {
         
         <!-- Top Status Bar & Phase Notification -->
         <div class="card" style="padding:10px 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div style="display:flex; align-items:center; gap:12px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; flex:1;">
             ${this.battleOver ? `
               <span class="badge ${this.contractWon ? 'green' : 'red'}" style="font-size:13px; font-weight:900; letter-spacing:0.5px; padding:6px 12px;">
                 ${this.contractWon ? '🏆 ENGAGEMENT RESOLVED: VICTORY!' : '☠️ ENGAGEMENT RESOLVED: DEFEAT'}
@@ -2118,8 +2142,15 @@ window.BattleModule = {
               </span>
             `}
             <span class="subtext mono" style="font-size:12px;">
-              Target: <strong style="color:var(--accent-red);">${this.enemy.name}</strong> (${this.enemy.weight})
+              Target: <strong style="color:var(--accent-red);">${this.enemy.name}</strong> (${this.enemy.weight}) &bull; Pilot: ${this.enemy.pilot}
             </span>
+            <span class="jrpg-topbar-meter" title="Hostile armor ${curEnemyArmor} / ${maxEnemyArmor}">
+              <span>HOSTILE ARMOR ${enemyArmorPct}%</span>
+              <span class="jrpg-bar-track" style="display:inline-block; width:90px; height:7px;"><span class="jrpg-bar-fill ${enemyArmorPct > 55 ? 'armor' : (enemyArmorPct > 25 ? 'armor-mid' : 'armor-low')}" style="display:block; width:${enemyArmorPct}%;"></span></span>
+            </span>
+            <span class="badge ${this.enemyHeat > 70 ? 'red' : 'blue'} mono" style="font-size:10px;">HEAT ${this.enemyHeat}</span>
+            <span class="badge red mono" style="font-size:10px;">${this.enemyFallen ? 'PRONE (+20% HIT)' : 'COMBAT READY'}</span>
+            <span class="badge amber mono" style="font-size:10px;">AIM: ${this.aimTarget === 'General' ? 'GENERAL' : `${this.aimTarget} (${this.getAimModifier(this.aimTarget) > 0 ? '+' : ''}${this.getAimModifier(this.aimTarget)}% HIT)`}</span>
             ${this.sensorLockTurns > 0 ? '<span class="badge purple mono" style="font-size:10px;">TACTICAL SCAN ACTIVE (+15% HIT)</span>' : ''}
           </div>
           <div style="display:flex; gap:8px;">
@@ -2204,7 +2235,10 @@ window.BattleModule = {
               </div>
             ` : ''}
 
-            <!-- Player Status HUD Badge (Top-Left) -->
+            <!-- Player Body-Part Condition Readout (shown when a part of our Mech is clicked) -->
+            ${this.selectedPlayerPart ? this.renderPartReadout(mech) : ''}
+
+            <!-- Player Status HUD Badge (Bottom-Center) -->
             <div class="jrpg-hud-badge player-hud">
               <div style="display:flex; gap:10px; align-items:center;">
                 <div style="flex-shrink:0;">
@@ -2253,49 +2287,6 @@ window.BattleModule = {
                 </div>
                 <span class="subtext mono" style="font-size:10px;">
                   HD:${mech?.armor?.HD || 0} CT:${mech?.armor?.CT || 0} LL:${mech?.armor?.LL || 0} RL:${mech?.armor?.RL || 0}
-                </span>
-              </div>
-            </div>
-
-            <!-- Enemy Status HUD Badge (Top-Right) -->
-            <div class="jrpg-hud-badge enemy-hud">
-              <div class="jrpg-hud-name">
-                <span style="color:#f43f5e;">${this.enemy.name}</span>
-                <span class="badge red mono" style="font-size:10px;">${this.enemy.weight}</span>
-              </div>
-              <div class="subtext mono" style="font-size:11px; margin-top:2px;">
-                Pilot: <strong style="color:#f8fafc;">${this.enemy.pilot}</strong>
-              </div>
-
-              <!-- Armor Bar -->
-              <div class="jrpg-bar-container">
-                <div class="jrpg-bar-label">
-                  <span>Hostile Armor</span>
-                  <span>${curEnemyArmor} / ${maxEnemyArmor} (${enemyArmorPct}%)</span>
-                </div>
-                <div class="jrpg-bar-track">
-                  <div class="jrpg-bar-fill ${enemyArmorPct > 55 ? 'armor' : (enemyArmorPct > 25 ? 'armor-mid' : 'armor-low')}" style="width:${enemyArmorPct}%;"></div>
-                </div>
-              </div>
-
-              <!-- Heat Meter -->
-              <div class="jrpg-bar-container">
-                <div class="jrpg-bar-label">
-                  <span>Thermal Signature</span>
-                  <span>${this.enemyHeat} / 100 C</span>
-                </div>
-                <div class="jrpg-bar-track">
-                  <div class="jrpg-bar-fill ${this.enemyHeat > 70 ? 'heat-high' : 'heat'}" style="width:${Math.min(100, this.enemyHeat)}%;"></div>
-                </div>
-              </div>
-
-              <!-- Enemy Posture & Telemetry -->
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:11px;">
-                <span class="badge ${this.enemyFallen ? 'red' : 'red'} mono" style="font-size:10px;">
-                  ${this.enemyFallen ? '⚠️ PRONE (+20% HIT)' : 'COMBAT READY'}
-                </span>
-                <span class="subtext mono" style="font-size:10px;">
-                  HD:${this.enemy.armor?.HD || 0} CT:${this.enemy.armor?.CT || 0} LL:${this.enemy.armor?.LL || 0} RL:${this.enemy.armor?.RL || 0}
                 </span>
               </div>
             </div>
@@ -2507,102 +2498,194 @@ window.BattleModule = {
     `;
   },
 
-  getMechArtworkSpec(side, mechOrEnemy) {
-    const isPlayer = (side === 'player');
-    if (isPlayer) {
-      const cid = (mechOrEnemy?.chassisId || '').toLowerCase();
-      const name = (mechOrEnemy?.customName || '').toLowerCase();
-      if (cid.includes('recon') || cid.includes('50') || name.includes('wasp')) {
-        return { src: 'assets/mechs/mech_wasp.png', flip: false, size: 175, tint: '' };
-      }
-      if (cid.includes('light') || cid.includes('80') || name.includes('lynx')) {
-        return { src: 'assets/mechs/mech_lynx.png', flip: false, size: 185, tint: '' };
-      }
-      if (cid.includes('heavy') || cid.includes('160') || name.includes('marauder')) {
-        return { src: 'assets/mechs/mech_marauder.png', flip: false, size: 205, tint: '' };
-      }
-      if (cid.includes('assault') || cid.includes('200') || name.includes('sovereign')) {
-        return { src: 'assets/mechs/mech_sovereign.png', flip: false, size: 220, tint: '' };
-      }
-      return { src: 'assets/mechs/mech_guillotine.png', flip: false, size: 195, tint: '' };
-    } else {
-      const eName = (mechOrEnemy?.name || this.enemy?.name || '').toLowerCase();
-      const eWeight = (mechOrEnemy?.weight || this.enemy?.weight || '').toLowerCase();
-      if (eName.includes('colossus') || eName.includes('sovereign') || eWeight.includes('190') || eWeight.includes('200') || eWeight.includes('assault')) {
-        return { src: 'assets/mechs/mech_enemy_colossus.png', flip: false, size: 215, tint: 'drop-shadow(0 0 14px rgba(244,63,94,0.38))' };
-      }
-      if (eName.includes('warhammer') || eName.includes('marauder') || eWeight.includes('155') || eWeight.includes('160') || eWeight.includes('heavy')) {
-        return { src: 'assets/mechs/mech_marauder.png', flip: true, size: 200, tint: 'hue-rotate(155deg) saturate(1.3) drop-shadow(0 0 12px rgba(244,63,94,0.35))' };
-      }
-      if (eName.includes('enforcer') || eName.includes('guillotine') || eWeight.includes('110') || eWeight.includes('120') || eWeight.includes('medium')) {
-        return { src: 'assets/mechs/mech_guillotine.png', flip: true, size: 190, tint: 'hue-rotate(140deg) saturate(1.25) drop-shadow(0 0 12px rgba(244,63,94,0.32))' };
-      }
-      if (eName.includes('jackal') || eName.includes('lynx') || eWeight.includes('80') || eWeight.includes('light')) {
-        return { src: 'assets/mechs/mech_lynx.png', flip: true, size: 178, tint: 'hue-rotate(145deg) saturate(1.3) drop-shadow(0 0 10px rgba(244,63,94,0.3))' };
-      }
-      if (eName.includes('stinger') || eName.includes('wasp') || eWeight.includes('50') || eWeight.includes('recon')) {
-        return { src: 'assets/mechs/mech_wasp.png', flip: true, size: 168, tint: 'hue-rotate(250deg) saturate(1.35) drop-shadow(0 0 10px rgba(244,63,94,0.3))' };
-      }
-      return { src: 'assets/mechs/mech_enemy_colossus.png', flip: false, size: 205, tint: 'drop-shadow(0 0 14px rgba(244,63,94,0.38))' };
+  // Sprite catalogue: image aspect + clickable body regions as [x, y, w, h] percentages of the sprite
+  // (sprites face right; enemy variants are mirrored and their regions are mirrored with them).
+  MECH_SPRITES: {
+    wasp: {
+      src: 'assets/mechs/mech_wasp.png', aw: 732, ah: 948,
+      regions: { hd: [52, 13, 18, 11], torso: [14, 10, 58, 24], la: [2, 30, 50, 14], ra: [60, 31, 38, 11], ll: [12, 40, 34, 58], rl: [44, 40, 34, 56] }
+    },
+    lynx: {
+      src: 'assets/mechs/mech_lynx.png', aw: 751, ah: 885,
+      regions: { hd: [46, 11, 21, 12], torso: [12, 6, 58, 40], la: [2, 31, 44, 13], ra: [66, 33, 32, 9], ll: [14, 42, 30, 56], rl: [42, 40, 36, 52] }
+    },
+    guillotine: {
+      src: 'assets/mechs/mech_guillotine.png', aw: 804, ah: 961,
+      regions: { hd: [47, 17, 16, 12], torso: [19, 10, 56, 33], la: [2, 36, 42, 20], ra: [64, 33, 34, 19], ll: [18, 54, 28, 44], rl: [48, 45, 30, 49] }
+    },
+    marauder: {
+      src: 'assets/mechs/mech_marauder.png', aw: 913, ah: 940,
+      regions: { hd: [60, 20, 20, 10], torso: [9, 3, 72, 37], la: [2, 36, 40, 15], ra: [66, 38, 32, 12], ll: [14, 50, 34, 46], rl: [43, 54, 38, 42] }
+    },
+    sovereign: {
+      src: 'assets/mechs/mech_sovereign.png', aw: 802, ah: 1155,
+      regions: { hd: [47, 11, 13, 11], torso: [11, 3, 68, 41], la: [2, 35, 50, 16], ra: [71, 32, 27, 14], ll: [16, 51, 34, 46], rl: [50, 46, 30, 50] }
+    },
+    colossus: {
+      src: 'assets/mechs/mech_enemy_colossus.png', aw: 854, ah: 1113,
+      regions: { hd: [45, 13, 14, 10], torso: [28, 5, 62, 33], la: [2, 31, 42, 17], ra: [57, 33, 41, 14], ll: [21, 48, 35, 48], rl: [54, 47, 30, 50] }
     }
+  },
+
+  getMechArtworkSpec(side, mechOrEnemy) {
+    const S = this.MECH_SPRITES;
+    if (side === 'player') {
+      const tid = (mechOrEnemy?.templateId || '').toLowerCase();
+      const name = (mechOrEnemy?.customName || '').toLowerCase();
+      let key = 'guillotine';
+      let h = 570;
+      if (tid.startsWith('recon') || name.includes('wasp')) { key = 'wasp'; h = 515; }
+      else if (tid.startsWith('light') || name.includes('lynx')) { key = 'lynx'; h = 540; }
+      else if (tid.startsWith('heavy') || name.includes('marauder')) { key = 'marauder'; h = 550; }
+      else if (tid.startsWith('assault') || name.includes('sovereign')) { key = 'sovereign'; h = 615; }
+      return { ...S[key], flip: false, h, tint: '' };
+    }
+
+    const eName = (mechOrEnemy?.name || this.enemy?.name || '').toLowerCase();
+    const eWeight = (mechOrEnemy?.weight || this.enemy?.weight || '').toLowerCase();
+    const glow = 'drop-shadow(0 0 14px rgba(244,63,94,0.38))';
+    if (eName.includes('colossus') || eName.includes('sovereign') || /19\d|20\d|assault/.test(eWeight)) {
+      return { ...S.colossus, flip: false, h: 530, tint: glow };
+    }
+    if (eName.includes('warhammer') || eName.includes('marauder') || /15\d|16\d|heavy/.test(eWeight)) {
+      return { ...S.marauder, flip: true, h: 500, tint: 'hue-rotate(155deg) saturate(1.3) ' + glow };
+    }
+    if (eName.includes('enforcer') || eName.includes('guillotine') || /11\d|12\d|medium/.test(eWeight)) {
+      return { ...S.guillotine, flip: true, h: 505, tint: 'hue-rotate(140deg) saturate(1.25) ' + glow };
+    }
+    if (eName.includes('jackal') || eName.includes('lynx') || /\b8\d|light/.test(eWeight)) {
+      return { ...S.lynx, flip: true, h: 470, tint: 'hue-rotate(145deg) saturate(1.3) ' + glow };
+    }
+    if (eName.includes('stinger') || eName.includes('wasp') || /\b5\d|recon/.test(eWeight)) {
+      return { ...S.wasp, flip: true, h: 455, tint: 'hue-rotate(250deg) saturate(1.35) ' + glow };
+    }
+    return { ...S.colossus, flip: false, h: 520, tint: glow };
+  },
+
+  // Clickable body-region overlay for a BattleMech sprite.
+  // Player side: click highlights the part and opens its condition readout.
+  // Enemy side: click selects the aimed region and shows its hit-chance modifier.
+  renderMechRegions(side, spec, mechOrEnemy) {
+    const isEnemy = (side === 'enemy');
+    const armor = (isEnemy ? this.enemy?.armor : mechOrEnemy?.armor) || {};
+    const maxArmor = (isEnemy ? this.enemy?.maxArmor : mechOrEnemy?.maxArmorCurrent) || {};
+    const r = spec.regions;
+    const t = r.torso;
+    const list = [
+      ['CT', [t[0] + t[2] * 0.32, t[1], t[2] * 0.36, t[3]], 1],
+      ['LT', [t[0], t[1], t[2] * 0.32, t[3]], 2],
+      ['RT', [t[0] + t[2] * 0.68, t[1], t[2] * 0.32, t[3]], 2],
+      ['LL', r.ll, 3],
+      ['RL', r.rl, 3],
+      ['LA', r.la, 4],
+      ['RA', r.ra, 4],
+      ['HD', r.hd, 5]
+    ];
+    const fullNames = { HD: 'Head', CT: 'Center Torso', LT: 'Left Torso', RT: 'Right Torso', LA: 'Left Arm', RA: 'Right Arm', LL: 'Left Leg', RL: 'Right Leg' };
+    const canAim = isEnemy && this.turn === 'player' && !this.battleOver;
+
+    return list.map(([loc, box, z]) => {
+      let [x, y, w, h] = box;
+      if (spec.flip) x = 100 - x - w;
+      const cur = Math.max(0, Math.round(armor[loc] ?? 0));
+      const max = Math.max(1, Math.round(maxArmor[loc] ?? 30));
+      const pct = Math.round((cur / max) * 100);
+      const state = cur <= 0 ? 'destroyed' : (pct <= 25 ? 'critical' : (pct <= 60 ? 'damaged' : 'intact'));
+      const selected = isEnemy ? (this.aimTarget === loc) : (this.selectedPlayerPart === loc);
+      const mod = this.getAimModifier(loc);
+      const modText = `${mod > 0 ? '+' : (mod < 0 ? '\u2212' : '\u00B1')}${Math.abs(mod)}% HIT`;
+      const title = isEnemy
+        ? `${fullNames[loc]} \u2014 armor ${cur}/${max} \u2014 ${modText}`
+        : `${fullNames[loc]} \u2014 armor ${cur}/${max} (${pct}%) \u2014 click for condition readout`;
+      return `
+        <div class="mech-hotspot ${side} ${state} ${selected ? 'selected' : ''} ${isEnemy && !canAim ? 'locked' : ''}"
+             style="left:${x.toFixed(1)}%; top:${y.toFixed(1)}%; width:${w.toFixed(1)}%; height:${h.toFixed(1)}%; z-index:${z + 2};"
+             title="${title}"
+             onclick="BattleModule.onRegionClick('${side}', '${loc}')">
+          <span class="mech-hs-tag">${loc}${isEnemy ? '' : ` ${pct}%`}</span>
+          ${isEnemy ? `<span class="mech-hs-mod ${mod > 0 ? 'pos' : (mod < 0 ? 'neg' : '')}">${fullNames[loc].toUpperCase()} &bull; ${modText}</span>` : ''}
+        </div>
+      `;
+    }).join('');
+  },
+
+  // Condition readout card for the player's selected body part
+  renderPartReadout(mech) {
+    const loc = this.selectedPlayerPart;
+    if (!loc || !mech) return '';
+    const fullNames = { HD: 'Head / Cockpit', CT: 'Center Torso', LT: 'Left Torso', RT: 'Right Torso', LA: 'Left Arm', RA: 'Right Arm', LL: 'Left Leg', RL: 'Right Leg' };
+    const cur = Math.max(0, Math.round(mech.armor?.[loc] ?? 0));
+    const max = Math.max(1, Math.round(mech.maxArmorCurrent?.[loc] ?? 30));
+    const pct = Math.round((cur / max) * 100);
+    const status = cur <= 0 ? 'BREACHED' : (pct <= 25 ? 'CRITICAL' : (pct <= 60 ? 'DAMAGED' : 'OPERATIONAL'));
+    const color = cur <= 0 ? '#ef4444' : (pct <= 25 ? '#f87171' : (pct <= 60 ? '#f59e0b' : '#10b981'));
+    const comps = (mech.locations?.[loc] || []).map((cid, idx) => {
+      const comp = window.GameState.getComponent(cid);
+      if (!comp) return '';
+      const cond = Math.round(window.GameState.getInstalledPartCondition(mech, loc, idx) ?? 100);
+      const cc = cond >= 80 ? '#10b981' : (cond >= 50 ? '#f59e0b' : '#ef4444');
+      return `
+        <div class="mech-readout-comp">
+          <div style="display:flex; justify-content:space-between; gap:6px;">
+            <span>${comp.name}</span>
+            <span class="mono" style="color:${cc}; font-weight:800;">${cond}%</span>
+          </div>
+          <div class="jrpg-bar-track" style="height:5px;"><div class="jrpg-bar-fill" style="width:${cond}%; background:${cc};"></div></div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="mech-part-readout" style="border-color:${color};">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <strong style="font-size:13px; color:#f8fafc;">${fullNames[loc]} <span class="mono" style="color:#94a3b8;">[${loc}]</span></strong>
+          <button class="btn" style="padding:1px 8px; font-size:12px;" onclick="BattleModule.closePartReadout()">&times;</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+          <span class="badge mono" style="font-size:10px; background:${color}22; color:${color}; border:1px solid ${color};">${status}</span>
+          <span class="mono" style="font-size:12px; font-weight:800; color:${color};">${cur} / ${max} ARMOR (${pct}%)</span>
+        </div>
+        <div class="jrpg-bar-track" style="margin-top:4px;"><div class="jrpg-bar-fill" style="width:${pct}%; background:${color};"></div></div>
+        <div style="margin-top:8px; font-size:10px; font-weight:800; color:#38bdf8; letter-spacing:0.5px;">INSTALLED SYSTEMS</div>
+        <div style="display:flex; flex-direction:column; gap:5px; margin-top:4px;">
+          ${comps || '<div class="subtext" style="font-size:11px;">No components installed in this section.</div>'}
+        </div>
+        ${cur <= 0 ? '<div style="margin-top:8px; font-size:11px; color:#fca5a5;">Armor breached \u2014 internal systems exposed to direct damage.</div>' : ''}
+      </div>
+    `;
   },
 
   renderIsometricTitanSvg(side, isProne = false, healthPct = 100, themeColor = '#38bdf8', mechOrEnemy = null, heatLevel = 0) {
     const isPlayer = (side === 'player');
     const spec = this.getMechArtworkSpec(side, mechOrEnemy);
-    const sz = spec.size || 195;
+    const widthPx = Math.round(spec.h * spec.aw / spec.ah);
     const isDamaged = healthPct < 55;
     const isCritical = healthPct < 28;
     const isOverheating = heatLevel >= 65;
 
     const baseShadow = isPlayer
-      ? 'drop-shadow(0 12px 20px rgba(0,0,0,0.92)) drop-shadow(0 0 12px rgba(56,189,248,0.25))'
-      : 'drop-shadow(0 12px 20px rgba(0,0,0,0.92))';
-    const heatGlow = isOverheating ? 'drop-shadow(0 0 16px rgba(249,115,22,0.8)) brightness(1.08)' : '';
+      ? 'drop-shadow(0 14px 22px rgba(0,0,0,0.92)) drop-shadow(0 0 12px rgba(56,189,248,0.22))'
+      : 'drop-shadow(0 14px 22px rgba(0,0,0,0.92))';
+    const heatGlow = isOverheating ? 'drop-shadow(0 0 18px rgba(249,115,22,0.8)) brightness(1.08)' : '';
     const filterChain = [baseShadow, spec.tint, heatGlow].filter(Boolean).join(' ');
 
+    // Damage / heat effects are anchored to the torso of the sprite
+    const t = spec.regions.torso;
+    let fx = t[0] + t[2] * 0.5;
+    if (spec.flip) fx = 100 - fx;
+    const fy = t[1] + t[3] * 0.35;
+
     return `
-      <div class="jrpg-mech-sprite-wrap" style="position:relative; width:${sz}px; height:${sz}px; display:flex; align-items:center; justify-content:center;">
-        <img
-          src="${spec.src}"
-          alt="${isPlayer ? 'Player BattleMech' : 'Hostile BattleMech'}"
-          class="jrpg-mech-img"
-          style="width:100%; height:100%; object-fit:contain; ${spec.flip ? 'transform:scaleX(-1);' : ''} filter:${filterChain}; pointer-events:none;"
-        />
-        ${(isDamaged || isOverheating) ? `
-          <svg viewBox="0 0 160 160" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible;">
-            ${isDamaged ? `
-              <!-- Battle Damage Smoke & Electrical Arcs -->
-              <circle cx="68" cy="58" r="10" fill="rgba(15,23,42,0.65)">
-                <animate attributeName="cy" values="58;32;12" dur="2.1s" repeatCount="indefinite"/>
-                <animate attributeName="r" values="6;14;20" dur="2.1s" repeatCount="indefinite"/>
-                <animate attributeName="opacity" values="0.7;0.35;0" dur="2.1s" repeatCount="indefinite"/>
-              </circle>
-              <path d="M88,68 L96,62 L91,74 L100,70" stroke="#fbbf24" stroke-width="2" fill="none">
-                <animate attributeName="opacity" values="1;0;1;0;0" dur="1.4s" repeatCount="indefinite"/>
-              </path>
-            ` : ''}
-            ${isCritical ? `
-              <!-- Critical Internal Fire & Sparks -->
-              <circle cx="82" cy="74" r="7" fill="rgba(239,68,68,0.8)">
-                <animate attributeName="r" values="5;11;6" dur="0.8s" repeatCount="indefinite"/>
-                <animate attributeName="opacity" values="0.9;0.4;0.9" dur="0.8s" repeatCount="indefinite"/>
-              </circle>
-              <circle cx="82" cy="70" r="13" fill="rgba(30,41,59,0.75)">
-                <animate attributeName="cy" values="70;36;8" dur="1.6s" repeatCount="indefinite"/>
-                <animate attributeName="r" values="8;18;25" dur="1.6s" repeatCount="indefinite"/>
-                <animate attributeName="opacity" values="0.85;0.4;0" dur="1.6s" repeatCount="indefinite"/>
-              </circle>
-            ` : ''}
-            ${isOverheating ? `
-              <!-- Reactor Heat Vent Plume -->
-              <ellipse cx="78" cy="48" rx="18" ry="8" fill="rgba(249,115,22,0.45)">
-                <animate attributeName="cy" values="48;22;4" dur="1.3s" repeatCount="indefinite"/>
-                <animate attributeName="opacity" values="0.65;0.25;0" dur="1.3s" repeatCount="indefinite"/>
-              </ellipse>
-            ` : ''}
-          </svg>
-        ` : ''}
+      <div class="jrpg-mech-sprite-wrap ${side}" style="position:relative; height:${spec.h}px; width:${widthPx}px;">
+        <img src="${spec.src}"
+             alt="${isPlayer ? 'Player BattleMech' : 'Hostile BattleMech'}"
+             class="jrpg-mech-img"
+             draggable="false"
+             style="width:100%; height:100%; display:block; ${spec.flip ? 'transform:scaleX(-1);' : ''} filter:${filterChain}; pointer-events:none;" />
+        ${isDamaged ? `<div class="mech-fx smoke" style="left:${fx.toFixed(1)}%; top:${fy.toFixed(1)}%;"></div><div class="mech-fx spark" style="left:${(fx + 6).toFixed(1)}%; top:${(fy + 6).toFixed(1)}%;"></div>` : ''}
+        ${isCritical ? `<div class="mech-fx fire" style="left:${fx.toFixed(1)}%; top:${(fy + 4).toFixed(1)}%;"></div><div class="mech-fx smoke dark" style="left:${(fx - 5).toFixed(1)}%; top:${fy.toFixed(1)}%;"></div>` : ''}
+        ${isOverheating ? `<div class="mech-fx heat" style="left:${fx.toFixed(1)}%; top:${(fy - 6).toFixed(1)}%;"></div>` : ''}
+        ${this.renderMechRegions(side, spec, mechOrEnemy)}
       </div>
     `;
   },
