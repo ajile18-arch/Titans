@@ -6,7 +6,7 @@ window.BattleModule = {
 
   // Stylized 3D Duel State (Pokemon / Final Fantasy Style)
   round: 1,
-  turn: 'player', // 'player' | 'enemy' | 'animating'
+  turn: 'player', // 'player' | 'enemy' | 'animating' | 'ended'
   commandTab: 'attack', // 'attack' | 'defend' | 'tactics' | 'cooling' | 'retreat'
   aimTarget: 'General', // 'General' | 'HD' | 'CT' | 'LT' | 'RT' | 'LA' | 'RA' | 'LL' | 'RL'
   playerStance: 'normal', // 'normal' | 'braced' | 'evasive' | 'twisted'
@@ -23,6 +23,8 @@ window.BattleModule = {
   logs: [],
   contractWon: false,
   contractLost: false,
+  battleOver: false,
+  pendingDebriefing: null,
   battleStats: { rounds: 0, shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 },
 
   // Battle Offer Negotiation State
@@ -89,6 +91,8 @@ window.BattleModule = {
     this.shaking = false;
     this.contractWon = false;
     this.contractLost = false;
+    this.battleOver = false;
+    this.pendingDebriefing = null;
     this.battleStats = { rounds: 1, shotsFired: 0, shotsHit: 0, damageDealt: 0, damageTaken: 0 };
 
     // Spawn Enemy Titan
@@ -146,14 +150,48 @@ window.BattleModule = {
     if (this.logs.length > 25) this.logs.pop();
   },
 
+  finishBattle(outcome, killMethod, killCode, weapon) {
+    this.battleOver = true;
+    this.turn = 'ended';
+    if (outcome === 'VICTORY') {
+      this.contractWon = true;
+      this.contractLost = false;
+      this.enemyFallen = true;
+    } else {
+      this.contractLost = true;
+      this.contractWon = false;
+      if (outcome === 'DEFEAT') {
+        this.playerFallen = true;
+      }
+    }
+    this.pendingDebriefing = { outcome, killMethod, killCode, weapon };
+    this.spawnDamagePopup(outcome === 'VICTORY' ? 'VICTORY!' : (outcome === 'DEFEAT' ? 'DEFEAT!' : 'RETREAT'), false, true);
+    this.render();
+  },
+
+  proceedToDebriefing() {
+    if (!this.pendingDebriefing) {
+      if (this.battleSummary) {
+        this.active = false;
+        this.arenaTab = 'summary';
+        this.render();
+      }
+      return;
+    }
+    const { outcome, killMethod, killCode, weapon } = this.pendingDebriefing;
+    this.pendingDebriefing = null;
+    this.battleOver = false;
+    this.buildBattleSummary(outcome, killMethod, killCode, weapon);
+  },
+
   setCommandTab(tab) {
-    if (this.turn !== 'player') return;
+    if (this.turn !== 'player' || this.battleOver) return;
     this.commandTab = tab;
     this.render();
   },
 
   setAimTarget(loc) {
-    if (this.turn !== 'player') return;
+    if (this.turn !== 'player' || this.battleOver) return;
     this.aimTarget = loc;
     this.render();
   },
@@ -236,7 +274,7 @@ window.BattleModule = {
   },
 
   executePlayerAttack(weaponIndex = 0) {
-    if (this.turn !== 'player' || this.contractWon || this.contractLost) return;
+    if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
     const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
@@ -323,17 +361,17 @@ window.BattleModule = {
         // --- Enemy Victory Checks ---
         if (this.enemy.armor.HD <= 0) {
           this.log(`DECAPITATION! Enemy Cockpit canopy obliterated by ${weapon.name}! Hostile neutralized!`, 'crit');
-          this.buildBattleSummary('VICTORY', 'Enemy Cockpit Decapitation', 'HD', weapon.name);
+          this.finishBattle('VICTORY', 'Enemy Cockpit Decapitation', 'HD', weapon.name);
           return;
         }
         if (this.enemy.armor.CT <= 0) {
           this.log(`REACTOR CORE BREACH! ${this.enemy.name}'s Center Torso pierced! Massive explosion neutralizes hostile!`, 'crit');
-          this.buildBattleSummary('VICTORY', 'Reactor Core Breach', 'CT', weapon.name);
+          this.finishBattle('VICTORY', 'Reactor Core Breach', 'CT', weapon.name);
           return;
         }
         if (this.enemy.armor.LL <= 0 && this.enemy.armor.RL <= 0) {
           this.log(`MOBILITY KILL! Both legs severed! ${this.enemy.name} incapacitated on the battlefield!`, 'crit');
-          this.buildBattleSummary('VICTORY', 'Total Mobility Kill (Both Legs Severed)', 'MOBILITY', weapon.name);
+          this.finishBattle('VICTORY', 'Total Mobility Kill (Both Legs Severed)', 'MOBILITY', weapon.name);
           return;
         }
 
@@ -345,7 +383,7 @@ window.BattleModule = {
       this.render();
 
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost) {
+        if (!this.contractWon && !this.contractLost && !this.battleOver) {
           this.runEnemyTurn();
         }
       }, 1100);
@@ -354,7 +392,7 @@ window.BattleModule = {
   },
 
   executePlayerAlphaStrike() {
-    if (this.turn !== 'player' || this.contractWon || this.contractLost) return;
+    if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
     const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
@@ -401,13 +439,13 @@ window.BattleModule = {
       this.log(`ALPHA STRIKE REPORT: ${hitCount}/${weapons.length} weapons struck home for ${totalDmg} total damage (+${heatSpike} C Heat)!`, 'player');
 
       if (this.enemy.armor.CT <= 0 || this.enemy.armor.HD <= 0) {
-        this.buildBattleSummary('VICTORY', 'Alpha Strike Core Overload', 'ALPHA', 'Full Battery');
+        this.finishBattle('VICTORY', 'Alpha Strike Core Overload', 'ALPHA', 'Full Battery');
         return;
       }
 
       this.render();
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost) {
+        if (!this.contractWon && !this.contractLost && !this.battleOver) {
           this.runEnemyTurn();
         }
       }, 1200);
@@ -415,7 +453,7 @@ window.BattleModule = {
   },
 
   executePlayerDefend(stance) {
-    if (this.turn !== 'player' || this.contractWon || this.contractLost) return;
+    if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
     this.turn = 'animating';
 
     if (stance === 'brace') {
@@ -430,14 +468,14 @@ window.BattleModule = {
     this.render();
 
     setTimeout(() => {
-      if (!this.contractWon && !this.contractLost) {
+      if (!this.contractWon && !this.contractLost && !this.battleOver) {
         this.runEnemyTurn();
       }
     }, 900);
   },
 
   executePlayerTactic(tacticKey) {
-    if (this.turn !== 'player' || this.contractWon || this.contractLost) return;
+    if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
 
     if (tacticKey === 'stand_up') {
       if (!this.playerFallen) {
@@ -461,7 +499,7 @@ window.BattleModule = {
 
       this.render();
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost) this.runEnemyTurn();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
       }, 1000);
       return;
     }
@@ -473,7 +511,7 @@ window.BattleModule = {
       this.log(`EVASIVE JINK: Jump jets & sprint thrusters engaged! +30% Evasion against hostile attacks next turn (+8 Heat).`, 'player');
       this.render();
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost) this.runEnemyTurn();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
       }, 900);
       return;
     }
@@ -484,7 +522,7 @@ window.BattleModule = {
       this.log(`TACTICAL SCAN: Target structural telemetry acquired! Target internal weaknesses tagged (+15% Hit Chance for 2 turns).`, 'player');
       this.render();
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost) this.runEnemyTurn();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
       }, 900);
       return;
     }
@@ -497,7 +535,7 @@ window.BattleModule = {
   },
 
   executePlayerCooling(type) {
-    if (this.turn !== 'player' || this.contractWon || this.contractLost) return;
+    if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
 
     if (type === 'vent') {
       if (this.ventCoolantUses <= 0) {
@@ -518,22 +556,24 @@ window.BattleModule = {
       this.log(`POWER CONSERVATION: Weapons powered down for reactor thermal flush (-28 C Heat dissipated).`, 'player');
       this.render();
       setTimeout(() => {
-        if (!this.contractWon && !this.contractLost) this.runEnemyTurn();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
       }, 900);
     }
   },
 
   executePlayerRetreat() {
     if (confirm("Tactical Retreat: Deploy smoke screen and withdraw from the combat arena?")) {
-      this.buildBattleSummary('RETREAT', 'Tactical Field Withdrawal under Smoke', 'RETREAT', null);
+      this.finishBattle('RETREAT', 'Tactical Field Withdrawal under Smoke', 'RETREAT', null);
     }
   },
 
   runEnemyTurn() {
+    if (this.battleOver) return;
     this.turn = 'enemy';
     this.render();
 
     setTimeout(() => {
+      if (this.battleOver) return;
       const st = window.GameState.data;
       const jock = this.getActiveCombatJock();
       const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
@@ -634,11 +674,11 @@ window.BattleModule = {
                 jock.health = 0;
                 jock.status = 'KIA';
                 this.log(`FATAL COCKPIT BREACH: Titan head decapitated! Cockpit canopy crushed. Pilot ${jock.callsign} is KILLED IN ACTION!`, 'hostile');
-                this.buildBattleSummary('DEFEAT', 'Fatal Cockpit Decapitation', 'HEAD_KIA', weapon.name);
+                this.finishBattle('DEFEAT', 'Fatal Cockpit Decapitation', 'HEAD_KIA', weapon.name);
                 return;
               } else {
                 this.log(`EMERGENCY EJECTION: Titan head decapitated, but ${jock.callsign} successfully triggered the ejection pod and survived!`, 'system');
-                this.buildBattleSummary('DEFEAT', 'Cockpit Decapitated â€” Emergency Ejection Pod Cleared', 'HEAD_EJECT', weapon.name);
+                this.finishBattle('DEFEAT', 'Cockpit Decapitated â€” Emergency Ejection Pod Cleared', 'HEAD_EJECT', weapon.name);
                 return;
               }
             }
@@ -647,7 +687,7 @@ window.BattleModule = {
           // --- Center Torso Core Breach ---
           if (mech && mech.armor && mech.armor.CT <= 0) {
             this.log(`REACTOR CORE CRITICAL! Center torso breached! Reactor containment failed!`, 'hostile');
-            this.buildBattleSummary('DEFEAT', 'Reactor Core Critical Breach', 'CORE_BREACH', weapon.name);
+            this.finishBattle('DEFEAT', 'Reactor Core Critical Breach', 'CORE_BREACH', weapon.name);
             return;
           }
 
@@ -696,6 +736,7 @@ window.BattleModule = {
   },
 
   endRound() {
+    if (this.battleOver) return;
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
     const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
@@ -2059,7 +2100,7 @@ window.BattleModule = {
 
     const weapons = this.getPlayerWeapons(mech);
     const coolCap = Math.max(16, metrics?.coolingCap || 24);
-    const isPlayerTurn = (this.turn === 'player');
+    const isPlayerTurn = (this.turn === 'player' && !this.battleOver);
 
     return `
       <div class="jrpg-battle-container">
@@ -2067,18 +2108,30 @@ window.BattleModule = {
         <!-- Top Status Bar & Phase Notification -->
         <div class="card" style="padding:10px 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div style="display:flex; align-items:center; gap:12px;">
-            <span class="badge ${isPlayerTurn ? 'green' : 'amber'}" style="font-size:12px; font-weight:900; letter-spacing:0.5px;">
-              ROUND ${this.round} &bull; ${isPlayerTurn ? 'COMMANDER ACTION PHASE' : 'HOSTILE COMBAT PHASE'}
-            </span>
+            ${this.battleOver ? `
+              <span class="badge ${this.contractWon ? 'green' : 'red'}" style="font-size:13px; font-weight:900; letter-spacing:0.5px; padding:6px 12px;">
+                ${this.contractWon ? 'ðŸ† ENGAGEMENT RESOLVED: VICTORY!' : 'â˜ ï¸ ENGAGEMENT RESOLVED: DEFEAT'}
+              </span>
+            ` : `
+              <span class="badge ${isPlayerTurn ? 'green' : 'amber'}" style="font-size:12px; font-weight:900; letter-spacing:0.5px;">
+                ROUND ${this.round} &bull; ${isPlayerTurn ? 'COMMANDER ACTION PHASE' : 'HOSTILE COMBAT PHASE'}
+              </span>
+            `}
             <span class="subtext mono" style="font-size:12px;">
               Target: <strong style="color:var(--accent-red);">${this.enemy.name}</strong> (${this.enemy.weight})
             </span>
             ${this.sensorLockTurns > 0 ? '<span class="badge purple mono" style="font-size:10px;">TACTICAL SCAN ACTIVE (+15% HIT)</span>' : ''}
           </div>
           <div style="display:flex; gap:8px;">
-            <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; color:var(--accent-red);" onclick="BattleModule.executePlayerRetreat()">
-              ðŸƒ Retreat &larr;
-            </button>
+            ${this.battleOver ? `
+              <button class="btn btn-primary" style="background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; font-weight:900; font-size:13px; padding:8px 18px; box-shadow:0 0 16px ${this.contractWon ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)'}; cursor:pointer;" onclick="BattleModule.proceedToDebriefing()">
+                ${this.contractWon ? 'ðŸ† Continue to Debriefing & Salvage &rarr;' : 'ðŸ“‹ Continue to Debriefing &rarr;'}
+              </button>
+            ` : `
+              <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; color:var(--accent-red);" onclick="BattleModule.executePlayerRetreat()">
+                ðŸƒ Retreat &larr;
+              </button>
+            `}
           </div>
         </div>
 
@@ -2129,6 +2182,27 @@ window.BattleModule = {
                 ${p.text}
               </div>
             `).join('')}
+
+            <!-- Battle Over Modal Overlay directly on the 3D battlefield -->
+            ${this.battleOver ? `
+              <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(2, 6, 23, 0.72); backdrop-filter:blur(5px); z-index:70;">
+                <div class="card" style="padding:26px 36px; text-align:center; max-width:480px; border:2px solid ${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; box-shadow:0 0 36px ${this.contractWon ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)'}; background:#0f172a;">
+                  <div style="font-size:44px; line-height:1; margin-bottom:10px;">${this.contractWon ? 'ðŸ†' : (this.pendingDebriefing?.outcome === 'RETREAT' ? 'ðŸƒ' : 'â˜ ï¸')}</div>
+                  <h2 style="font-size:24px; font-weight:900; color:${this.contractWon ? '#10b981' : '#ef4444'}; margin:0 0 6px 0; text-transform:uppercase; letter-spacing:0.04em;">
+                    ${this.contractWon ? 'COMBAT VICTORY!' : (this.pendingDebriefing?.outcome === 'RETREAT' ? 'TACTICAL WITHDRAWAL' : 'BATTLE DEFEAT')}
+                  </h2>
+                  <div style="font-size:14px; color:#f8fafc; font-weight:600; margin-bottom:6px;">
+                    ${this.pendingDebriefing?.killMethod || 'Combat Concluded'}
+                  </div>
+                  <div class="subtext" style="font-size:12px; margin-bottom:20px;">
+                    Hostile: <strong>${this.enemy.name}</strong> (${this.enemy.weight}) &bull; Pilot: <strong>${jock ? jock.callsign : 'Pilot'}</strong>
+                  </div>
+                  <button class="btn btn-primary" style="font-size:15px; font-weight:900; padding:12px 28px; width:100%; background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; box-shadow:0 0 20px ${this.contractWon ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)'}; cursor:pointer;" onclick="BattleModule.proceedToDebriefing()">
+                    ${this.contractWon ? 'ðŸ† Continue to Debriefing & Salvage &rarr;' : 'ðŸ“‹ Continue to Debriefing &rarr;'}
+                  </button>
+                </div>
+              </div>
+            ` : ''}
 
             <!-- Player Status HUD Badge (Top-Left) -->
             <div class="jrpg-hud-badge player-hud">
@@ -2235,32 +2309,52 @@ window.BattleModule = {
           <!-- Box 1: Primary Command Categories -->
           <div class="jrpg-box">
             <div class="jrpg-box-title">Commands</div>
-            <button class="jrpg-menu-btn ${this.commandTab === 'attack' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('attack')">
-              <span>âš”ï¸ ATTACK</span>
-              <span class="mono" style="font-size:11px;">&rarr;</span>
-            </button>
-            <button class="jrpg-menu-btn ${this.commandTab === 'defend' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('defend')">
-              <span>ðŸ›¡ï¸ DEFEND</span>
-              <span class="mono" style="font-size:11px;">&rarr;</span>
-            </button>
-            <button class="jrpg-menu-btn ${this.commandTab === 'tactics' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('tactics')">
-              <span>âš¡ TACTICS</span>
-              <span class="mono" style="font-size:11px;">&rarr;</span>
-            </button>
-            <button class="jrpg-menu-btn ${this.commandTab === 'cooling' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('cooling')">
-              <span>â„ï¸ COOLING</span>
-              <span class="mono" style="font-size:11px;">&rarr;</span>
-            </button>
+            ${this.battleOver ? `
+              <div style="display:flex; flex-direction:column; gap:8px; height:100%; justify-content:center;">
+                <button class="btn btn-primary" style="padding:14px; font-size:13px; font-weight:900; background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; box-shadow:0 0 16px ${this.contractWon ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)'};" onclick="BattleModule.proceedToDebriefing()">
+                  ${this.contractWon ? 'ðŸ† Debriefing &rarr;' : 'ðŸ“‹ Debriefing &rarr;'}
+                </button>
+              </div>
+            ` : `
+              <button class="jrpg-menu-btn ${this.commandTab === 'attack' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('attack')">
+                <span>âš”ï¸ ATTACK</span>
+                <span class="mono" style="font-size:11px;">&rarr;</span>
+              </button>
+              <button class="jrpg-menu-btn ${this.commandTab === 'defend' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('defend')">
+                <span>ðŸ›¡ï¸ DEFEND</span>
+                <span class="mono" style="font-size:11px;">&rarr;</span>
+              </button>
+              <button class="jrpg-menu-btn ${this.commandTab === 'tactics' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('tactics')">
+                <span>âš¡ TACTICS</span>
+                <span class="mono" style="font-size:11px;">&rarr;</span>
+              </button>
+              <button class="jrpg-menu-btn ${this.commandTab === 'cooling' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('cooling')">
+                <span>â„ï¸ COOLING</span>
+                <span class="mono" style="font-size:11px;">&rarr;</span>
+              </button>
+            `}
           </div>
 
           <!-- Box 2: Action Submenu (Weapons, Stances, Maneuvers) -->
           <div class="jrpg-box">
             <div class="jrpg-box-title">
-              <span>${this.commandTab.toUpperCase()} SELECTION</span>
-              <span class="subtext mono" style="font-size:10px;">Aim: ${this.aimTarget}</span>
+              <span>${this.battleOver ? 'BATTLE OUTCOME' : `${this.commandTab.toUpperCase()} SELECTION`}</span>
+              <span class="subtext mono" style="font-size:10px;">${this.battleOver ? 'ENGAGEMENT RESOLVED' : `Aim: ${this.aimTarget}`}</span>
             </div>
 
-            ${this.commandTab === 'attack' ? `
+            ${this.battleOver ? `
+              <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; height:100%; gap:8px; padding:10px;">
+                <div style="font-size:16px; font-weight:900; color:${this.contractWon ? '#10b981' : '#ef4444'};">
+                  ${this.contractWon ? 'VICTORY ACHIEVED!' : 'BATTLE TERMINATED'}
+                </div>
+                <div class="subtext" style="font-size:11px;">
+                  ${this.pendingDebriefing?.killMethod || 'Combat has concluded.'} Click below to collect contract bounty, salvage components, and pilot XP.
+                </div>
+                <button class="btn btn-primary" style="margin-top:6px; width:100%; padding:10px; font-weight:800; font-size:13px; background:${this.contractWon ? 'var(--accent-green)' : 'var(--accent-red)'}; color:${this.contractWon ? '#000' : '#fff'}; box-shadow:0 0 16px ${this.contractWon ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}; cursor:pointer;" onclick="BattleModule.proceedToDebriefing()">
+                  ${this.contractWon ? 'ðŸ† Continue to Debriefing & Salvage &rarr;' : 'ðŸ“‹ Continue to Debriefing &rarr;'}
+                </button>
+              </div>
+            ` : this.commandTab === 'attack' ? `
               <div style="display:flex; flex-direction:column; gap:5px;">
                 ${weapons.map((w, idx) => {
                   const hit = this.calcHitChance(w, true, this.aimTarget);
