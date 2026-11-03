@@ -797,6 +797,49 @@ window.SoundFX = {
       osc.start(now + offset);
       osc.stop(now + offset + 0.11);
     });
+  },
+
+  // 8. TITAN MOBILITY: MARCHING / APPROACH STRIDE SFX
+  playMechMarch(t) {
+    this.ensureContext();
+    if (!this.ctx || (window.MusicModule && window.MusicModule.muted)) return;
+    const ctx = this.ctx;
+    const now = typeof t === 'number' && t > 0 ? t : ctx.currentTime;
+
+    const playStep = (stepTime) => {
+      // Hydraulic servo pressure release whine
+      const servo = ctx.createOscillator();
+      const sGain = ctx.createGain();
+      servo.type = 'sawtooth';
+      servo.frequency.setValueAtTime(260, stepTime);
+      servo.frequency.exponentialRampToValueAtTime(110, stepTime + 0.18);
+      sGain.gain.setValueAtTime(0.001, stepTime);
+      sGain.gain.linearRampToValueAtTime(0.35, stepTime + 0.04);
+      sGain.gain.exponentialRampToValueAtTime(0.001, stepTime + 0.22);
+      servo.connect(sGain);
+      sGain.connect(this.master);
+      servo.start(stepTime);
+      servo.stop(stepTime + 0.24);
+
+      // Low frequency seismic footpad impact
+      const thud = ctx.createOscillator();
+      const tGain = ctx.createGain();
+      thud.type = 'triangle';
+      thud.frequency.setValueAtTime(95, stepTime + 0.08);
+      thud.frequency.exponentialRampToValueAtTime(32, stepTime + 0.35);
+      tGain.gain.setValueAtTime(0.001, stepTime + 0.08);
+      tGain.gain.linearRampToValueAtTime(0.65, stepTime + 0.12);
+      tGain.gain.exponentialRampToValueAtTime(0.001, stepTime + 0.38);
+      thud.connect(tGain);
+      tGain.connect(this.master);
+      thud.start(stepTime + 0.08);
+      thud.stop(stepTime + 0.4);
+    };
+
+    // First heavy mechanical stride
+    playStep(now);
+    // Second heavy mechanical stride
+    playStep(now + 0.65);
   }
 };
 

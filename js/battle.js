@@ -21,6 +21,9 @@ window.BattleModule = {
   enemyStance: 'normal',
   playerFallen: false,
   enemyFallen: false,
+  isCloseRange: false,
+  isWalking: false,
+  walkDirection: 'forward',
   sensorLockTurns: 0,
   damagePopups: [],
   activeBeam: null,
@@ -161,6 +164,9 @@ window.BattleModule = {
     this.enemyStance = 'normal';
     this.playerFallen = false;
     this.enemyFallen = false;
+    this.isCloseRange = false;
+    this.isWalking = false;
+    this.walkDirection = 'forward';
     this.sensorLockTurns = 0;
     this.damagePopups = [];
     this.activeBeam = null;
@@ -499,6 +505,7 @@ window.BattleModule = {
       if (this.playerFallen) hit -= 20;
       if (this.enemyStance === 'evasive') hit -= 20;
       if (this.sensorLockTurns > 0) hit += 15;
+      if (this.isCloseRange) hit += 10;
     } else {
       hit = this.enemy?.hit || 68;
 
@@ -517,6 +524,7 @@ window.BattleModule = {
       if (this.playerFallen) hit += 20;
       if (this.playerStance === 'evasive') hit -= 25;
       if (this.playerStance === 'braced') hit -= 5;
+      if (this.isCloseRange) hit += 5;
     }
 
     return Math.max(15, Math.min(95, Math.round(hit)));
@@ -563,8 +571,8 @@ window.BattleModule = {
     // Trigger Firing Beam Animation
     this.activeBeam = {
       type: (window.SoundFX?.classifyWeapon(weapon) || 'energy'),
-      from: { x: 36, y: 50 },
-      to: { x: 80, y: 36 }
+      from: this.isCloseRange ? { x: 44, y: 52 } : { x: 36, y: 50 },
+      to: this.isCloseRange ? { x: 68, y: 44 } : { x: 80, y: 36 }
     };
     this.render();
 
@@ -680,6 +688,41 @@ window.BattleModule = {
   executePlayerTactic(tacticKey) {
     if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
 
+    if (tacticKey === 'approach') {
+      if (this.playerFallen) {
+        alert("Cannot approach while your Titan is prone! Stand up first.");
+        return;
+      }
+      this.turn = 'animating';
+      const isApproaching = !this.isCloseRange;
+      this.walkDirection = isApproaching ? 'forward' : 'backward';
+      this.isWalking = true;
+      this.isCloseRange = isApproaching;
+
+      if (window.SoundFX && typeof window.SoundFX.playMechMarch === 'function') {
+        window.SoundFX.playMechMarch();
+      }
+
+      if (isApproaching) {
+        this.log(`APPROACH MANEUVER: Actuators power forward! Closing distance into Point-Blank Brawling Range (+10% Hit Accuracy).`, 'player');
+        this.spawnDamagePopup('APPROACHING!', true, true);
+      } else {
+        this.log(`TACTICAL FALL-BACK: Reverse thrusters engaged. Re-establishing Standoff Range.`, 'player');
+        this.spawnDamagePopup('FALLING BACK', true, false);
+      }
+
+      this.render();
+
+      setTimeout(() => {
+        this.isWalking = false;
+        this.render();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) {
+          this.onPlayerActionComplete();
+        }
+      }, 1400);
+      return;
+    }
+
     if (tacticKey === 'stand_up') {
       if (!this.playerFallen) {
         alert("Your Titan is already upright!");
@@ -784,8 +827,8 @@ window.BattleModule = {
       }
       this.activeBeam = {
         type: (window.SoundFX?.classifyWeapon(weapon) || 'ballistic'),
-        from: { x: 80, y: 36 },
-        to: { x: 30, y: 52 }
+        from: this.isCloseRange ? { x: 68, y: 44 } : { x: 80, y: 36 },
+        to: this.isCloseRange ? { x: 42, y: 54 } : { x: 30, y: 52 }
       };
       this.render();
 
@@ -2343,6 +2386,8 @@ window.BattleModule = {
     const weapons = this.getPlayerWeapons(mech);
     const isPlayerTurn = (this.turn === 'player' && !this.battleOver);
     const bgUrl = this.getArenaBackground(this.currentContract);
+    const playerWalkClass = this.isWalking ? (this.walkDirection === 'backward' ? 'walking-backward' : 'walking-forward') : '';
+    const enemyWalkClass = this.isWalking ? (this.walkDirection === 'backward' ? 'walking-backward' : 'walking-forward') : '';
 
     return `
       <div class="jrpg-battle-container">
@@ -2375,6 +2420,9 @@ window.BattleModule = {
             <span class="badge cyan mono" style="font-size:10px;" title="Hostile armor rating damage reduction">
               🛡️ ARMOR: ${this.enemy.armorRating} (-${this.enemy.damageReductionPct}% DR)
             </span>
+            <span class="badge ${this.isCloseRange ? 'green' : 'cyan'} mono" style="font-size:10px;" title="Engagement Range">
+              ${this.isCloseRange ? '⚔️ RANGE: POINT-BLANK (+10% HIT)' : '🎯 RANGE: STANDOFF'}
+            </span>
             <span class="badge red mono" style="font-size:10px;">${this.enemyFallen ? 'PRONE (+20% HIT)' : 'COMBAT READY'}</span>
             <span class="badge amber mono" style="font-size:10px;">AIM: ${this.aimTarget === 'General' ? 'GENERAL' : `${this.aimTarget} (${this.getAimModifier(this.aimTarget) > 0 ? '+' : ''}${this.getAimModifier(this.aimTarget)}% HIT)`}</span>
             ${this.sensorLockTurns > 0 ? '<span class="badge purple mono" style="font-size:10px;">TACTICAL SCAN ACTIVE (+15% HIT)</span>' : ''}
@@ -2404,13 +2452,13 @@ window.BattleModule = {
             <div class="jrpg-3d-ground"></div>
 
             <!-- Player Titan (Bottom-Left Foreground, Angled Northeast) -->
-            <div class="jrpg-combatant player-side ${this.playerFallen ? 'prone' : ''}">
+            <div class="jrpg-combatant player-side ${this.isCloseRange ? 'close-range' : ''} ${playerWalkClass} ${this.playerFallen ? 'prone' : ''}">
               ${this.renderIsometricTitanSvg('player', this.playerFallen, playerArmorPct, '#38bdf8', mech)}
               <div class="jrpg-shadow"></div>
             </div>
 
             <!-- Enemy Titan (Top-Right Background, Angled Southwest) -->
-            <div class="jrpg-combatant enemy-side ${this.enemyFallen ? 'prone' : ''}">
+            <div class="jrpg-combatant enemy-side ${this.isCloseRange ? 'close-range' : ''} ${enemyWalkClass} ${this.enemyFallen ? 'prone' : ''}">
               ${this.renderIsometricTitanSvg('enemy', this.enemyFallen, enemyArmorPct, '#f43f5e', this.enemy)}
               <div class="jrpg-shadow"></div>
             </div>
@@ -2619,6 +2667,12 @@ window.BattleModule = {
               </div>
             ` : this.commandTab === 'tactics' ? `
               <div style="display:flex; flex-direction:column; gap:6px;">
+                <button class="jrpg-menu-btn ${this.isCloseRange ? 'active' : ''}" ${!isPlayerTurn || this.playerFallen ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('approach')" style="${this.isCloseRange ? 'border-color:#38bdf8; background:rgba(56,189,248,0.15);' : ''}">
+                  <div>
+                    <div><strong>${this.isCloseRange ? '🔙 Fall Back (Withdraw Range)' : '⏩ Approach (Close Distance)'}</strong></div>
+                    <div class="subtext" style="font-size:11px;">${this.isCloseRange ? 'March backward to standoff range' : 'March forward into point-blank brawling range (+10% Hit Accuracy)'}</div>
+                  </div>
+                </button>
                 <button class="jrpg-menu-btn ${this.playerFallen ? 'active' : ''}" ${!isPlayerTurn || !this.playerFallen ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('stand_up')" style="${this.playerFallen ? 'border-color:#ef4444; background:rgba(239,68,68,0.2);' : ''}">
                   <div>
                     <div><strong>🦾 Stand Up (Piloting Recovery)</strong></div>

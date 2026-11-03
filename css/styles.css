@@ -870,6 +870,174 @@ body {
 .jrpg-combatant.player-side .jrpg-shadow { width: 420px; height: 76px; margin-top: -40px; }
 .jrpg-combatant.enemy-side .jrpg-shadow { width: 360px; height: 64px; margin-top: -34px; }
 
+/* Close Range Engaged Stances (Mechs Placed Closer Together) */
+.jrpg-combatant.player-side.close-range {
+  left: 17%;
+  bottom: 8px;
+}
+
+.jrpg-combatant.enemy-side.close-range {
+  right: 17%;
+  top: 44px;
+}
+
+/* Walking Forward & Backward Animations */
+@keyframes mech-walk-player-forward {
+  0% {
+    left: 1%;
+    bottom: -20px;
+    transform: translateY(0px) rotate(0deg);
+  }
+  15% {
+    transform: translateY(-16px) rotate(2.5deg);
+  }
+  30% {
+    left: 7%;
+    bottom: -10px;
+    transform: translateY(4px) rotate(-1deg);
+  }
+  45% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  60% {
+    transform: translateY(-16px) rotate(-2.5deg);
+  }
+  75% {
+    left: 14%;
+    bottom: 2px;
+    transform: translateY(4px) rotate(1deg);
+  }
+  90% {
+    transform: translateY(-2px) rotate(0deg);
+  }
+  100% {
+    left: 17%;
+    bottom: 8px;
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes mech-walk-player-backward {
+  0% {
+    left: 17%;
+    bottom: 8px;
+    transform: translateY(0px) rotate(0deg);
+  }
+  15% {
+    transform: translateY(-14px) rotate(-2deg);
+  }
+  30% {
+    left: 11%;
+    bottom: -2px;
+    transform: translateY(3px) rotate(1deg);
+  }
+  45% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  60% {
+    transform: translateY(-14px) rotate(2deg);
+  }
+  75% {
+    left: 5%;
+    bottom: -14px;
+    transform: translateY(3px) rotate(-1deg);
+  }
+  90% {
+    transform: translateY(-2px) rotate(0deg);
+  }
+  100% {
+    left: 1%;
+    bottom: -20px;
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes mech-walk-enemy-forward {
+  0% {
+    right: 1%;
+    top: 12px;
+    transform: translateY(0px) rotate(0deg);
+  }
+  15% {
+    transform: translateY(-14px) rotate(-2.5deg);
+  }
+  30% {
+    right: 7%;
+    top: 24px;
+    transform: translateY(4px) rotate(1deg);
+  }
+  45% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  60% {
+    transform: translateY(-14px) rotate(2.5deg);
+  }
+  75% {
+    right: 14%;
+    top: 38px;
+    transform: translateY(4px) rotate(-1deg);
+  }
+  90% {
+    transform: translateY(-2px) rotate(0deg);
+  }
+  100% {
+    right: 17%;
+    top: 44px;
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes mech-walk-enemy-backward {
+  0% {
+    right: 17%;
+    top: 44px;
+    transform: translateY(0px) rotate(0deg);
+  }
+  15% {
+    transform: translateY(-14px) rotate(2deg);
+  }
+  30% {
+    right: 11%;
+    top: 32px;
+    transform: translateY(3px) rotate(-1deg);
+  }
+  45% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  60% {
+    transform: translateY(-14px) rotate(-2deg);
+  }
+  75% {
+    right: 5%;
+    top: 20px;
+    transform: translateY(3px) rotate(1deg);
+  }
+  90% {
+    transform: translateY(-2px) rotate(0deg);
+  }
+  100% {
+    right: 1%;
+    top: 12px;
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+.jrpg-combatant.player-side.walking-forward {
+  animation: mech-walk-player-forward 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards !important;
+}
+
+.jrpg-combatant.player-side.walking-backward {
+  animation: mech-walk-player-backward 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards !important;
+}
+
+.jrpg-combatant.enemy-side.walking-forward {
+  animation: mech-walk-enemy-forward 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards !important;
+}
+
+.jrpg-combatant.enemy-side.walking-backward {
+  animation: mech-walk-enemy-backward 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards !important;
+}
+
 @keyframes jrpg-idle-player {
   0%, 100% { transform: translateY(0px) scale(1); }
   50% { transform: translateY(-4px) scale(1); }
