@@ -693,23 +693,54 @@ window.BattleModule = {
         alert("Cannot approach while your Titan is prone! Stand up first.");
         return;
       }
+      if (this.isCloseRange) {
+        alert("Mechs have already closed the distance! Use 'Separate' to disengage.");
+        return;
+      }
       this.turn = 'animating';
-      const isApproaching = !this.isCloseRange;
-      this.walkDirection = isApproaching ? 'forward' : 'backward';
+      this.walkDirection = 'forward';
       this.isWalking = true;
-      this.isCloseRange = isApproaching;
+      this.isCloseRange = true;
 
       if (window.SoundFX && typeof window.SoundFX.playMechMarch === 'function') {
         window.SoundFX.playMechMarch();
       }
 
-      if (isApproaching) {
-        this.log(`APPROACH MANEUVER: Actuators power forward! Closing distance into Point-Blank Brawling Range (+10% Hit Accuracy).`, 'player');
-        this.spawnDamagePopup('APPROACHING!', true, true);
-      } else {
-        this.log(`TACTICAL FALL-BACK: Reverse thrusters engaged. Re-establishing Standoff Range.`, 'player');
-        this.spawnDamagePopup('FALLING BACK', true, false);
+      this.log(`APPROACH MANEUVER: Actuators power forward! Closing distance into Point-Blank Brawling Range (+10% Hit Accuracy).`, 'player');
+      this.spawnDamagePopup('APPROACHING!', true, true);
+
+      this.render();
+
+      setTimeout(() => {
+        this.isWalking = false;
+        this.render();
+        if (!this.contractWon && !this.contractLost && !this.battleOver) {
+          this.onPlayerActionComplete();
+        }
+      }, 1400);
+      return;
+    }
+
+    if (tacticKey === 'separate' || tacticKey === 'seperate' || tacticKey === 'fall_back') {
+      if (this.playerFallen) {
+        alert("Cannot separate while your Titan is prone! Stand up first.");
+        return;
       }
+      if (!this.isCloseRange) {
+        alert("Mechs are already separated at normal standoff distance!");
+        return;
+      }
+      this.turn = 'animating';
+      this.walkDirection = 'backward';
+      this.isWalking = true;
+      this.isCloseRange = false;
+
+      if (window.SoundFX && typeof window.SoundFX.playMechMarch === 'function') {
+        window.SoundFX.playMechMarch();
+      }
+
+      this.log(`TACTICAL SEPARATION: Reverse actuators engaged! Mechs walk backwards with animation and return to normal standoff distance.`, 'player');
+      this.spawnDamagePopup('SEPARATING!', true, false);
 
       this.render();
 
@@ -2667,12 +2698,21 @@ window.BattleModule = {
               </div>
             ` : this.commandTab === 'tactics' ? `
               <div style="display:flex; flex-direction:column; gap:6px;">
-                <button class="jrpg-menu-btn ${this.isCloseRange ? 'active' : ''}" ${!isPlayerTurn || this.playerFallen ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('approach')" style="${this.isCloseRange ? 'border-color:#38bdf8; background:rgba(56,189,248,0.15);' : ''}">
-                  <div>
-                    <div><strong>${this.isCloseRange ? '🔙 Fall Back (Withdraw Range)' : '⏩ Approach (Close Distance)'}</strong></div>
-                    <div class="subtext" style="font-size:11px;">${this.isCloseRange ? 'March backward to standoff range' : 'March forward into point-blank brawling range (+10% Hit Accuracy)'}</div>
-                  </div>
-                </button>
+                ${!this.isCloseRange ? `
+                  <button class="jrpg-menu-btn" ${!isPlayerTurn || this.playerFallen ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('approach')">
+                    <div>
+                      <div><strong>⏩ Approach (Close Distance)</strong></div>
+                      <div class="subtext" style="font-size:11px;">March forward into point-blank brawling range (+10% Hit Accuracy)</div>
+                    </div>
+                  </button>
+                ` : `
+                  <button class="jrpg-menu-btn active" ${!isPlayerTurn || this.playerFallen ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('separate')" style="border-color:#38bdf8; background:rgba(56,189,248,0.15);">
+                    <div>
+                      <div><strong>🔙 Separate (Walk Backwards)</strong></div>
+                      <div class="subtext" style="font-size:11px;">Walk backwards to return Mechs to normal distance away</div>
+                    </div>
+                  </button>
+                `}
                 <button class="jrpg-menu-btn ${this.playerFallen ? 'active' : ''}" ${!isPlayerTurn || !this.playerFallen ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('stand_up')" style="${this.playerFallen ? 'border-color:#ef4444; background:rgba(239,68,68,0.2);' : ''}">
                   <div>
                     <div><strong>🦾 Stand Up (Piloting Recovery)</strong></div>
