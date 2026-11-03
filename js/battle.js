@@ -7,16 +7,13 @@ window.BattleModule = {
   // Stylized 3D Duel State (Pokemon / Final Fantasy Style)
   round: 1,
   turn: 'player', // 'player' | 'enemy' | 'animating' | 'ended'
-  commandTab: 'attack', // 'attack' | 'defend' | 'tactics' | 'cooling' | 'retreat'
+  commandTab: 'attack', // 'attack' | 'defend' | 'tactics' | 'retreat'
   aimTarget: 'General', // 'General' | 'HD' | 'CT' | 'LT' | 'RT' | 'LA' | 'RA' | 'LL' | 'RL'
   selectedPlayerPart: null, // Player mech region highlighted for the condition readout
   playerStance: 'normal', // 'normal' | 'braced' | 'evasive' | 'twisted'
   enemyStance: 'normal',
   playerFallen: false,
   enemyFallen: false,
-  playerHeat: 0,
-  enemyHeat: 0,
-  ventCoolantUses: 2,
   sensorLockTurns: 0,
   damagePopups: [],
   activeBeam: null,
@@ -84,9 +81,6 @@ window.BattleModule = {
     this.enemyStance = 'normal';
     this.playerFallen = false;
     this.enemyFallen = false;
-    this.playerHeat = 0;
-    this.enemyHeat = 0;
-    this.ventCoolantUses = 2;
     this.sensorLockTurns = 0;
     this.damagePopups = [];
     this.activeBeam = null;
@@ -107,12 +101,11 @@ window.BattleModule = {
         armor: { ...contract.enemy.armor },
         maxArmor: { ...contract.enemy.maxArmor },
         pilot: contract.enemy.pilot || 'Hostile Combat AI',
-        coolingCap: 24,
         weapons: [
-          { name: 'Particle Projector Cannon (PPC)', cat: 'Energy', dmg: 24, heat: 18, accMod: 0 },
-          { name: 'Long-Range Missile 15 (LRM-15)', cat: 'Missile', dmg: 18, heat: 12, accMod: 4 },
-          { name: 'Twin Medium Lasers', cat: 'Energy', dmg: 14, heat: 8, accMod: 6 },
-          { name: 'Heavy Autocannon AC/10', cat: 'Ballistic', dmg: 20, heat: 10, accMod: 0 }
+          { name: 'Particle Projector Cannon (PPC)', cat: 'Energy', dmg: 24, accMod: 0 },
+          { name: 'Long-Range Missile 15 (LRM-15)', cat: 'Missile', dmg: 18, accMod: 4 },
+          { name: 'Twin Medium Lasers', cat: 'Energy', dmg: 14, accMod: 6 },
+          { name: 'Heavy Autocannon AC/10', cat: 'Ballistic', dmg: 20, accMod: 0 }
         ]
       };
     } else {
@@ -130,11 +123,10 @@ window.BattleModule = {
         armor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
         maxArmor: { HD: 20, CT: 56, LT: 40, RT: 40, LA: 34, RA: 34, LL: 38, RL: 38 },
         pilot: pick.pilot,
-        coolingCap: 24,
         weapons: [
-          { name: 'Heavy Ion Blast', cat: 'Energy', dmg: pick.dmg + 4, heat: 16, accMod: 0 },
-          { name: 'Missile Swarm', cat: 'Missile', dmg: pick.dmg, heat: 10, accMod: 5 },
-          { name: 'Rotary Autocannon', cat: 'Ballistic', dmg: pick.dmg + 2, heat: 11, accMod: 2 }
+          { name: 'Heavy Ion Blast', cat: 'Energy', dmg: pick.dmg + 4, accMod: 0 },
+          { name: 'Missile Swarm', cat: 'Missile', dmg: pick.dmg, accMod: 5 },
+          { name: 'Rotary Autocannon', cat: 'Ballistic', dmg: pick.dmg + 2, accMod: 2 }
         ]
       };
     }
@@ -300,7 +292,6 @@ window.BattleModule = {
               name: comp.name,
               cat: comp.cat.replace(' Weapons', ''),
               damage: comp.damage || (comp.heat ? Math.round(comp.heat * 1.4) : 14),
-              heat: comp.heat || 6,
               accMod: comp.accMod || 0,
               ammo: comp.ammoMax ? (comp.ammo ?? comp.ammoMax) : null,
               loc: loc
@@ -312,10 +303,10 @@ window.BattleModule = {
 
     if (!weapons.length) {
       return [
-        { id: 'w-ppc', name: 'Particle Projector Cannon (PPC)', cat: 'Energy', damage: 24, heat: 18, accMod: 0, ammo: null, loc: 'RA' },
-        { id: 'w-lrm', name: 'LRM-10 Missile Launcher', cat: 'Missile', damage: 16, heat: 10, accMod: 5, ammo: 8, loc: 'LT' },
-        { id: 'w-laser', name: 'Twin Medium Pulse Lasers', cat: 'Energy', damage: 14, heat: 8, accMod: 6, ammo: null, loc: 'LA' },
-        { id: 'w-ac', name: 'Rotary Autocannon RAC/5', cat: 'Ballistic', damage: 18, heat: 9, accMod: 2, ammo: 12, loc: 'RT' }
+        { id: 'w-ppc', name: 'Particle Projector Cannon (PPC)', cat: 'Energy', damage: 24, accMod: 0, ammo: null, loc: 'RA' },
+        { id: 'w-lrm', name: 'LRM-10 Missile Launcher', cat: 'Missile', damage: 16, accMod: 5, ammo: 8, loc: 'LT' },
+        { id: 'w-laser', name: 'Twin Medium Pulse Lasers', cat: 'Energy', damage: 14, accMod: 6, ammo: null, loc: 'LA' },
+        { id: 'w-ac', name: 'Rotary Autocannon RAC/5', cat: 'Ballistic', damage: 18, accMod: 2, ammo: 12, loc: 'RT' }
       ];
     }
     return weapons;
@@ -374,8 +365,7 @@ window.BattleModule = {
     this.turn = 'animating';
     this.battleStats.shotsFired++;
 
-    // Weapon Heat & Ammo
-    this.playerHeat += (weapon.heat || 6);
+    // Ammo
     if (typeof weapon.ammo === 'number') {
       weapon.ammo = Math.max(0, weapon.ammo - 1);
     }
@@ -480,67 +470,6 @@ window.BattleModule = {
     }, 350);
   },
 
-  executePlayerAlphaStrike() {
-    if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
-    const st = window.GameState.data;
-    const jock = this.getActiveCombatJock();
-    const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
-    const weapons = this.getPlayerWeapons(mech);
-
-    this.turn = 'animating';
-    this.log(`ALPHA STRIKE INITIATED! ${jock ? jock.callsign : 'Pilot'} unloads full weapon battery simultaneously!`, 'crit');
-
-    let totalDmg = 0;
-    let hitCount = 0;
-    let heatSpike = 0;
-
-    weapons.forEach(w => {
-      this.battleStats.shotsFired++;
-      heatSpike += (w.heat || 6);
-      const hitChance = this.calcHitChance(w, true, this.aimTarget);
-      const roll = Math.floor(Math.random() * 100) + 1;
-      if (roll <= hitChance) {
-        hitCount++;
-        this.battleStats.shotsHit++;
-        let d = Math.round((w.damage || 14) * 0.9);
-        if (this.enemyStance === 'braced') d = Math.round(d * 0.6);
-        totalDmg += d;
-
-        const locChart = ['CT', 'CT', 'LT', 'RT', 'LA', 'RA', 'LL', 'RL'];
-        const loc = locChart[Math.floor(Math.random() * locChart.length)];
-        this.enemy.armor[loc] = Math.max(0, this.enemy.armor[loc] - d);
-      }
-    });
-
-    this.playerHeat += heatSpike;
-    this.battleStats.damageDealt += totalDmg;
-
-    if (window.SoundFX && typeof window.SoundFX.playIncomingShot === 'function') {
-      window.SoundFX.playIncomingShot(true);
-    }
-
-    this.activeBeam = { type: 'laser', from: { x: 36, y: 50 }, to: { x: 80, y: 36 } };
-    this.spawnDamagePopup(`ALPHA STRIKE: -${totalDmg} DMG!`, false, true);
-    this.render();
-
-    setTimeout(() => {
-      this.activeBeam = null;
-      this.log(`ALPHA STRIKE REPORT: ${hitCount}/${weapons.length} weapons struck home for ${totalDmg} total damage (+${heatSpike} C Heat)!`, 'player');
-
-      if (this.enemy.armor.CT <= 0 || this.enemy.armor.HD <= 0) {
-        this.finishBattle('VICTORY', 'Alpha Strike Core Overload', 'ALPHA', 'Full Battery');
-        return;
-      }
-
-      this.render();
-      setTimeout(() => {
-        if (!this.contractWon && !this.contractLost && !this.battleOver) {
-          this.runEnemyTurn();
-        }
-      }, 1200);
-    }, 450);
-  },
-
   executePlayerDefend(stance) {
     if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
     this.turn = 'animating';
@@ -553,7 +482,6 @@ window.BattleModule = {
       this.log(`TORSO TWIST: Armor presentation angled to deflect incoming projectiles away from vulnerable core.`, 'player');
     }
 
-    this.playerHeat = Math.max(0, this.playerHeat - 14);
     this.render();
 
     setTimeout(() => {
@@ -596,8 +524,7 @@ window.BattleModule = {
     if (tacticKey === 'evasion') {
       this.turn = 'animating';
       this.playerStance = 'evasive';
-      this.playerHeat += 8;
-      this.log(`EVASIVE JINK: Jump jets & sprint thrusters engaged! +30% Evasion against hostile attacks next turn (+8 Heat).`, 'player');
+      this.log(`EVASIVE JINK: Jump jets & sprint thrusters engaged! +30% Evasion against hostile attacks next turn.`, 'player');
       this.render();
       setTimeout(() => {
         if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
@@ -620,33 +547,6 @@ window.BattleModule = {
       this.commandTab = 'attack';
       this.aimTarget = 'HD';
       this.render();
-    }
-  },
-
-  executePlayerCooling(type) {
-    if (this.turn !== 'player' || this.contractWon || this.contractLost || this.battleOver) return;
-
-    if (type === 'vent') {
-      if (this.ventCoolantUses <= 0) {
-        alert("Emergency Coolant tanks are empty!");
-        return;
-      }
-      this.ventCoolantUses--;
-      this.playerHeat = Math.max(0, this.playerHeat - 35);
-      this.log(`COOLANT FLUSH: Emergency aerosol coolant deployed! Core temperature dropped by -35 C (${this.ventCoolantUses} uses left).`, 'system');
-      this.spawnDamagePopup('-35 C COOLANT', true, false);
-      this.render();
-      return;
-    }
-
-    if (type === 'safe_mode') {
-      this.turn = 'animating';
-      this.playerHeat = Math.max(0, this.playerHeat - 28);
-      this.log(`POWER CONSERVATION: Weapons powered down for reactor thermal flush (-28 C Heat dissipated).`, 'player');
-      this.render();
-      setTimeout(() => {
-        if (!this.contractWon && !this.contractLost && !this.battleOver) this.runEnemyTurn();
-      }, 900);
     }
   },
 
@@ -682,21 +582,11 @@ window.BattleModule = {
         }
       }
 
-      // Enemy Heat Venting
-      if (this.enemyHeat > 80) {
-        this.enemyHeat = Math.max(0, this.enemyHeat - 30);
-        this.log(`ENEMY THERMAL FLUSH: ${this.enemy.name} vents superheated plasma to prevent reactor shutdown.`, 'hostile');
-        this.render();
-        this.endRound();
-        return;
-      }
-
       // Enemy Attack
       const weapons = this.enemy.weapons || [
-        { name: 'Heavy Cannon', cat: 'Ballistic', dmg: this.enemy.dmg, heat: 10, accMod: 0 }
+        { name: 'Heavy Cannon', cat: 'Ballistic', dmg: this.enemy.dmg, accMod: 0 }
       ];
       const weapon = weapons[Math.floor(Math.random() * weapons.length)];
-      this.enemyHeat += (weapon.heat || 8);
 
       const hitChance = this.calcHitChance(weapon, false);
       const roll = Math.floor(Math.random() * 100) + 1;
@@ -829,12 +719,6 @@ window.BattleModule = {
     const st = window.GameState.data;
     const jock = this.getActiveCombatJock();
     const mech = jock ? st.mechs.find(m => m.id === jock.assignedMechId) : st.mechs[0];
-    const metrics = mech ? window.GameState.computeMechMetrics(mech) : { coolingCap: 20 };
-
-    const coolCap = Math.max(12, Math.round(metrics.coolingCap || 20));
-    this.playerHeat = Math.max(0, this.playerHeat - coolCap);
-    this.enemyHeat = Math.max(0, this.enemyHeat - (this.enemy.coolingCap || 22));
-
     if (this.sensorLockTurns > 0) this.sensorLockTurns--;
 
     this.playerStance = 'normal';
@@ -2189,7 +2073,6 @@ window.BattleModule = {
     const enemyArmorPct = maxEnemyArmor > 0 ? Math.round((curEnemyArmor / maxEnemyArmor) * 100) : 100;
 
     const weapons = this.getPlayerWeapons(mech);
-    const coolCap = Math.max(16, metrics?.coolingCap || 24);
     const isPlayerTurn = (this.turn === 'player' && !this.battleOver);
 
     return `
@@ -2214,7 +2097,6 @@ window.BattleModule = {
               <span>HOSTILE ARMOR ${enemyArmorPct}%</span>
               <span class="jrpg-bar-track" style="display:inline-block; width:90px; height:7px;"><span class="jrpg-bar-fill ${enemyArmorPct > 55 ? 'armor' : (enemyArmorPct > 25 ? 'armor-mid' : 'armor-low')}" style="display:block; width:${enemyArmorPct}%;"></span></span>
             </span>
-            <span class="badge ${this.enemyHeat > 70 ? 'red' : 'blue'} mono" style="font-size:10px;">HEAT ${this.enemyHeat}</span>
             <span class="badge red mono" style="font-size:10px;">${this.enemyFallen ? 'PRONE (+20% HIT)' : 'COMBAT READY'}</span>
             <span class="badge amber mono" style="font-size:10px;">AIM: ${this.aimTarget === 'General' ? 'GENERAL' : `${this.aimTarget} (${this.getAimModifier(this.aimTarget) > 0 ? '+' : ''}${this.getAimModifier(this.aimTarget)}% HIT)`}</span>
             ${this.sensorLockTurns > 0 ? '<span class="badge purple mono" style="font-size:10px;">TACTICAL SCAN ACTIVE (+15% HIT)</span>' : ''}
@@ -2241,13 +2123,13 @@ window.BattleModule = {
 
             <!-- Player Titan (Bottom-Left Foreground, Angled Northeast) -->
             <div class="jrpg-combatant player-side ${this.playerFallen ? 'prone' : ''}">
-              ${this.renderIsometricTitanSvg('player', this.playerFallen, playerArmorPct, '#38bdf8', mech, this.playerHeat)}
+              ${this.renderIsometricTitanSvg('player', this.playerFallen, playerArmorPct, '#38bdf8', mech)}
               <div class="jrpg-shadow"></div>
             </div>
 
             <!-- Enemy Titan (Top-Right Background, Angled Southwest) -->
             <div class="jrpg-combatant enemy-side ${this.enemyFallen ? 'prone' : ''}">
-              ${this.renderIsometricTitanSvg('enemy', this.enemyFallen, enemyArmorPct, '#f43f5e', this.enemy, this.enemyHeat)}
+              ${this.renderIsometricTitanSvg('enemy', this.enemyFallen, enemyArmorPct, '#f43f5e', this.enemy)}
               <div class="jrpg-shadow"></div>
             </div>
 
@@ -2332,17 +2214,6 @@ window.BattleModule = {
                 </div>
               </div>
 
-              <!-- Heat Meter -->
-              <div class="jrpg-bar-container">
-                <div class="jrpg-bar-label">
-                  <span>Reactor Heat</span>
-                  <span style="color:${this.playerHeat > 70 ? 'var(--accent-red)' : 'var(--accent-amber)'};">${this.playerHeat} / 100 C</span>
-                </div>
-                <div class="jrpg-bar-track">
-                  <div class="jrpg-bar-fill ${this.playerHeat > 70 ? 'heat-high' : 'heat'}" style="width:${Math.min(100, this.playerHeat)}%;"></div>
-                </div>
-              </div>
-
               <!-- Posture & Section Paperdoll Mini -->
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:11px;">
                 <div style="display:flex; gap:4px; flex-wrap:wrap;">
@@ -2385,10 +2256,6 @@ window.BattleModule = {
                 <span>⚡ TACTICS</span>
                 <span class="mono" style="font-size:11px;">&rarr;</span>
               </button>
-              <button class="jrpg-menu-btn ${this.commandTab === 'cooling' ? 'active' : ''}" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.setCommandTab('cooling')">
-                <span>❄️ COOLING</span>
-                <span class="mono" style="font-size:11px;">&rarr;</span>
-              </button>
             `}
           </div>
 
@@ -2420,7 +2287,7 @@ window.BattleModule = {
                       <div>
                         <div><strong>${w.name}</strong></div>
                         <div class="subtext mono" style="font-size:10px; color:#94a3b8;">
-                          ${w.damage} DMG &bull; +${w.heat} Heat ${w.ammo !== null ? `&bull; Ammo: ${w.ammo}` : ''}
+                          ${w.damage} DMG &bull; ${w.ammo !== null ? `&bull; Ammo: ${w.ammo}` : ''}
                         </div>
                       </div>
                       <span class="badge ${hit >= 70 ? 'green' : (hit >= 50 ? 'amber' : 'red')} mono" style="font-size:11px;">
@@ -2429,9 +2296,6 @@ window.BattleModule = {
                     </button>
                   `;
                 }).join('')}
-                <button class="btn btn-primary" ${!isPlayerTurn ? 'disabled' : ''} style="margin-top:4px; padding:8px; font-weight:800; font-size:12px; background:linear-gradient(90deg, #dc2626, #ea580c); color:#fff;" onclick="BattleModule.executePlayerAlphaStrike()">
-                  ⚡ UNLEASH ALPHA STRIKE (ALL WEAPONS)
-                </button>
               </div>
             ` : this.commandTab === 'defend' ? `
               <div style="display:flex; flex-direction:column; gap:6px;">
@@ -2459,7 +2323,7 @@ window.BattleModule = {
                 <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('evasion')">
                   <div>
                     <div><strong>💨 Evasive Jink Sprint</strong></div>
-                    <div class="subtext" style="font-size:11px;">+30% Evasion against hostile attacks next turn (+8 Heat)</div>
+                    <div class="subtext" style="font-size:11px;">+30% Evasion against hostile attacks next turn</div>
                   </div>
                 </button>
                 <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerTactic('sensor_lock')">
@@ -2472,21 +2336,6 @@ window.BattleModule = {
                   <div>
                     <div><strong>🎯 Headhunter Snipe Stance</strong></div>
                     <div class="subtext" style="font-size:11px;">Locks targeting reticle directly onto cockpit canopy (HD)</div>
-                  </div>
-                </button>
-              </div>
-            ` : this.commandTab === 'cooling' ? `
-              <div style="display:flex; flex-direction:column; gap:6px;">
-                <button class="jrpg-menu-btn" ${!isPlayerTurn || this.ventCoolantUses <= 0 ? 'disabled' : ''} onclick="BattleModule.executePlayerCooling('vent')">
-                  <div>
-                    <div><strong>❄️ Vent Emergency Coolant</strong></div>
-                    <div class="subtext" style="font-size:11px;">Instantly drops -35 C heat (${this.ventCoolantUses} charges left)</div>
-                  </div>
-                </button>
-                <button class="jrpg-menu-btn" ${!isPlayerTurn ? 'disabled' : ''} onclick="BattleModule.executePlayerCooling('safe_mode')">
-                  <div>
-                    <div><strong>⏸️ Thermal Flush / Hold Fire</strong></div>
-                    <div class="subtext" style="font-size:11px;">Hold attacks to double heat sink dissipation (-28 C)</div>
                   </div>
                 </button>
               </div>
@@ -2721,21 +2570,19 @@ window.BattleModule = {
     `;
   },
 
-  renderIsometricTitanSvg(side, isProne = false, healthPct = 100, themeColor = '#38bdf8', mechOrEnemy = null, heatLevel = 0) {
+  renderIsometricTitanSvg(side, isProne = false, healthPct = 100, themeColor = '#38bdf8', mechOrEnemy = null) {
     const isPlayer = (side === 'player');
     const spec = this.getMechArtworkSpec(side, mechOrEnemy);
     const widthPx = Math.round(spec.h * spec.aw / spec.ah);
     const isDamaged = healthPct < 55;
     const isCritical = healthPct < 28;
-    const isOverheating = heatLevel >= 65;
 
     const baseShadow = isPlayer
       ? 'drop-shadow(0 14px 22px rgba(0,0,0,0.92)) drop-shadow(0 0 12px rgba(56,189,248,0.22))'
       : 'drop-shadow(0 14px 22px rgba(0,0,0,0.92))';
-    const heatGlow = isOverheating ? 'drop-shadow(0 0 18px rgba(249,115,22,0.8)) brightness(1.08)' : '';
-    const filterChain = [baseShadow, spec.tint, heatGlow].filter(Boolean).join(' ');
+    const filterChain = [baseShadow, spec.tint].filter(Boolean).join(' ');
 
-    // Damage / heat effects are anchored to the torso of the sprite
+    // Damage effects are anchored to the torso of the sprite
     const t = spec.regions.torso;
     let fx = t[0] + t[2] * 0.5;
     if (spec.flip) fx = 100 - fx;
@@ -2750,7 +2597,6 @@ window.BattleModule = {
              style="width:100%; height:100%; display:block; ${spec.flip ? 'transform:scaleX(-1);' : ''} filter:${filterChain}; pointer-events:none;" />
         ${isDamaged ? `<div class="mech-fx smoke" style="left:${fx.toFixed(1)}%; top:${fy.toFixed(1)}%;"></div><div class="mech-fx spark" style="left:${(fx + 6).toFixed(1)}%; top:${(fy + 6).toFixed(1)}%;"></div>` : ''}
         ${isCritical ? `<div class="mech-fx fire" style="left:${fx.toFixed(1)}%; top:${(fy + 4).toFixed(1)}%;"></div><div class="mech-fx smoke dark" style="left:${(fx - 5).toFixed(1)}%; top:${fy.toFixed(1)}%;"></div>` : ''}
-        ${isOverheating ? `<div class="mech-fx heat" style="left:${fx.toFixed(1)}%; top:${(fy - 6).toFixed(1)}%;"></div>` : ''}
         ${this.renderMechRegions(side, spec, mechOrEnemy)}
       </div>
     `;
