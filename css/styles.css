@@ -743,3 +743,355 @@ body {
   }
 }
 
+/* ==========================================================================
+   STYLIZED JRPG 3D SIDE-ANGLE DUEL BATTLE ARENA (POKEMON / FINAL FANTASY STYLE)
+   ========================================================================== */
+
+.jrpg-battle-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  user-select: none;
+}
+
+.jrpg-3d-viewport {
+  position: relative;
+  width: 100%;
+  height: 440px;
+  min-height: 440px;
+  border-radius: 12px;
+  overflow: hidden;
+  perspective: 1100px;
+  background: radial-gradient(circle at 75% 25%, #1e1b4b 0%, #0f172a 45%, #020617 100%);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), inset 0 0 80px rgba(0, 0, 0, 0.85);
+}
+
+.jrpg-3d-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+
+/* Tilted 3D Holographic Ground Plane */
+.jrpg-3d-ground {
+  position: absolute;
+  width: 150%;
+  height: 150%;
+  left: -25%;
+  top: 10%;
+  transform: rotateX(62deg) rotateZ(-24deg);
+  background-image: 
+    linear-gradient(rgba(56, 189, 248, 0.18) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.18) 1.5px, transparent 1.5px);
+  background-size: 42px 42px;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.jrpg-3d-ground::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, #020617 80%);
+}
+
+/* Dynamic Combatant Bases on the 3D Stage */
+.jrpg-combatant {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.25s ease, filter 0.2s ease;
+  transform-style: preserve-3d;
+}
+
+.jrpg-combatant.player-side {
+  left: 9%;
+  bottom: 12%;
+  z-index: 20;
+  animation: jrpg-idle-player 3.2s ease-in-out infinite;
+}
+
+.jrpg-combatant.enemy-side {
+  right: 14%;
+  top: 14%;
+  z-index: 15;
+  animation: jrpg-idle-enemy 3.2s ease-in-out infinite;
+}
+
+@keyframes jrpg-idle-player {
+  0%, 100% { transform: translateY(0px) scale(1.08); }
+  50% { transform: translateY(-5px) scale(1.08); }
+}
+
+@keyframes jrpg-idle-enemy {
+  0%, 100% { transform: translateY(0px) scale(0.92); }
+  50% { transform: translateY(-4px) scale(0.92); }
+}
+
+.jrpg-combatant.prone {
+  transform: rotate(-65deg) scale(0.85) !important;
+  filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.6));
+}
+
+.jrpg-combatant.shaking {
+  animation: jrpg-hit-shake 0.4s cubic-bezier(.36,.07,.19,.97) both !important;
+}
+
+@keyframes jrpg-hit-shake {
+  10%, 90% { transform: translate3d(-3px, 0, 0); filter: brightness(1.8) contrast(1.4); }
+  20%, 80% { transform: translate3d(5px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+  40%, 60% { transform: translate3d(6px, 0, 0); }
+}
+
+.jrpg-shadow {
+  width: 140px;
+  height: 38px;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.85) 0%, rgba(0,0,0,0) 70%);
+  border-radius: 50%;
+  margin-top: -16px;
+  transform: rotateX(60deg);
+  z-index: -1;
+}
+
+/* JRPG Floating HUD Status Badges (Pokemon / Final Fantasy Style) */
+.jrpg-hud-badge {
+  position: absolute;
+  z-index: 40;
+  min-width: 280px;
+  max-width: 340px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 0 12px rgba(56, 189, 248, 0.1);
+}
+
+.jrpg-hud-badge.player-hud {
+  left: 18px;
+  top: 16px;
+  border-left: 4px solid var(--accent-green, #10b981);
+}
+
+.jrpg-hud-badge.enemy-hud {
+  right: 18px;
+  top: 16px;
+  border-right: 4px solid var(--accent-red, #f43f5e);
+}
+
+.jrpg-hud-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f8fafc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.jrpg-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.jrpg-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.jrpg-bar-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(30, 41, 59, 0.9);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.jrpg-bar-fill {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.jrpg-bar-fill.armor {
+  background: linear-gradient(90deg, #10b981, #34d399);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.jrpg-bar-fill.armor-mid {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+
+.jrpg-bar-fill.armor-low {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+.jrpg-bar-fill.heat {
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+}
+
+.jrpg-bar-fill.heat-high {
+  background: linear-gradient(90deg, #f97316, #ef4444);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+/* Dynamic VFX Overlay Layer for Projectiles & Floating Numbers */
+.jrpg-vfx-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.jrpg-damage-num {
+  position: absolute;
+  font-size: 20px;
+  font-weight: 900;
+  font-family: var(--font-mono, monospace);
+  text-shadow: 0 2px 6px #000, 0 0 10px currentColor;
+  animation: jrpg-float-up 1.4s ease-out forwards;
+  pointer-events: none;
+  z-index: 60;
+}
+
+@keyframes jrpg-float-up {
+  0% { opacity: 0; transform: translateY(12px) scale(0.7); }
+  15% { opacity: 1; transform: translateY(-8px) scale(1.2); }
+  40% { transform: translateY(-24px) scale(1.0); }
+  100% { opacity: 0; transform: translateY(-48px) scale(0.9); }
+}
+
+/* JRPG Classic 4-Box Command & Dialogue Console */
+.jrpg-console {
+  display: grid;
+  grid-template-columns: 200px 320px 220px 1fr;
+  gap: 10px;
+  width: 100%;
+  min-height: 180px;
+  background: #090d16;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+}
+
+@media (max-width: 900px) {
+  .jrpg-console {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+}
+
+.jrpg-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: 210px;
+}
+
+.jrpg-box-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #38bdf8;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+  padding-bottom: 4px;
+}
+
+.jrpg-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.jrpg-menu-btn:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  transform: translateX(3px);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+}
+
+.jrpg-menu-btn.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.5);
+}
+
+.jrpg-menu-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.8);
+}
+
+.jrpg-feed {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.jrpg-feed-entry {
+  padding: 4px 6px;
+  border-left: 2px solid #64748b;
+  background: rgba(2, 6, 23, 0.5);
+  border-radius: 0 4px 4px 0;
+}
+
+.jrpg-feed-entry.player { border-left-color: #38bdf8; color: #bae6fd; }
+.jrpg-feed-entry.hostile { border-left-color: #f43f5e; color: #fecdd3; }
+.jrpg-feed-entry.crit { border-left-color: #eab308; color: #fef08a; font-weight: 700; }
+.jrpg-feed-entry.system { border-left-color: #10b981; color: #a7f3d0; }
+
+.jrpg-shake-screen {
+  animation: jrpg-shake-view 0.35s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes jrpg-shake-view {
+  10%, 90% { transform: translate3d(-2px, -1px, 0); }
+  20%, 80% { transform: translate3d(3px, 2px, 0); }
+  30%, 50%, 70% { transform: translate3d(-3px, -2px, 0); }
+  40%, 60% { transform: translate3d(3px, 1px, 0); }
+}
+
