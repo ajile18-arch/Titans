@@ -11,6 +11,8 @@ window.BattleModule = {
   playerChassisClass: 'Medium',
   playerAffinity: 20,
   playerAffTier: null,
+  playerArmorRating: 100,
+  playerDamageReductionPct: 35,
   turn: 'player', // 'player' | 'enemy' | 'animating' | 'ended'
   commandTab: 'attack', // 'attack' | 'defend' | 'tactics' | 'retreat'
   aimTarget: 'General', // 'General' | 'HD' | 'CT' | 'LT' | 'RT' | 'LA' | 'RA' | 'LL' | 'RL'
@@ -82,6 +84,26 @@ window.BattleModule = {
     }
     const offset = seed % spread;
     return Math.min(99, Math.max(15, base + offset));
+  },
+
+  calcEnemyArmorRating(enemy) {
+    if (typeof enemy?.armorRating === 'number') return enemy.armorRating;
+    const wClass = this.getChassisClass(enemy?.weight);
+    const threat = String(enemy?.threat || 'Moderate').toLowerCase();
+    let baseAR = 140;
+    if (wClass === 'Recon') baseAR = 60;
+    else if (wClass === 'Light') baseAR = 95;
+    else if (wClass === 'Medium') baseAR = 140;
+    else if (wClass === 'Heavy') baseAR = 200;
+    else if (wClass === 'Assault') baseAR = 280;
+
+    let threatMod = 0;
+    if (threat.includes('low')) threatMod = -20;
+    else if (threat.includes('challeng')) threatMod = +20;
+    else if (threat.includes('high')) threatMod = +40;
+    else if (threat.includes('dead')) threatMod = +60;
+
+    return Math.max(30, baseAR + threatMod);
   },
 
   onPlayerActionComplete() {
@@ -161,6 +183,7 @@ window.BattleModule = {
         pilot: contract.enemy.pilot || 'Hostile Combat AI',
         threat: contract.enemy.threat || 'Moderate',
         affinity: contract.enemy.affinity,
+        armorRating: contract.enemy.armorRating,
         weapons: [
           { name: 'Particle Projector Cannon (PPC)', cat: 'Energy', dmg: 24, accMod: 0 },
           { name: 'Long-Range Missile 15 (LRM-15)', cat: 'Missile', dmg: 18, accMod: 4 },
@@ -200,6 +223,12 @@ window.BattleModule = {
     this.enemy.affinity = enemyAffinity;
     this.enemy.affTier = enemyAffTier;
 
+    // Calculate enemy Armor Rating & Damage Reduction
+    if (typeof this.enemy.armorRating !== 'number') {
+      this.enemy.armorRating = this.calcEnemyArmorRating(this.enemy);
+    }
+    this.enemy.damageReductionPct = Math.min(65, Math.round((this.enemy.armorRating / (this.enemy.armorRating + 120)) * 80));
+
     // Determine player chassis weight class & affinity
     const playerTpl = mech ? window.GameState.getMechTemplate(mech) : null;
     const playerClass = playerTpl ? playerTpl.weightClass : 'Medium';
@@ -209,6 +238,11 @@ window.BattleModule = {
     this.playerChassisClass = playerClass;
     this.playerAffinity = playerAffinity;
     this.playerAffTier = playerAffTier;
+
+    // Calculate player Armor Rating & Damage Reduction from equipped open-weight armor
+    const pMetrics = mech ? window.GameState.computeMechMetrics(mech) : null;
+    this.playerArmorRating = pMetrics?.armorRating ?? 100;
+    this.playerDamageReductionPct = pMetrics?.damageReductionPct ?? 35;
 
     // INITIATIVE DECISION: Whoever has a higher affinity in their size of Mech has the first turn!
     if (playerAffinity > enemyAffinity) {
@@ -239,6 +273,11 @@ window.BattleModule = {
           ? `INITIATIVE SEIZED: ${pName} (${playerAffinity}% ${playerClass} Affinity [${playerAffTier.tier}]) out-maneuvered ${eName} (${enemyAffinity}% ${enemyClass} Affinity [${enemyAffTier.tier}])! Commander has the opening turn!`
           : `INITIATIVE LOST: Hostile ${eName} (${enemyAffinity}% ${enemyClass} Affinity [${enemyAffTier.tier}]) out-paced ${pName} (${playerAffinity}% ${playerClass} Affinity [${playerAffTier.tier}])! Hostile attacks first!`,
         type: isPlayerFirst ? 'player' : 'hostile'
+      },
+      {
+        time: '[DEFENSE]',
+        text: `ARMOR RATINGS: Commander Titan Plating: ${this.playerArmorRating} (-${this.playerDamageReductionPct}% DR) vs Hostile Plating: ${this.enemy.armorRating} (-${this.enemy.damageReductionPct}% DR).`,
+        type: 'system'
       }
     ];
 
@@ -533,9 +572,13 @@ window.BattleModule = {
       this.activeBeam = null;
       if (isHit) {
         this.battleStats.shotsHit++;
-        let dmg = Math.round((weapon.damage || 16) * (0.85 + Math.random() * 0.3));
+        let rawDmg = Math.round((weapon.damage || 16) * (0.85 + Math.random() * 0.3));
+        const enemyDR = this.enemy.damageReductionPct || 0;
+        const armorAbsorbed = Math.round(rawDmg * (enemyDR / 100));
+        let dmg = Math.max(1, rawDmg - armorAbsorbed);
+
         if (this.enemyStance === 'braced') {
-          dmg = Math.round(dmg * 0.6);
+          dmg = Math.max(1, Math.round(dmg * 0.6));
         }
         this.battleStats.damageDealt += dmg;
 
@@ -547,7 +590,8 @@ window.BattleModule = {
         this.enemy.armor[loc] = Math.max(0, this.enemy.armor[loc] - dmg);
         const isCrit = (Math.random() < 0.22);
         const critText = isCrit ? ' [CRITICAL!]' : '';
-        this.log(`${jock ? jock.callsign : 'Pilot'} fired ${weapon.name} at ${loc}! Direct Hit for ${dmg} DMG${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
+        const drText = enemyDR > 0 ? ` (absorbed ${armorAbsorbed} DMG via Hostile Armor Rating ${this.enemy.armorRating} [-${enemyDR}% DR])` : '';
+        this.log(`${jock ? jock.callsign : 'Pilot'} fired ${weapon.name} at ${loc}! Direct Hit for ${dmg} DMG${drText}${critText}. (Hit Roll ${roll} <= ${hitChance}%)`, 'player');
         this.spawnDamagePopup(`-${dmg} [${loc}]${critText}`, false, isCrit);
 
         // --- Leg Damage Knockdown Check (50% reduced fall rate table) ---
@@ -751,9 +795,13 @@ window.BattleModule = {
           this.shaking = true;
           setTimeout(() => { this.shaking = false; this.render(); }, 400);
 
-          let dmg = Math.round((weapon.dmg || this.enemy.dmg) * (0.85 + Math.random() * 0.3));
+          let rawDmg = Math.round((weapon.dmg || this.enemy.dmg) * (0.85 + Math.random() * 0.3));
+          const playerDR = this.playerDamageReductionPct || 0;
+          const armorAbsorbed = Math.round(rawDmg * (playerDR / 100));
+          let dmg = Math.max(1, rawDmg - armorAbsorbed);
+
           if (this.playerStance === 'braced') {
-            dmg = Math.round(dmg * 0.6);
+            dmg = Math.max(1, Math.round(dmg * 0.6));
           }
           this.battleStats.damageTaken += dmg;
 
@@ -765,7 +813,8 @@ window.BattleModule = {
             mech.armor[loc] = Math.max(0, (mech.armor[loc] || 30) - dmg);
           }
 
-          this.log(`HOSTILE IMPACT: ${this.enemy.name} fired ${weapon.name} at your ${loc}! Direct Hit for ${dmg} DMG!`, 'hostile');
+          const drText = playerDR > 0 ? ` (absorbed ${armorAbsorbed} DMG via Titan Armor Rating ${this.playerArmorRating} [-${playerDR}% DR])` : '';
+          this.log(`HOSTILE IMPACT: ${this.enemy.name} fired ${weapon.name} at your ${loc}! Direct Hit for ${dmg} DMG${drText}!`, 'hostile');
           this.spawnDamagePopup(`-${dmg} [${loc}]`, true, true);
 
           // --- Cockpit Head Injury & Decapitation Checks ---
@@ -1579,7 +1628,7 @@ window.BattleModule = {
               ${s.stats.shotsHit} Hits on ${s.stats.shotsFired} Salvos (${s.stats.damageDealt} Dmg Dealt)
             </div>
             <div style="margin-top:6px; font-size:11px; color:var(--accent-green);" class="mono">
-              Titan Hull: ${s.stats.remainingArmorPct}% Armor Integrity
+              Titan Hull: ${s.stats.remainingArmorPct}% Structural Integrity (Armor Rating: ${this.playerArmorRating || 100})
             </div>
           </div>
 
@@ -1762,12 +1811,12 @@ window.BattleModule = {
               </div>
               <div class="panel" style="display:flex; flex-direction:column; gap:6px;">
                 <div style="display:flex; justify-content:space-between; font-size:13px;">
-                  <span class="subtext">Remaining Armor Integrity:</span>
+                  <span class="subtext">Remaining Structural Integrity:</span>
                   <strong style="color:${s.stats.remainingArmorPct > 65 ? 'var(--accent-green)' : (s.stats.remainingArmorPct > 30 ? 'var(--accent-amber)' : 'var(--accent-red)')};">${s.stats.remainingArmorPct}%</strong>
                 </div>
                 <div class="bar-bg" style="height:10px;"><div class="bar-fill ${s.stats.remainingArmorPct > 65 ? 'green' : (s.stats.remainingArmorPct > 30 ? 'amber' : 'red')}" style="width:${s.stats.remainingArmorPct}%;"></div></div>
                 <div style="display:flex; justify-content:space-between; font-size:12px;" class="subtext">
-                  <span>Armor Damage Taken: ${s.stats.damageTaken} pts</span>
+                  <span>Structural Damage Taken: ${s.stats.damageTaken} pts</span>
                   <span>Damage Dealt: ${s.stats.damageDealt} pts</span>
                 </div>
               </div>
@@ -2319,9 +2368,12 @@ window.BattleModule = {
                 Affinity: ${this.enemy.affinity}% (${this.enemy.affTier?.tier || 'Familiar'})
               </span>
             </span>
-            <span class="jrpg-topbar-meter" title="Hostile armor ${curEnemyArmor} / ${maxEnemyArmor}">
-              <span>HOSTILE ARMOR ${enemyArmorPct}%</span>
-              <span class="jrpg-bar-track" style="display:inline-block; width:90px; height:7px;"><span class="jrpg-bar-fill ${enemyArmorPct > 55 ? 'armor' : (enemyArmorPct > 25 ? 'armor-mid' : 'armor-low')}" style="display:block; width:${enemyArmorPct}%;"></span></span>
+            <span class="jrpg-topbar-meter" title="Hostile structural integrity ${curEnemyArmor} / ${maxEnemyArmor}">
+              <span>HOSTILE STRUCTURE ${enemyArmorPct}%</span>
+              <span class="jrpg-bar-track" style="display:inline-block; width:80px; height:7px;"><span class="jrpg-bar-fill ${enemyArmorPct > 55 ? 'armor' : (enemyArmorPct > 25 ? 'armor-mid' : 'armor-low')}" style="display:block; width:${enemyArmorPct}%;"></span></span>
+            </span>
+            <span class="badge cyan mono" style="font-size:10px;" title="Hostile armor rating damage reduction">
+              🛡️ ARMOR: ${this.enemy.armorRating} (-${this.enemy.damageReductionPct}% DR)
             </span>
             <span class="badge red mono" style="font-size:10px;">${this.enemyFallen ? 'PRONE (+20% HIT)' : 'COMBAT READY'}</span>
             <span class="badge amber mono" style="font-size:10px;">AIM: ${this.aimTarget === 'General' ? 'GENERAL' : `${this.aimTarget} (${this.getAimModifier(this.aimTarget) > 0 ? '+' : ''}${this.getAimModifier(this.aimTarget)}% HIT)`}</span>
@@ -2439,10 +2491,14 @@ window.BattleModule = {
                 </div>
               </div>
 
-              <!-- Armor Bar -->
+              <!-- Armor Rating & Structural Integrity Bar -->
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-top:6px; margin-bottom:2px;">
+                <span style="color:#38bdf8; font-weight:700;">🛡️ Armor Rating: ${this.playerArmorRating}</span>
+                <span class="badge cyan mono" style="font-size:10px;">-${this.playerDamageReductionPct}% DR</span>
+              </div>
               <div class="jrpg-bar-container">
                 <div class="jrpg-bar-label">
-                  <span>Armor Integrity</span>
+                  <span>Structural Integrity (Hull)</span>
                   <span>${curPlayerArmor} / ${maxPlayerArmor} (${playerArmorPct}%)</span>
                 </div>
                 <div class="jrpg-bar-track">
@@ -2756,8 +2812,8 @@ window.BattleModule = {
       const mod = this.getAimModifier(loc);
       const modText = `${mod > 0 ? '+' : (mod < 0 ? '\u2212' : '\u00B1')}${Math.abs(mod)}% HIT`;
       const title = isEnemy
-        ? `${fullNames[loc]} \u2014 armor ${cur}/${max} \u2014 ${modText}`
-        : `${fullNames[loc]} \u2014 armor ${cur}/${max} (${pct}%) \u2014 click for condition readout`;
+        ? `${fullNames[loc]} \u2014 structure ${cur}/${max} \u2014 ${modText}`
+        : `${fullNames[loc]} \u2014 structure ${cur}/${max} (${pct}%) \u2014 click for condition readout`;
       return `
         <div class="mech-hotspot ${side} ${state} ${selected ? 'selected' : ''} ${isEnemy && !canAim ? 'locked' : ''}"
              style="left:${x.toFixed(1)}%; top:${y.toFixed(1)}%; width:${w.toFixed(1)}%; height:${h.toFixed(1)}%; z-index:${z + 2};"
@@ -2804,14 +2860,14 @@ window.BattleModule = {
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
           <span class="badge mono" style="font-size:10px; background:${color}22; color:${color}; border:1px solid ${color};">${status}</span>
-          <span class="mono" style="font-size:12px; font-weight:800; color:${color};">${cur} / ${max} ARMOR (${pct}%)</span>
+          <span class="mono" style="font-size:12px; font-weight:800; color:${color};">${cur} / ${max} STRUCTURE (${pct}%)</span>
         </div>
         <div class="jrpg-bar-track" style="margin-top:4px;"><div class="jrpg-bar-fill" style="width:${pct}%; background:${color};"></div></div>
         <div style="margin-top:8px; font-size:10px; font-weight:800; color:#38bdf8; letter-spacing:0.5px;">INSTALLED SYSTEMS</div>
         <div style="display:flex; flex-direction:column; gap:5px; margin-top:4px;">
           ${comps || '<div class="subtext" style="font-size:11px;">No components installed in this section.</div>'}
         </div>
-        ${cur <= 0 ? '<div style="margin-top:8px; font-size:11px; color:#fca5a5;">Armor breached \u2014 internal systems exposed to direct damage.</div>' : ''}
+        ${cur <= 0 ? '<div style="margin-top:8px; font-size:11px; color:#fca5a5;">Section structure breached \u2014 internal systems exposed to direct damage.</div>' : ''}
       </div>
     `;
   },

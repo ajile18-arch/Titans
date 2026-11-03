@@ -1071,21 +1071,51 @@ window.GameState = {
       });
     });
 
-    const totalMaxArmor = Object.values(mech.maxArmorCurrent).reduce((a, b) => a + b, 0);
-    const totalCurrentArmor = Object.values(mech.armor).reduce((a, b) => a + b, 0);
-    const armorTons = +(totalMaxArmor * 0.08).toFixed(1);
+    const totalMaxArmor = Object.values(mech.maxArmorCurrent || {}).reduce((a, b) => a + b, 0);
+    const totalCurrentArmor = Object.values(mech.armor || {}).reduce((a, b) => a + b, 0);
+
+    // Open weight available on this chassis before armor allocation
+    const rawOpenWeight = +(tpl.maxTons - tpl.baseChassisTons - compTons).toFixed(1);
+
+    // If mech.armorTons is not explicitly defined yet, initialize from existing loadout or open weight
+    if (typeof mech.armorTons !== 'number') {
+      const legacyTons = +(totalMaxArmor * 0.08).toFixed(1);
+      const initialTons = legacyTons > 0 && legacyTons <= rawOpenWeight
+        ? legacyTons
+        : Math.max(0, +(rawOpenWeight * 0.7).toFixed(1));
+      mech.armorTons = initialTons;
+    }
+
+    const armorTons = Math.max(0, +Number(mech.armorTons || 0).toFixed(1));
     const totalTons = +(tpl.baseChassisTons + compTons + armorTons).toFixed(1);
-    const totalCost = tpl.baseCost + compCost + totalMaxArmor * 120;
+    const openWeight = +(tpl.maxTons - totalTons).toFixed(1);
+
+    // Armor Rating directly scales with tons of equipped armor (1 ton = 10 Armor Rating points)
+    const armorRating = Math.max(0, Math.round(armorTons * 10));
+
+    // Damage Reduction % calculated from Armor Rating (capped at 65% DR)
+    const damageReductionPct = armorRating <= 0
+      ? 0
+      : Math.min(65, Math.round((armorRating / (armorRating + 120)) * 80));
+
+    const totalCost = tpl.baseCost + compCost + Math.round(armorTons * 1500);
 
     return {
       tpl,
       totalTons,
       maxTons: tpl.maxTons,
+      openWeight,
+      armorTons,
+      maxArmorTons: rawOpenWeight,
+      armorRating,
+      damageReductionPct,
       alphaHeat,
       coolingCap,
       totalCost,
       totalCurrentArmor,
       totalMaxArmor,
+      totalCurrentStructure: totalCurrentArmor,
+      totalMaxStructure: totalMaxArmor,
       jumpJets,
       hitBonus,
       defenseBonus,

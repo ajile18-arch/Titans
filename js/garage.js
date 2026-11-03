@@ -246,11 +246,11 @@ window.GarageModule = {
             <div class="section-header">
               <div>
                 <div class="section-title">8-Part Titan Anatomy Diagram</div>
-                <div class="subtext">Click any body section to inspect slots, armor &amp; equip owned parts</div>
+                <div class="subtext">Click any body section to inspect slots, internal structure &amp; equip owned parts</div>
               </div>
               <div style="display:flex; gap:6px;">
-                <button class="btn" onclick="GarageModule.repairCurrentMech()">Repair Damage (+2 Wks)</button>
-                <button class="btn" onclick="GarageModule.maxAllArmor()">Max All Armor (+1 Wk)</button>
+                <button class="btn" onclick="GarageModule.repairCurrentMech()">Repair Structure (+2 Wks)</button>
+                <button class="btn btn-primary" onclick="GarageModule.fillMaxArmor()">Fill Open Weight (+1 Wk)</button>
               </div>
             </div>
 
@@ -266,8 +266,8 @@ window.GarageModule = {
               ${this.renderPartBox(mech, tpl, 'LT', activeLoc)}
               <div class="panel" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px; padding:6px;">
                 <img src="${tpl.sprite || 'assets/mechs/mech_guillotine.png'}" alt="${tpl.model}" style="width:76px; height:76px; object-fit:contain; filter:drop-shadow(0 4px 8px rgba(0,0,0,0.85));" />
-                <strong class="mono" style="font-size:12px;">${metrics.totalCurrentArmor}/${metrics.totalMaxArmor} (${resaleInfo.conditionPct}%)</strong>
-                <span class="subtext mono" style="font-size:10px;">${(metrics.totalMaxArmor * 0.08).toFixed(1)} Tons Armor</span>
+                <strong class="mono" style="font-size:12px;">Structure: ${metrics.totalCurrentArmor}/${metrics.totalMaxArmor} (${resaleInfo.conditionPct}%)</strong>
+                <span class="badge cyan mono" style="font-size:10px;">🛡️ Armor: ${metrics.armorTons}t (Rating ${metrics.armorRating})</span>
               </div>
               ${this.renderPartBox(mech, tpl, 'RT', activeLoc)}
 
@@ -296,6 +296,18 @@ window.GarageModule = {
                   <div class="label">Mass / Max Tonnage</div>
                   <div class="val" style="color:${overTons ? 'var(--accent-red)' : 'var(--accent-green)'};">
                     ${metrics.totalTons} / ${metrics.maxTons}.0 t
+                  </div>
+                </div>
+                <div class="hud-pill" style="border-color:${metrics.openWeight < 0 ? 'var(--accent-red)' : 'var(--accent-cyan)'};">
+                  <div class="label">Open Weight</div>
+                  <div class="val" style="color:${metrics.openWeight < 0 ? 'var(--accent-red)' : '#38bdf8'}; font-weight:700;">
+                    ${metrics.openWeight >= 0 ? `${metrics.openWeight.toFixed(1)}t Free` : `${Math.abs(metrics.openWeight).toFixed(1)}t Over`}
+                  </div>
+                </div>
+                <div class="hud-pill">
+                  <div class="label">Armor Rating</div>
+                  <div class="val" style="color:var(--accent-cyan); font-weight:700;">
+                    ${metrics.armorRating} (-${metrics.damageReductionPct}% DR)
                   </div>
                 </div>
                 <div class="hud-pill">
@@ -347,6 +359,64 @@ window.GarageModule = {
             </div>
           </div>
 
+          <!-- Dedicated Armor Plating & Damage Reduction Module (Open Weight Equipping) -->
+          <div class="card" style="border: 1px solid rgba(56, 189, 248, 0.35); background: linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.85) 100%);">
+            <div class="section-header">
+              <div>
+                <div class="section-title" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <span>🛡️ Armor Plating Allocation</span>
+                  <span class="badge cyan mono" style="font-size:11px;">Armor Rating: ${metrics.armorRating}</span>
+                  <span class="badge green mono" style="font-size:11px;">-${metrics.damageReductionPct}% Damage Taken</span>
+                </div>
+                <div class="subtext">
+                  Equip armor plating using open weight capacity up to ${metrics.maxTons}.0 tons. Armor Rating directly reduces incoming damage from all attacks.
+                </div>
+              </div>
+              <div class="hud-pill" style="border-color:${metrics.openWeight < 0 ? 'var(--accent-red)' : 'var(--accent-green)'};">
+                <div class="label">Open Weight Left</div>
+                <div class="val" style="color:${metrics.openWeight < 0 ? 'var(--accent-red)' : 'var(--accent-green)'};">
+                  ${metrics.openWeight >= 0 ? `${metrics.openWeight.toFixed(1)} t Free` : `${Math.abs(metrics.openWeight).toFixed(1)} t Over`}
+                </div>
+              </div>
+            </div>
+
+            <!-- Interactive Armor Weight Controls -->
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.06); border-bottom:1px solid rgba(255,255,255,0.06);">
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <span class="subtext mono" style="font-size:12px; font-weight:700;">Equipped Armor:</span>
+                <button class="btn" onclick="GarageModule.adjustArmorTons(-5)">-5t</button>
+                <button class="btn" onclick="GarageModule.adjustArmorTons(-1)">-1t</button>
+                <button class="btn" onclick="GarageModule.adjustArmorTons(-0.5)">-0.5t</button>
+                <div style="padding:6px 14px; background:#020617; border:1px solid var(--accent-cyan); border-radius:4px; text-align:center; min-width:105px;">
+                  <div class="mono" style="font-size:16px; font-weight:900; color:#38bdf8;">${metrics.armorTons.toFixed(1)} Tons</div>
+                  <div class="subtext mono" style="font-size:10px; color:#94a3b8;">${metrics.armorRating} Rating</div>
+                </div>
+                <button class="btn" onclick="GarageModule.adjustArmorTons(0.5)">+0.5t</button>
+                <button class="btn" onclick="GarageModule.adjustArmorTons(1)">+1t</button>
+                <button class="btn" onclick="GarageModule.adjustArmorTons(5)">+5t</button>
+              </div>
+
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="GarageModule.fillMaxArmor()" title="Equip maximum armor plating up to chassis weight capacity">
+                  🛡️ Fill Max Armor (${metrics.openWeight > 0 ? `+${metrics.openWeight.toFixed(1)}t` : 'Full'})
+                </button>
+                <button class="btn btn-secondary" onclick="GarageModule.stripArmor()" title="Remove all armor to test heavy weapon loadouts">
+                  Strip Armor (0t)
+                </button>
+              </div>
+            </div>
+
+            <!-- Armor Absorption Telemetry Bar -->
+            <div style="margin-top:8px; background:#020617; padding:8px 12px; border-radius:4px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; font-size:12px; gap:8px;">
+              <span class="subtext">
+                Combat Protection: <strong>${metrics.damageReductionPct}% of incoming weapon damage</strong> will be absorbed by heavy plating before reaching internal structure.
+              </span>
+              <span class="mono" style="color:#38bdf8; font-weight:700;">
+                Chassis Weight: ${metrics.totalTons} / ${metrics.maxTons}.0 t
+              </span>
+            </div>
+          </div>
+
           <!-- Selected Body Part Slot & Armor Editor + Mech Parts Shop -->
           <div class="card">
             <div class="section-header">
@@ -355,12 +425,9 @@ window.GarageModule = {
                 <span class="badge primary mono" style="margin-left:8px;">Critical Slots: ${usedSlots} / ${maxSlots}</span>
               </div>
 
-              <!-- Armor Controls for this Part -->
+              <!-- Location Structural Integrity -->
               <div style="display:flex; align-items:center; gap:8px;">
-                <span class="subtext">Location Armor:</span>
-                <button class="btn" onclick="GarageModule.adjustArmor('${activeLoc}', -4)">-4</button>
-                <span class="mono" style="font-weight:700; min-width:58px; text-align:center;">${curArmor} / ${limArmor}</span>
-                <button class="btn" onclick="GarageModule.adjustArmor('${activeLoc}', 4)">+4</button>
+                <span class="subtext mono">Structural Integrity: <strong style="color:var(--accent-green);">${curArmor} / ${limArmor} HP</strong></span>
               </div>
             </div>
 
@@ -428,7 +495,7 @@ window.GarageModule = {
 
                     const effectiveCost = Math.round(comp.cost * (1 - (qmDiscountPct / 100)));
                     const fitsSlots = (usedSlots + comp.slots) <= maxSlots;
-                    const fitsTons = (metrics.totalTons + comp.tons) <= metrics.maxTons;
+                    const fitsTons = (metrics.totalTons - metrics.armorTons + comp.tons) <= metrics.maxTons;
                     const canAfford = st.credits >= effectiveCost;
                     const canEquip = owned > 0 && fitsSlots && fitsTons;
 
@@ -512,7 +579,7 @@ window.GarageModule = {
     return `
       <div class="part-box ${isSel ? 'selected' : ''}" onclick="GarageModule.selectPart('${code}')">
         <div style="font-weight:700; font-size:14px;">${code}</div>
-        <div class="mono subtext" style="margin-top:2px;">Armor: ${curArmor}/${limArmor}</div>
+        <div class="mono subtext" style="margin-top:2px;">Structure: ${curArmor}/${limArmor}</div>
         <div class="mono" style="font-size:12px; margin-top:2px; color:${usedSlots >= maxSlots ? 'var(--accent-amber)' : 'var(--accent-green)'};">
           Slots: ${usedSlots}/${maxSlots}
         </div>
@@ -559,17 +626,47 @@ window.GarageModule = {
     this.render();
   },
 
-  maxAllArmor() {
+  adjustArmorTons(delta) {
     const st = window.GameState.data;
     const mech = st.mechs.find(m => m.id === st.selectedMechId);
     if (!mech) return;
-    const tpl = window.GameState.getMechTemplate(mech);
-    Object.keys(tpl.maxArmor).forEach(k => {
-      mech.maxArmorCurrent[k] = tpl.maxArmor[k];
-      mech.armor[k] = tpl.maxArmor[k];
-    });
-    window.GameState.advanceTimeWeeks(1, `Refitted Full Armor on ${mech.customName}`);
+    const metrics = window.GameState.computeMechMetrics(mech);
+    const tpl = metrics.tpl;
+    const compTons = +(metrics.totalTons - metrics.armorTons - tpl.baseChassisTons).toFixed(1);
+    const maxAllowed = Math.max(0, +(tpl.maxTons - tpl.baseChassisTons - compTons).toFixed(1));
+    const cur = typeof mech.armorTons === 'number' ? mech.armorTons : metrics.armorTons;
+    const nextVal = Math.max(0, Math.min(maxAllowed, +(cur + delta).toFixed(1)));
+    mech.armorTons = nextVal;
+    window.GameState.save();
     this.render();
+  },
+
+  fillMaxArmor() {
+    const st = window.GameState.data;
+    const mech = st.mechs.find(m => m.id === st.selectedMechId);
+    if (!mech) return;
+    const metrics = window.GameState.computeMechMetrics(mech);
+    const tpl = metrics.tpl;
+    const compTons = +(metrics.totalTons - metrics.armorTons - tpl.baseChassisTons).toFixed(1);
+    const maxAllowed = Math.max(0, +(tpl.maxTons - tpl.baseChassisTons - compTons).toFixed(1));
+    mech.armorTons = maxAllowed;
+    window.GameState.advanceTimeWeeks(1, `Equipped Maximum Armor Plating on ${mech.customName} (${maxAllowed}t)`);
+    window.GameState.save();
+    this.render();
+  },
+
+  stripArmor() {
+    const st = window.GameState.data;
+    const mech = st.mechs.find(m => m.id === st.selectedMechId);
+    if (!mech) return;
+    mech.armorTons = 0;
+    window.GameState.advanceTimeWeeks(1, `Stripped Armor Plating from ${mech.customName}`);
+    window.GameState.save();
+    this.render();
+  },
+
+  maxAllArmor() {
+    this.fillMaxArmor();
   },
 
   repairCurrentMech() {
@@ -673,7 +770,19 @@ window.GarageModule = {
     const metrics = window.GameState.computeMechMetrics(mech);
     const usedSlots = (mech.locations[locCode] || []).reduce((a, cid) => a + (window.GameState.getComponent(cid)?.slots || 0), 0);
     if (usedSlots + comp.slots > metrics.tpl.slotLimits[locCode]) return;
-    if (metrics.totalTons + comp.tons > metrics.maxTons) return;
+
+    // Check if equipment fits chassis mass limit
+    const nonArmorTons = +(metrics.totalTons - metrics.armorTons).toFixed(1);
+    if (nonArmorTons + comp.tons > metrics.maxTons) {
+      alert(`Cannot equip ${comp.name} (${comp.tons}t): Exceeds chassis weight capacity (${metrics.maxTons}t) even without armor!`);
+      return;
+    }
+
+    // If equipping this part exceeds max tonnage with current armor, auto-trim armor to fit open weight
+    if (metrics.totalTons + comp.tons > metrics.maxTons) {
+      const excess = +(metrics.totalTons + comp.tons - metrics.maxTons).toFixed(1);
+      mech.armorTons = Math.max(0, +(metrics.armorTons - excess).toFixed(1));
+    }
 
     // Mount the highest-condition owned copy first
     const bestPart = ownedItems[0];
@@ -794,12 +903,18 @@ window.GarageModule = {
       ? { HD: [], CT: [], LT: [], RT: [], LA: [], RA: [], LL: [], RL: [] }
       : { HD: [], CT: ['hs', 'hs'], LT: [], RT: [], LA: ['mlas'], RA: ['mlas'], LL: [], RL: [] };
 
+    const rawOpen = +(tpl.maxTons - tpl.baseChassisTons - (mode === 'standard' ? 8 : 0)).toFixed(1);
+    const initialArmorTons = mode === 'stripped'
+      ? Math.max(0, +(rawOpen * 0.4).toFixed(1))
+      : Math.max(0, +(rawOpen * 0.75).toFixed(1));
+
     const newMech = {
       id: newId,
       customName: tpl.model,
       templateId: tpl.id,
       armor: { ...armorCopy },
       maxArmorCurrent: { ...armorCopy },
+      armorTons: initialArmorTons,
       locations
     };
     window.GameState.ensureMechPartConditions(newMech);
