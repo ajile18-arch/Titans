@@ -610,6 +610,52 @@ window.BattleModule = {
     return Math.max(15, Math.min(95, Math.round(hit)));
   },
 
+  // Calculates fall chance on a missed kick, factoring in Titan Affinity, Close Combat, and Piloting skills
+  calcKickFallChance(isPlayer = true) {
+    if (isPlayer) {
+      const st = window.GameState?.data;
+      const jock = this.getActiveCombatJock();
+      const piloting = jock?.skills?.piloting || 50;
+      const closeCombat = jock?.skills?.['Close Combat'] || jock?.skills?.closeCombat || 50;
+      const mech = jock ? st?.mechs?.find(m => m.id === jock.assignedMechId) : st?.mechs?.[0];
+      const tpl = window.GameState?.getMechTemplate(mech);
+      const wClass = tpl ? tpl.weightClass : (mech?.weight || 'Medium');
+      if (jock && window.GameState?.ensureJockAffinity) window.GameState.ensureJockAffinity(jock);
+      const affinityRating = jock?.affinity?.[wClass] ?? 20;
+
+      // Base 50% risk when over-extending a missed multi-ton kick
+      const pilotingMod = Math.round((piloting - 50) * 0.4);
+      const combatMod = Math.round((closeCombat - 50) * 0.3);
+      const affinityMod = Math.round((affinityRating - 20) * 0.3);
+
+      let fallChance = 50 - pilotingMod - combatMod - affinityMod;
+      if (this.playerStance === 'braced') {
+        fallChance = Math.round(fallChance * 0.5); // Braced hydraulics stabilize gyro
+      }
+
+      return {
+        fallChance: Math.max(5, Math.min(80, Math.round(fallChance))),
+        piloting,
+        closeCombat,
+        affinityRating,
+        wClass
+      };
+    } else {
+      const enemyPiloting = this.enemy?.piloting || 50;
+      const enemyAffinity = this.enemy?.affinity || 30;
+      const pilotingMod = Math.round((enemyPiloting - 50) * 0.4);
+      const affinityMod = Math.round((enemyAffinity - 20) * 0.3);
+      let fallChance = 50 - pilotingMod - affinityMod;
+      return {
+        fallChance: Math.max(5, Math.min(80, Math.round(fallChance))),
+        piloting: enemyPiloting,
+        closeCombat: 50,
+        affinityRating: enemyAffinity,
+        wClass: this.enemy?.weight || 'Medium'
+      };
+    }
+  },
+
   spawnDamagePopup(text, isPlayer = false, isCrit = false) {
     const id = 'pop-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
     const x = isPlayer ? (20 + Math.random() * 12) : (72 + Math.random() * 10);
@@ -766,8 +812,24 @@ window.BattleModule = {
         }
 
       } else {
-        this.log(`${jock ? jock.callsign : 'Pilot'} fired ${weapon.name} but missed! (Roll ${roll} > ${hitChance}%)`, 'player');
-        this.spawnDamagePopup('MISS!', false, false);
+        if (weapon?.physType === 'kick' || weapon?.name?.toLowerCase().includes('kick')) {
+          const { fallChance, piloting, closeCombat, affinityRating, wClass } = this.calcKickFallChance(true);
+          const fallRoll = Math.floor(Math.random() * 100) + 1;
+          if (!this.playerFallen && fallRoll <= fallChance) {
+            this.playerFallen = true;
+            this.shaking = true;
+            setTimeout(() => { this.shaking = false; this.render(); }, 400);
+            if (window.SoundFX && typeof window.SoundFX.playMechFall === 'function') window.SoundFX.playMechFall();
+            this.log(`MISSED KICK OVERBALANCE: ${jock ? jock.callsign : 'Pilot'}'s ${weapon.name} missed! Overextended leg actuators caused the Titan to lose gyro balance and collapse (PRONE)! (Fall Roll ${fallRoll} <= ${fallChance}% | Piloting: ${piloting}, Close Combat: ${closeCombat}, ${wClass} Affinity: ${affinityRating}%)`, 'crit');
+            this.spawnDamagePopup('FELL (PRONE)!', true, true);
+          } else {
+            this.log(`KICK RECOVERY: ${jock ? jock.callsign : 'Pilot'}'s ${weapon.name} missed, but gyro compensation and chassis mastery kept the Titan upright! (Roll ${fallRoll} > ${fallChance}% | Piloting: ${piloting}, Close Combat: ${closeCombat}, ${wClass} Affinity: ${affinityRating}%)`, 'player');
+            this.spawnDamagePopup('BALANCE RECOVERED', true, false);
+          }
+        } else {
+          this.log(`${jock ? jock.callsign : 'Pilot'} fired ${weapon.name} but missed! (Roll ${roll} > ${hitChance}%)`, 'player');
+          this.spawnDamagePopup('MISS!', false, false);
+        }
       }
 
       this.render();
@@ -1088,8 +1150,22 @@ window.BattleModule = {
           }
 
         } else {
-          this.log(`HOSTILE MISSED: ${this.enemy.name}'s ${weapon.name} sailed harmlessly past your Titan!`, 'player');
-          this.spawnDamagePopup('EVADED!', true, false);
+          if (weapon?.physType === 'kick' || weapon?.name?.toLowerCase().includes('kick')) {
+            const { fallChance, piloting, affinityRating } = this.calcKickFallChance(false);
+            const fallRoll = Math.floor(Math.random() * 100) + 1;
+            if (!this.enemyFallen && fallRoll <= fallChance) {
+              this.enemyFallen = true;
+              if (window.SoundFX && typeof window.SoundFX.playMechFall === 'function') window.SoundFX.playMechFall();
+              this.log(`ENEMY KICK OVERBALANCE: ${this.enemy.name} whiffed their kick, lost gyro footing, and crashed to the ground (PRONE)! (Fall Roll ${fallRoll} <= ${fallChance}%)`, 'player');
+              this.spawnDamagePopup('ENEMY FELL (PRONE)!', false, true);
+            } else {
+              this.log(`HOSTILE MISSED: ${this.enemy.name}'s kick missed, but the hostile caught their balance!`, 'player');
+              this.spawnDamagePopup('EVADED!', true, false);
+            }
+          } else {
+            this.log(`HOSTILE MISSED: ${this.enemy.name}'s ${weapon.name} sailed harmlessly past your Titan!`, 'player');
+            this.spawnDamagePopup('EVADED!', true, false);
+          }
         }
 
         this.onEnemyActionComplete();
@@ -2800,7 +2876,7 @@ window.BattleModule = {
                       <div>
                         <div><strong>${w.name}</strong></div>
                         <div class="subtext mono" style="font-size:10px; color:${isMeleeBlocked ? '#f87171' : (isPhys || isMelee ? '#fbbf24' : '#94a3b8')};">
-                          ${w.damage} DMG &bull; ${isMeleeBlocked ? '⚠️ REQUIRES APPROACHED STATE TO USE' : (w.ammo !== null ? `Ammo: ${w.ammo}` : (isPhys ? (w.physType === 'kick' ? 'Brawling Kick • Trip Chance' : 'Close Combat Punch') : (isMelee ? 'Equipped Melee Weapon' : 'Energy')))}
+                          ${w.damage} DMG &bull; ${isMeleeBlocked ? '⚠️ REQUIRES APPROACHED STATE TO USE' : (w.ammo !== null ? `Ammo: ${w.ammo}` : (isPhys ? (w.physType === 'kick' ? 'Brawling Kick • Fall Risk on Miss' : 'Close Combat Punch') : (isMelee ? 'Equipped Melee Weapon' : 'Energy')))}
                         </div>
                       </div>
                       <span class="badge ${isMeleeBlocked ? 'red' : (hit >= 70 ? 'green' : (hit >= 50 ? 'amber' : 'red'))} mono" style="font-size:11px;">
