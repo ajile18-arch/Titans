@@ -186,6 +186,71 @@ window.BattleModule = {
     this.buildBattleSummary(outcome, killMethod, killCode, weapon);
   },
 
+  // Records the fight in the jockey's service history and grants any earned commendations
+  recordBattleHistory(jock, mech, outcome, killMethod, xpEarned, killCode) {
+    if (!jock) return;
+    if (!Array.isArray(jock.fightHistory)) jock.fightHistory = [];
+    if (!Array.isArray(jock.awards)) jock.awards = [];
+
+    const enemyName = this.enemy?.name || 'Hostile Titan';
+    const fightNumber = jock.fightHistory.length + 1;
+    const newAwards = [];
+    const grantAward = (id, citation) => {
+      if (jock.awards.some(a => a.id === id)) return;
+      const def = (window.TOS_DATA.commendations || []).find(c => c.id === id);
+      if (!def) return;
+      jock.awards.push({
+        id: def.id,
+        title: def.title,
+        citation: citation || def.desc,
+        fightNum: fightNumber
+      });
+      newAwards.push(def.title);
+      this.log(`COMMENDATION AWARDED: ${jock.callsign} received the [${def.title}]!`, 'player');
+    };
+
+    if (outcome === 'VICTORY') {
+      grantAward('first-blood', `Neutralized ${enemyName} in Fight #${fightNumber}.`);
+      if (killCode === 'HD') {
+        grantAward('headhunter', `Decapitated ${enemyName} with a Cockpit Headshot (HD) in Fight #${fightNumber}.`);
+      } else if (killCode === 'CT') {
+        grantAward('core-breaker', `Cored ${enemyName}'s Center Torso (CT) reactor in Fight #${fightNumber}.`);
+      } else if (killCode === 'LEGS' || killCode === 'MOBILITY') {
+        grantAward('leg-sweeper', `Swept both legs (LL & RL) of ${enemyName} in Fight #${fightNumber}.`);
+      }
+
+      const acc = this.battleStats.shotsFired > 0
+        ? Math.round((this.battleStats.shotsHit / this.battleStats.shotsFired) * 100)
+        : 0;
+      if (this.battleStats.shotsFired >= 3 && acc >= 75) {
+        grantAward('sharpshooter', `Finished Fight #${fightNumber} with ${acc}% gunnery accuracy (${this.battleStats.shotsHit}/${this.battleStats.shotsFired}).`);
+      }
+      if (this.battleStats.damageTaken >= 36) {
+        grantAward('ironclad-survivor', `Endured ${this.battleStats.damageTaken} armor damage against ${enemyName} and emerged victorious.`);
+      }
+      if (jock.kills >= 3) {
+        grantAward('titan-ace', `Achieved ${jock.kills} confirmed Titan kills in service of the company.`);
+      }
+    }
+
+    jock.fightHistory.unshift({
+      fightNumber,
+      campaignDate: window.GameState.getCalendarText(),
+      enemyName,
+      enemyWeight: this.enemy?.weight || '',
+      mechName: mech ? mech.customName : 'Titan-AT',
+      outcome,
+      durationSec: (this.battleStats.rounds || this.round || 1) * 15, // each duel round is ~15s of combat
+      shotsFired: this.battleStats.shotsFired,
+      shotsHit: this.battleStats.shotsHit,
+      damageDealt: this.battleStats.damageDealt,
+      damageTaken: this.battleStats.damageTaken,
+      killMethod,
+      xpEarned,
+      awardsEarned: newAwards
+    });
+  },
+
   setCommandTab(tab) {
     if (this.turn !== 'player' || this.battleOver) return;
     this.commandTab = tab;
@@ -1033,6 +1098,7 @@ window.BattleModule = {
     let jockXpEarned = 0;
     const prevJockXp = jock ? jock.xp : 0;
     let newlyAwarded = [];
+    let newlyRevealedTrait = null;
     if (jock) {
       if (outcome === 'VICTORY') {
         jockXpEarned = 250 + (killCode === 'HD' ? 75 : 0);
@@ -1062,7 +1128,7 @@ window.BattleModule = {
       newlyAwarded = (jock.awards || []).slice(beforeAwardsCount).map(a => a.title);
 
       // Check for newly revealed personality trait after battles 1, 4, 10, 15, 25
-      let newlyRevealedTrait = null;
+      newlyRevealedTrait = null;
       const milestones = window.TOS_DATA?.personalityMilestones || [1, 4, 10, 15, 25];
       if (milestones.includes(jock.missions)) {
         window.GameState.ensureJockPersonalityTraits(jock);
@@ -1194,7 +1260,7 @@ window.BattleModule = {
         missionsCompleted: st.missionsCompleted
       },
       stats: {
-        durationSec: this.clockSec,
+        durationSec: (this.battleStats.rounds || this.round || 1) * 15,
         shotsFired: this.battleStats.shotsFired,
         shotsHit: this.battleStats.shotsHit,
         accuracy: this.battleStats.shotsFired > 0 ? Math.round((this.battleStats.shotsHit / this.battleStats.shotsFired) * 100) : 0,
